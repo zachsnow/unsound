@@ -1,0 +1,302 @@
+# Tests for meso.us extension (operators)
+#usc -x meso
+
+--- addition
+1 + 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- subtraction
+5 - 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- multiplication
+3 * 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+12
+
+--- prefix not
+!false
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- prefix not true
+!true
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- prefix negation
+-5
+=== parse: $parse, compile: $compile, interpret: $interpret
+-5
+
+--- prefix negation in expr
+-5 + 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+-2
+
+--- prefix not with binary
+!false && true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- prefix double negation
+- -5
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- not equals vs prefix not
+3 != 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- complex with prefix
+let x = 5 in -x + 10
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- precedence
+1 + 2 * 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+7
+
+--- comparison
+3 < 5
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- equality
+3 == 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- logical and
+true && true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- logical or
+false || true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- division
+10 / 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- modulo
+10 % 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- greater than
+5 > 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- less than or equal
+3 <= 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- greater than or equal
+5 >= 5
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- not equal
+3 != 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- and short circuit
+false && true
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- or short circuit
+true || false
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- precedence mul over add
+2 + 3 * 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+14
+
+--- precedence parens
+(2 + 3) * 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+20
+
+--- precedence comparison over logical
+3 < 5 && 2 > 1
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- chained comparison
+1 + 2 == 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- complex expression
+(1 + 2) * 3 == 9 && 10 / 2 > 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- double not
+!!true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- double not false
+!!false
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- negation of negation
+--5
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- string equality
+"hello" == "hello"
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- string inequality
+"hello" == "world"
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- string not equal
+"a" != "b"
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- zero equals zero
+0 == 0
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- negative number comparison
+-3 < -1
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- negative numbers equal
+-5 == -5
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- and with false first
+false && true
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- or with true first
+true || false
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- complex boolean
+true && false || true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- boolean and precedence
+true || false && false
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- comparison chain
+1 < 2 == true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- arithmetic in comparison
+2 + 3 > 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- left associativity subtraction
+10 - 3 - 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- left associativity division
+100 / 10 / 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- mixed arithmetic
+2 * 3 + 4 * 5
+=== parse: $parse, compile: $compile, interpret: $interpret
+26
+
+--- nested parens
+((1 + 2) * (3 + 4))
+=== parse: $parse, compile: $compile, interpret: $interpret
+21
+
+--- operator with let
+let x = 2 in x * x + 1
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- operator in lambda body
+let f = (x) => x * 2 in f(5)
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- operator with function result
+let f = () => 10 in f() + 5
+=== parse: $parse, compile: $compile, interpret: $interpret
+15
+
+--- comparison in if condition
+if 3 > 2 then 1 else 0
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- arithmetic in if condition
+if 2 + 2 == 4 then true else false
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- operator with object property
+let o = { x: 10 } in o.x + 5
+=== parse: $parse, compile: $compile, interpret: $interpret
+15
+
+--- modulo negative
+7 % 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- divide produces decimal
+7 / 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+3.5
+
+--- not with comparison
+!(3 > 5)
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- complex nested
+let a = 1 in let b = 2 in let c = 3 in a + b * c == 7
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- multiple operators same precedence
+1 + 2 + 3 + 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- multiple comparisons
+1 < 2 && 2 < 3 && 3 < 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+true

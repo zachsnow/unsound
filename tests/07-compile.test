@@ -1,0 +1,56 @@
+# Tests for compile phase directly (input is AST JSON)
+
+--- compile literal number
+{"type":"Literal","value":42}
+=== compile: $compile, emit: $emit
+$.number(42)
+
+--- compile literal string
+{"type":"Literal","value":"hello"}
+=== compile: $compile, emit: $emit
+$.string("hello")
+
+--- compile literal boolean
+{"type":"Literal","value":true}
+=== compile: $compile, emit: $emit
+$.boolean(true)
+
+--- compile identifier
+{"type":"Ident","name":"x"}
+=== compile: $compile, emit: $emit
+$.lookup($env, "x")
+
+--- compile lambda
+{"type":"Lambda","params":["x","y"],"body":{"type":"Ident","name":"x"}}
+=== compile: $compile, emit: $emit
+$.lambda($env, ["x", "y"], ($env) => $.lookup($env, "x"))
+
+--- compile application
+{"type":"App","fn":{"type":"Ident","name":"f"},"args":[{"type":"Literal","value":1}]}
+=== compile: $compile, emit: $emit
+$.call($.lookup($env, "f"), [$.number(1)])
+
+--- compile let
+{"type":"LetExpr","name":"x","value":{"type":"Literal","value":1},"body":{"type":"Ident","name":"x"}}
+=== compile: $compile, emit: $emit
+$.let($env, "x", ($env) => $.number(1), ($env) => $.lookup($env, "x"))
+
+--- compile if
+{"type":"IfExpr","cond":{"type":"Literal","value":true},"then":{"type":"Literal","value":1},"else":{"type":"Literal","value":2}}
+=== compile: $compile, emit: $emit
+$.if($.boolean(true), ($env) => $.number(1), ($env) => $.number(2), $env)
+
+--- compile object
+{"type":"ObjectExpr","properties":[{"key":"x","value":{"type":"Literal","value":1}}]}
+=== compile: $compile, emit: $emit
+$.object({ ["x"]: $.number(1) })
+
+--- compile index
+{"type":"Index","object":{"type":"Ident","name":"o"},"key":{"type":"Literal","value":"x"}}
+=== compile: $compile, emit: $emit
+$.index($.lookup($env, "o"), $.string("x"))
+
+--- compile setindex
+{"type":"SetIndex","object":{"type":"Ident","name":"o"},"key":{"type":"Literal","value":"x"},"value":{"type":"Literal","value":42}}
+=== compile: $compile, emit: $emit
+$.setIndex($.lookup($env, "o"), $.string("x"), $.number(42))

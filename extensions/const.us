@@ -1,0 +1,123 @@
+//usc -x meso -x thermo
+// const.us - Constant bindings extension
+// Adds: const x = v; (scopes to end of block like let)
+// Assignment to const variables is detected at compile time
+//
+// AST node:
+//   ConstStmt: { type: "ConstStmt", name: string, value: expr }
+
+// === Parser Extension ===
+
+let constParseExtension = ($) => {
+  let baseStatement = $.statement;
+
+  // Parse const statement: const name = value
+  let _ = $.constStmt = () => (input, pos) => {
+    let kw = $.keyword("const")(input, pos);
+    if !(kw.ok) then { ok: false, pos: pos }
+    else {
+      // Reuse let's atomic combinators
+      let binding = $.letBinding()(input, kw.pos);
+      if !(binding.ok) then { ok: false, expected: "identifier", pos: kw.pos }
+      else {
+        let value = $.letInitializer()(input, binding.pos);
+        if !(value.ok) then value
+        else {
+          ok: true,
+          value: { type: "ConstStmt", name: binding.value.name, value: value.value },
+          pos: value.pos
+        }
+      }
+    }
+  };
+
+  // Override statement to try constStmt first
+  let _ = $.statement = () => (input, pos) => {
+    let constResult = $.constStmt()(input, pos);
+    if constResult.ok then constResult
+    else baseStatement()(input, pos)
+  };
+
+  {}
+};
+
+// === Compiler Extension ===
+
+let constCompileExtension = ($) => {
+  let baseCompileExpr = $.compileExpr;
+
+  // Track const names during compilation
+  let constNames = {};
+
+  // Helper to compile statements with const tracking
+  let compileStmts = (stmts, idx) =>
+    if idx >= stmts.length then $.ir.lit(undefined)
+    else {
+      let stmt = stmts[idx];
+      let isLast = idx == stmts.length - 1;
+      if stmt.type == "ConstStmt" then {
+        // Track this name as const
+        let wasConst = if constNames[stmt.name] then true else false;
+        let _ = constNames[stmt.name] = true;
+        let result = $.ir.$("let",
+          $.ir.var("$env"),
+          $.ir.string(stmt.name),
+          $.ir.arrow(["$env"], $.compileExpr(stmt.value)),
+          $.ir.arrow(["$env"], compileStmts(stmts, idx + 1))
+        );
+        let _ = constNames[stmt.name] = wasConst;
+        result
+      } else if stmt.type == "LetStmt" then {
+        // Track this name as non-const (shadows any outer const)
+        let wasConst = if constNames[stmt.name] then true else false;
+        let _ = constNames[stmt.name] = false;
+        let result = $.ir.$("let",
+          $.ir.var("$env"),
+          $.ir.string(stmt.name),
+          $.ir.arrow(["$env"], $.compileExpr(stmt.value)),
+          $.ir.arrow(["$env"], compileStmts(stmts, idx + 1))
+        );
+        let _ = constNames[stmt.name] = wasConst;
+        result
+      } else if isLast then
+        $.compileExpr(stmt)
+      else
+        $.ir.seq($.compileExpr(stmt), compileStmts(stmts, idx + 1))
+    };
+
+  let _ = $.compileExpr = (expr) =>
+    if expr.type == "Block" then
+      compileStmts(expr.stmts, 0)
+    else if expr.type == "ConstStmt" then {
+      // Standalone ConstStmt
+      let wasConst = if constNames[expr.name] then true else false;
+      let _ = constNames[expr.name] = true;
+      let result = $.ir.$("let",
+        $.ir.var("$env"),
+        $.ir.string(expr.name),
+        $.ir.arrow(["$env"], $.compileExpr(expr.value)),
+        $.ir.arrow(["$env"], $.ir.lit(undefined))
+      );
+      let _ = constNames[expr.name] = wasConst;
+      result
+    } else if expr.type == "Assign" then
+      if constNames[expr.name] then
+        $.error("Cannot assign to const variable: " + expr.name)
+      else
+        baseCompileExpr(expr)
+    else
+      baseCompileExpr(expr);
+
+  {}
+};
+
+// === The Extension ===
+
+{
+  name: "const",
+  description: "Constant bindings with compile-time assignment checking",
+  requires: "thermo",
+  version: "2.0.0",
+  $parse: constParseExtension,
+  $compile: constCompileExtension
+}

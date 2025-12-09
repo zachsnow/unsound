@@ -1,0 +1,6 @@
+// The identity does nothing at all.
+{
+  $parse: ($) => {},
+  $compile: ($) => {},
+  $interpret: ($) => {}
+}

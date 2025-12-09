@@ -1,0 +1,24 @@
+{
+  "name": "unsound",
+  "version": "0.2.0",
+  "type": "module",
+  "main": "extension.ts",
+  "bin": {
+    "usc": "./cli.ts"
+  },
+  "scripts": {
+    "usc": "bun cli.ts",
+    "test": "bun test.ts",
+    "types": "tsc --noEmit",
+    "build": "./build.sh",
+    "clean": "./clean.sh",
+    "dist": "bun run types && mkdir -p dist && bun build --compile --outfile dist/usc ./cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "bun-types": "^1.3.3",
+    "typescript": "^5.9.3",
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.11"
+  }
+}

@@ -1,0 +1,230 @@
+// meso.us - The middle layer
+// Adds operators with precedence to Unsound: binary, prefix, postfix
+//
+// Defines $.operators on both $parse and $compile:
+//   binary:  { op: { prec, assoc, method } }  - infix operators
+//   prefix:  { op: { method } }               - prefix unary operators
+//   postfix: { op: { method } }               - postfix unary operators
+//
+// Note: Variable assignment (x = v) is provided by thermo, not meso.
+// Member assignment (o.x = v) is provided by core as SetIndex.
+
+let is = $operators["op==="] in
+let add = $operators["op+"] in
+let sub = $operators["op-"] in
+let lt = $operators["op<"] in
+let not = $operators["op!"] in
+
+// Operator table - shared by parser and compiler
+let operators = {
+  binary: {
+    "||":  { prec: 1, assoc: "left",  method: "op||" },
+    "&&":  { prec: 2, assoc: "left",  method: "op&&" },
+    "===": { prec: 3, assoc: "left",  prim: "strictEq" },
+    "!==": { prec: 3, assoc: "left",  prim: "strictNeq" },
+    "==":  { prec: 3, assoc: "left",  method: "op==" },
+    "!=":  { prec: 3, assoc: "left",  method: "op!=" },
+    "<":   { prec: 4, assoc: "left",  method: "op<" },
+    ">":   { prec: 4, assoc: "left",  method: "op>" },
+    "<=":  { prec: 4, assoc: "left",  method: "op<=" },
+    ">=":  { prec: 4, assoc: "left",  method: "op>=" },
+    "+":   { prec: 5, assoc: "left",  method: "op+" },
+    "-":   { prec: 5, assoc: "left",  method: "op-" },
+    "*":   { prec: 6, assoc: "left",  method: "op*" },
+    "/":   { prec: 6, assoc: "left",  method: "op/" },
+    "%":   { prec: 6, assoc: "left",  method: "op%" }
+  },
+  prefix: {
+    "!": { method: "op!" },
+    "-": { method: "opNeg" }
+  },
+  postfix: {
+    // Empty for now - infrastructure ready
+    // e.g., "?": { method: "op?" }
+  }
+} in
+
+// === Parser Extension ===
+
+let mesoParseExtension = ($) =>
+  let baseAppExpr = $.appExpr in
+  let _ = $.operators = operators in
+
+  // --- Binary operator parsing ---
+  // Exposed as $.binaryOp for extension overriding
+
+  // Try to parse an N-char binary operator at position
+  let tryBinaryN = (input, p, n) =>
+    let chars = input.slice(p, add(p, n)) in
+    let def = $.operators.binary[chars] in
+    if def then { ok: true, value: chars, pos: add(p, n) }
+    else { ok: false }
+  in
+
+  // Parse a binary operator (try 3-char, then 2-char, then 1-char)
+  let _ = $.binaryOp = () => (input, pos) =>
+    let ws = $.ws()(input, pos) in
+    let p = ws.pos in
+    let r3 = tryBinaryN(input, p, 3) in
+    if r3.ok then r3
+    else
+      let r2 = tryBinaryN(input, p, 2) in
+      if r2.ok then r2
+      else tryBinaryN(input, p, 1)
+  in
+
+  // --- Prefix operator parsing ---
+  // Exposed as $.prefixOp for extension overriding
+
+  let _ = $.prefixOp = () => (input, pos) =>
+    let ws = $.ws()(input, pos) in
+    let p = ws.pos in
+    let ch = input.slice(p, add(p, 1)) in
+    let next = input.slice(add(p, 1), add(p, 2)) in
+    // Special case: ! but not !=
+    if is(ch, "!") then
+      if is(next, "=") then { ok: false, expected: "prefix", pos: p }
+      else { ok: true, value: "!", pos: add(p, 1) }
+    else
+      let def = $.operators.prefix[ch] in
+      if def then { ok: true, value: ch, pos: add(p, 1) }
+      else { ok: false, expected: "prefix", pos: p }
+  in
+
+  // --- Postfix operator parsing ---
+  // Exposed as $.postfixOp for extension overriding
+
+  let _ = $.postfixOp = () => (input, pos) =>
+    let ws = $.ws()(input, pos) in
+    let p = ws.pos in
+    let ch = input.slice(p, add(p, 1)) in
+    let def = $.operators.postfix[ch] in
+    if def then { ok: true, value: ch, pos: add(p, 1) }
+    else { ok: false, expected: "postfix", pos: p }
+  in
+
+  // --- Postfix expression parsing ---
+  // Applies all postfix operators to an operand
+  // Exposed as $.postfixExpr for extension overriding
+
+  let _ = $.postfixExpr = () => (input, pos, operand) =>
+    let loop = (current) =>
+      let opResult = $.postfixOp()(input, current.pos) in
+      if is(opResult.ok, false) then current
+      else
+        loop({
+          ok: true,
+          value: { type: "PostfixOp", op: opResult.value, operand: current.value },
+          pos: opResult.pos
+        })
+    in
+    loop({ ok: true, value: operand, pos: pos })
+  in
+
+  // --- Precedence climbing parser ---
+  // Exposed as $.operatorExpr for extension overriding
+
+  let _ = $.operatorExpr = () => (input, pos, minPrec) =>
+    // 1. Try prefix operator
+    let prefixResult = $.prefixOp()(input, pos) in
+    let leftResult = if prefixResult.ok then
+      // Prefix binds at precedence 7
+      let operandResult = $.operatorExpr()(input, prefixResult.pos, 7) in
+      if is(operandResult.ok, false) then operandResult
+      else {
+        ok: true,
+        value: { type: "PrefixOp", op: prefixResult.value, operand: operandResult.value },
+        pos: operandResult.pos
+      }
+    else
+      // 2. No prefix, get atom via baseAppExpr
+      baseAppExpr()(input, pos)
+    in
+
+    if is(leftResult.ok, false) then leftResult
+    else
+      // 3. Apply postfix operators
+      let afterPostfix = $.postfixExpr()(input, leftResult.pos, leftResult.value) in
+
+      // 4. Loop on binary operators
+      let loop = (current) =>
+        let opResult = $.binaryOp()(input, current.pos) in
+        if is(opResult.ok, false) then current
+        else
+          let op = opResult.value in
+          let def = $.operators.binary[op] in
+          let prec = def.prec in
+          if lt(prec, minPrec) then current
+          else
+            // Regular binary operator
+            let nextMinPrec = if is(def.assoc, "right") then prec else add(prec, 1) in
+            let right = $.operatorExpr()(input, opResult.pos, nextMinPrec) in
+            if is(right.ok, false) then right
+            else
+              loop({
+                ok: true,
+                value: { type: "BinOp", op: op, left: current.value, right: right.value },
+                pos: right.pos
+              })
+      in
+      loop(afterPostfix)
+  in
+
+  // Override appExpr with precedence climbing (starts at precedence 0)
+  let _ = $.appExpr = () => (input, pos) =>
+    $.operatorExpr()(input, pos, 0)
+  in
+  {}
+
+in
+
+// === Compiler Extension ===
+
+let mesoCompileExtension = ($) =>
+  let baseCompileExpr = $.compileExpr in
+  let _ = $.operators = operators in
+
+  let _ = $.compileExpr = (expr) =>
+    if is(expr.type, "BinOp") then
+      let def = $.operators.binary[expr.op] in
+      if def.prim then
+        // Primitive operator: $.prim(left, right)
+        $.ir.$(def.prim, $.compileExpr(expr.left), $.compileExpr(expr.right))
+      else
+        // Method dispatch: left.method(right)
+        $.ir.$("call",
+          $.ir.$("index", $.compileExpr(expr.left), $.ir.string(def.method)),
+          $.ir.array($.compileExpr(expr.right))
+        )
+    else if is(expr.type, "PrefixOp") then
+      // Prefix: $.call($.index(operand, "method"))
+      let def = $.operators.prefix[expr.op] in
+      let methodName = def.method in
+      $.ir.$("call",
+        $.ir.$("index", $.compileExpr(expr.operand), $.ir.string(methodName)),
+        $.ir.array()
+      )
+    else if is(expr.type, "PostfixOp") then
+      // Postfix: $.call($.index(operand, "method"))
+      let def = $.operators.postfix[expr.op] in
+      let methodName = def.method in
+      $.ir.$("call",
+        $.ir.$("index", $.compileExpr(expr.operand), $.ir.string(methodName)),
+        $.ir.array()
+      )
+    else
+      baseCompileExpr(expr)
+  in
+  {}
+
+in
+
+// === The Extension ===
+
+{
+  name: "meso",
+  description: "Operators with precedence: binary, prefix, postfix",
+  version: "1.0.0",
+  $parse: mesoParseExtension,
+  $compile: mesoCompileExtension
+}

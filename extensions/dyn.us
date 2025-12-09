@@ -1,0 +1,107 @@
+//usc -x meso
+// dyn.us - Dynamic variable binding
+//
+// Syntax: dyn x = value in body
+//
+// Unlike let (lexical), dyn binds dynamically - the binding is visible
+// to any code called from body, even functions defined elsewhere.
+
+let dynParseExtension = ($) =>
+  let baseExpr = $.expr in
+
+  let parseDyn = () => (input, pos) =>
+    let ws1 = $.ws()(input, pos) in
+    let kw = $.str("dyn")(input, ws1.pos) in
+    if kw.ok == false then { ok: false, expected: "dyn", pos: pos }
+    else
+      let nextChar = input.slice(kw.pos, kw.pos + 1) in
+      let isIdChar = (nextChar >= "a" && nextChar <= "z") ||
+                     (nextChar >= "A" && nextChar <= "Z") ||
+                     (nextChar >= "0" && nextChar <= "9") ||
+                     nextChar == "_" || nextChar == "$" in
+      if isIdChar then { ok: false, expected: "dyn", pos: pos }
+      else
+        let ws2 = $.ws()(input, kw.pos) in
+        let nameRes = $.ident()(input, ws2.pos) in
+        if nameRes.ok == false then nameRes
+        else
+          let ws3 = $.ws()(input, nameRes.pos) in
+          let eq = $.str("=")(input, ws3.pos) in
+          if eq.ok == false then { ok: false, expected: "=", pos: ws3.pos }
+          else
+            let valueRes = $.expr()(input, eq.pos) in
+            if valueRes.ok == false then valueRes
+            else
+              let ws4 = $.ws()(input, valueRes.pos) in
+              let inKw = $.str("in")(input, ws4.pos) in
+              if inKw.ok == false then { ok: false, expected: "in", pos: ws4.pos }
+              else
+                let bodyRes = $.expr()(input, inKw.pos) in
+                if bodyRes.ok == false then bodyRes
+                else {
+                  ok: true,
+                  value: {
+                    type: "DynExpr",
+                    name: nameRes.value,
+                    value: valueRes.value,
+                    body: bodyRes.value
+                  },
+                  pos: bodyRes.pos
+                }
+  in
+
+  let _ = $.expr = () => $.alt(parseDyn(), baseExpr()) in
+  {}
+
+in
+
+let dynCompileExtension = ($) =>
+  let baseCompileExpr = $.compileExpr in
+  let dynNames = {} in
+
+  let _ = $.compileExpr = (expr) =>
+    if expr.type == "DynExpr" then
+      let valueIR = $.compileExpr(expr.value) in
+      let name = expr.name in
+      let wasDepth = dynNames[name] in
+      let _ = dynNames[name] = (if wasDepth then wasDepth else 0) + 1 in
+      let bodyIR = $.compileExpr(expr.body) in
+      let _ = dynNames[name] = wasDepth in
+      // $.dynBind("name", value, () => body)
+      $.ir.call(
+        $.ir.member($.ir.var("$"), "dynBind"),
+        $.ir.lit(name),
+        valueIR,
+        $.ir.arrow1("_", bodyIR)
+      )
+    else if expr.type == "Ident" then
+      if dynNames[expr.name] then
+        // $.dyn["name"]
+        $.ir.index($.ir.member($.ir.var("$"), "dyn"), $.ir.lit(expr.name))
+      else baseCompileExpr(expr)
+    else baseCompileExpr(expr)
+  in
+  {}
+
+in
+
+let dynInterpretExtension = ($) =>
+  let _ = $.dyn = {} in
+  let _ = $.dynBind = (name, value, bodyFn) =>
+    let old = $.dyn[name] in
+    let _ = $.dyn[name] = value in
+    let result = bodyFn() in
+    let _ = $.dyn[name] = old in
+    result
+  in
+  {}
+
+in
+
+{
+  name: "dyn",
+  description: "Dynamic variable binding",
+  $parse: dynParseExtension,
+  $compile: dynCompileExtension,
+  $interpret: dynInterpretExtension
+}

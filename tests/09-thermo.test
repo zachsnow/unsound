@@ -1,0 +1,459 @@
+# Tests for thermo.us extension (JS-like imperative features)
+#usc -x meso -x thermo
+
+# let...in syntax is removed in thermo
+
+--- let in syntax rejected
+let x = 1 in x
+=== parse: $parse
+error: Parse error
+
+--- let in syntax rejected in parens
+(let x = 1 in x)
+=== parse: $parse
+error: Parse error
+
+# Assignment tests
+
+--- simple assignment
+let x = 1; { x = 42; x }
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- assignment returns value
+let x = 1; x = 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- assignment in nested scope
+let x = 1; let y = 2; { x = 10; x + y }
+=== parse: $parse, compile: $compile, interpret: $interpret
+12
+
+--- chained assignment
+let a = 0; let b = 0; { a = b = 5; a + b }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+# Block tests
+
+--- simple block
+{ 1; 2; 3 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block with expressions
+{ 1 + 2; 3 * 4 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+12
+
+--- block single expression with semicolon
+{ 42; }
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- block with let
+let x = 1; { x + 1; x + 2 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block with assignment
+let x = 0; { x = 10; x + 5 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+15
+
+--- nested blocks
+{ { 1; 2 }; 3 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- empty object still works
+{}
+=== parse: $parse, compile: $compile, interpret: $interpret
+{}
+
+--- object with property still works
+{ x: 1 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"x": 1}
+
+--- object shorthand needs parens (JS-style)
+let x = 42; ({ x })
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"x": 42}
+
+# If without else
+
+--- if without else true
+if true then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- if without else false
+if false then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+--- if without else with block
+if true then { 1; 2 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- if with else still works
+if false then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- if without else in block
+{ if true then 10; 20 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+20
+
+# More block tests
+
+--- block with multiple assignments
+let x = 0; let y = 0; { x = 1; y = 2; x + y }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block as lambda body
+let f = () => { 1; 2; 3 }; f()
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block in let value
+let x = { 1; 2 }; x + 1
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block returning function result
+let f = () => 42; { 1; f() }
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- deeply nested blocks
+{ { { 1; 2 }; 3 }; 4 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+4
+
+--- block with comparison
+{ 1 < 2; 3 > 2 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- block with let inside
+{ let x = 10; x; 20 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+20
+
+# More assignment tests
+
+--- multiple assignments in block
+let x = 0; let y = 0; { x = 1; y = 2; x + y }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- assignment in block then use
+let x = 0; { x = 42; x }
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- three assignments in sequence
+let a = 0; let b = 0; let c = 0; { a = 1; b = 2; c = 3; a + b + c }
+=== parse: $parse, compile: $compile, interpret: $interpret
+6
+
+--- assignment with complex value
+let x = 0; { x = 2 + 3; x * 2 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+# More if without else tests
+
+--- dangling else binds to inner if
+if true then if false then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- dangling else outer false
+if false then if true then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+--- nested if without else
+if true then if true then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- nested if without else false outer
+if false then if true then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+--- nested if without else false inner
+if true then if false then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+--- if without else with expression condition
+if 1 < 2 then 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- if without else in lambda
+let f = (x) => if x then 100; f(true)
+=== parse: $parse, compile: $compile, interpret: $interpret
+100
+
+--- if without else in lambda false
+let f = (x) => if x then 100; f(false)
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+--- if without else with function call in then
+let f = () => 42; if true then f()
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+# Combinations
+
+--- block with if without else
+{ if true then 10; if false then 20; 30 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+30
+
+--- assignment then arithmetic
+let x = 0; { x = 5; x * 2 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- assignment used in later expression
+let x = 0; { x = 10; if x > 5 then x else 0 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- block as if then branch
+if true then { 1; 2; 3 } else 0
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- block as if else branch
+if false then 0 else { 1; 2; 3 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- complex nested structure
+let counter = 0; {
+  counter = counter + 1;
+  counter = counter + 1;
+  counter = counter + 1;
+  counter
+}
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- object in block
+{ let o = { x: 1 }; o.x; 10 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- block returns object
+{ 1; { y: 42 } }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"y": 42}
+
+# Top-level blocks (unbraced)
+
+--- top level sequence
+1; 2; 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- top level with trailing semicolon
+42;
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- top level with expressions
+1 + 2; 3 * 4
+=== parse: $parse, compile: $compile, interpret: $interpret
+12
+
+--- top level with let
+let x = 1; x + 1; 10
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- let without body at end of program
+let x = 42
+=== parse: $parse, compile: $compile, interpret: $interpret
+undefined
+
+# Patterns from exo.us
+
+--- lambda returning object
+let Arrow = (p, r) => { kind: "arrow", param: p, ret: r }; Arrow(1, 2)
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"kind": "arrow", "param": 1, "ret": 2}
+
+--- null comparison
+null === null
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- null comparison with variable
+let x = null; x === null
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- null comparison with or
+let a = null; let b = 1; (a === null) || (b === null)
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- complex or chain
+let a = 1; let b = 2; (a === null) || (b === null) || false
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- and chain with property access
+let o = { kind: "num" }; o.kind == "num" && true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- recursive-style function
+let f = (n) => if n == 0 then 1 else n + f(n - 1); f(3)
+=== parse: $parse, compile: $compile, interpret: $interpret
+7
+
+--- string concatenation in block
+{ "hello" + " " + "world" }
+=== parse: $parse, compile: $compile, interpret: $interpret
+"hello world"
+
+--- nested if-else chain
+let x = 2; if x == 1 then "one" else if x == 2 then "two" else "other"
+=== parse: $parse, compile: $compile, interpret: $interpret
+"two"
+
+--- lambda with block body and semicolons
+let f = (x) => { let y = x + 1; let z = y + 1; z }; f(10)
+=== parse: $parse, compile: $compile, interpret: $interpret
+12
+
+--- assignment to object property
+let o = { x: 1 }; { o.x = 42; o.x }
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- if without else for side effect
+let x = 0; { if true then x = 10; x }
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- !== comparison
+let x = 1; x !== null
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- !== with null value
+let x = null; x !== null
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- complex condition with && and !==
+let o = { v: 1 }; o !== null && o.v !== null
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- lambda assigned to object property
+let o = {}; { o.f = (x) => x + 1; o.f(10) }
+=== parse: $parse, compile: $compile, interpret: $interpret
+11
+
+--- nested object access
+let o = { inner: { x: 42 } }; o.inner.x
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- block returning lambda
+let f = { (x) => x * 2 }; f(5)
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- multi-statement lambda with object return
+let mk = (k, v) => { let o = {}; o[k] = v; o }; mk("foo", 123)
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"foo": 123}
+
+--- chained method-style calls
+let o = { f: (x) => { g: (y) => x + y } }; o.f(10).g(5)
+=== parse: $parse, compile: $compile, interpret: $interpret
+15
+
+--- array in block
+{ [1, 2, 3] }
+=== parse: $parse, compile: $compile, interpret: $interpret
+[1, 2, 3]
+
+--- array with expressions
+let x = 1; { [x, x + 1, x + 2] }
+=== parse: $parse, compile: $compile, interpret: $interpret
+[1, 2, 3]
+
+--- mixed array and object
+{ let arr = [1, 2]; let obj = { a: arr }; obj.a[0] }
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+# Extension-style patterns (mimicking exo.us structure)
+
+--- extension function pattern
+let ext = ($) => { $.foo = 42; {} }; let o = {}; ext(o); o.foo
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- nested extension functions
+let parse = ($) => { $.a = 1; {} }; let compile = ($) => { $.b = 2; {} }; let o = {}; parse(o); compile(o); o.a + o.b
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- extension returning object with functions
+let ext = ($) => { $.f = (x) => x + 1; { name: "test" } }; let o = {}; let r = ext(o); o.f(10)
+=== parse: $parse, compile: $compile, interpret: $interpret
+11
+
+--- if chain in function body
+let check = (x) => if x.kind == "a" then 1 else if x.kind == "b" then 2 else 3; check({ kind: "b" })
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- complex type-like function
+let typeEq = (a, b) => if a === null || b === null then a === b else if a.k == b.k then true else false; typeEq({ k: 1 }, { k: 1 })
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- type function with null
+let typeEq = (a, b) => if a === null || b === null then a === b else true; typeEq(null, null)
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- type function with non-null
+let typeEq = (a, b) => if a === null || b === null then a === b else true; typeEq(1, null)
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- multiple let bindings in extension
+let ext = ($) => { let base = $.orig; $.orig = (x) => base(x) + 1; {} }; let o = { orig: (x) => x }; ext(o); o.orig(10)
+=== parse: $parse, compile: $compile, interpret: $interpret
+11
+
+--- conditional assignment in block
+let o = {}; let v = 1; { if v !== null then o.x = v; o }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"x": 1}
+
+--- complex nested lets with semicolons
+let a = 1; let b = { let c = 2; let d = 3; c + d }; a + b
+=== parse: $parse, compile: $compile, interpret: $interpret
+6

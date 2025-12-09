@@ -1,0 +1,51 @@
+# Tests for emit phase directly (input is IR JSON)
+
+--- emit literal number
+{"tag":"call","fn":{"tag":"member","obj":{"tag":"var","name":"$"},"field":"number"},"args":[{"tag":"literal","value":42}]}
+=== emit: $emit
+$.number(42)
+
+--- emit literal string
+{"tag":"call","fn":{"tag":"member","obj":{"tag":"var","name":"$"},"field":"string"},"args":[{"tag":"literal","value":"hello"}]}
+=== emit: $emit
+$.string("hello")
+
+--- emit lookup
+{"tag":"call","fn":{"tag":"member","obj":{"tag":"var","name":"$"},"field":"lookup"},"args":[{"tag":"literal","value":"x"}]}
+=== emit: $emit
+$.lookup("x")
+
+--- emit arrow function
+{"tag":"arrow","params":["x"],"body":{"tag":"var","name":"x"}}
+=== emit: $emit
+(x) => x
+
+--- emit array
+{"tag":"array","elements":[{"tag":"literal","value":1},{"tag":"literal","value":2}]}
+=== emit: $emit
+[1, 2]
+
+--- emit object
+{"tag":"object","properties":[{"key":"x","value":{"tag":"literal","value":1}}]}
+=== emit: $emit
+{ ["x"]: 1 }
+
+--- emit ternary
+{"tag":"ternary","cond":{"tag":"literal","value":true},"then":{"tag":"literal","value":1},"else":{"tag":"literal","value":2}}
+=== emit: $emit
+(true ? 1 : 2)
+
+--- emit index
+{"tag":"index","obj":{"tag":"var","name":"x"},"key":{"tag":"literal","value":"y"}}
+=== emit: $emit
+x["y"]
+
+--- emit member
+{"tag":"member","obj":{"tag":"var","name":"$"},"field":"number"}
+=== emit: $emit
+$.number
+
+--- emit nested call
+{"tag":"call","fn":{"tag":"call","fn":{"tag":"var","name":"f"},"args":[{"tag":"literal","value":1}]},"args":[{"tag":"literal","value":2}]}
+=== emit: $emit
+f(1)(2)

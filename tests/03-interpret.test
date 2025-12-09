@@ -1,0 +1,233 @@
+# Interpretation tests ($interpret is one interpretation; could also use $type, etc.)
+
+--- multiple interpretations
+let x = 42 in x
+=== parse: $parse, compile: $compile, emit: $emit
+$.let($env, "x", ($env) => $.number(42), ($env) => $.lookup($env, "x"))
+=== ..., interpret: $interpret
+42
+
+--- literal number
+42
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- literal string
+"hello"
+=== parse: $parse, compile: $compile, interpret: $interpret
+"hello"
+
+--- literal boolean true
+true
+=== parse: $parse, compile: $compile, interpret: $interpret
+true
+
+--- literal boolean false
+false
+=== parse: $parse, compile: $compile, interpret: $interpret
+false
+
+--- simple let
+let x = 42 in x
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- nested let
+let x = 1 in let y = 2 in x
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- lambda and call
+let f = (x) => x in f(42)
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- if true branch
+if true then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- if false branch
+if false then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- object literal
+{ x: 1 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"x": 1}
+
+--- member access
+let o = { x: 42 } in o.x
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- index access with string key
+let o = { x: 42 } in o["x"]
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- index access with computed key
+let o = { x: 42 } in let k = "x" in o[k]
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- chained member access
+let o = { a: { b: { c: 1 } } } in o.a.b.c
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- setindex
+let o = {} in let _ = o["x"] = 42 in o.x
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- multiple let bindings
+let a = 1 in let b = 2 in let c = 3 in a
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- let shadowing
+let x = 1 in let x = 2 in x
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- lambda multiple params
+let f = (a, b, c) => a in f(1, 2, 3)
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- lambda returns second param
+let f = (a, b) => b in f(1, 2)
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- closure captures variable
+let x = 10 in let f = () => x in f()
+=== parse: $parse, compile: $compile, interpret: $interpret
+10
+
+--- closure captures outer scope
+let make = (x) => () => x in let f = make(42) in f()
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- higher order function
+let apply = (f, x) => f(x) in let inc = (n) => n in apply(inc, 5)
+=== parse: $parse, compile: $compile, interpret: $interpret
+5
+
+--- nested function calls
+let f = (x) => x in let g = (x) => x in f(g(42))
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- if with complex condition
+let x = true in if x then 1 else 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- if with function call in branch
+let f = () => 42 in if true then f() else 0
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- nested if
+if true then if false then 1 else 2 else 3
+=== parse: $parse, compile: $compile, interpret: $interpret
+2
+
+--- object multiple properties
+{ a: 1, b: 2, c: 3 }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"a": 1, "b": 2, "c": 3}
+
+--- object with nested object
+{ outer: { inner: 42 } }
+=== parse: $parse, compile: $compile, interpret: $interpret
+{"outer": {"inner": 42}}
+
+--- object property is function
+let o = { f: (x) => x } in o.f(42)
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- array literal empty
+[]
+=== parse: $parse, compile: $compile, interpret: $interpret
+[]
+
+--- array literal single
+[42]
+=== parse: $parse, compile: $compile, interpret: $interpret
+[42]
+
+--- array literal multiple
+[1, 2, 3]
+=== parse: $parse, compile: $compile, interpret: $interpret
+[1, 2, 3]
+
+--- array indexing
+[10, 20, 30][1]
+=== parse: $parse, compile: $compile, interpret: $interpret
+20
+
+--- array with expressions
+let x = 1 in let y = 2 in [x, y, 3]
+=== parse: $parse, compile: $compile, interpret: $interpret
+[1, 2, 3]
+
+--- nested arrays
+[[1, 2], [3, 4]]
+=== parse: $parse, compile: $compile, interpret: $interpret
+[[1, 2], [3, 4]]
+
+--- array in let binding
+let arr = [1, 2, 3] in arr[0]
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- literal zero
+0
+=== parse: $parse, compile: $compile, interpret: $interpret
+0
+
+--- literal negative (parsed as expression)
+let neg = (x) => x in neg(0)
+=== parse: $parse, compile: $compile, interpret: $interpret
+0
+
+--- literal empty string
+""
+=== parse: $parse, compile: $compile, interpret: $interpret
+""
+
+--- literal string with spaces
+"hello world"
+=== parse: $parse, compile: $compile, interpret: $interpret
+"hello world"
+
+--- literal string with escapes
+"hello\nworld"
+=== parse: $parse, compile: $compile, interpret: $interpret
+"hello\nworld"
+
+--- call with no args
+let f = () => 42 in f()
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- immediate lambda call
+((x) => x)(42)
+=== parse: $parse, compile: $compile, interpret: $interpret
+42
+
+--- lambda returning lambda
+let f = (x) => (y) => x in f(1)(2)
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- complex nested expression
+let pair = (a, b) => { fst: a, snd: b } in let p = pair(1, 2) in p.fst
+=== parse: $parse, compile: $compile, interpret: $interpret
+1

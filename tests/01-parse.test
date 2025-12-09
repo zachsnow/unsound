@@ -1,0 +1,306 @@
+# Parser tests
+
+--- literal number
+42
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": 42
+}
+
+--- literal string
+"hello"
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": "hello"
+}
+
+--- identifier
+foo
+=== parse: $parse
+{
+  "name": "foo",
+  "type": "Ident"
+}
+
+--- simple let
+let x = 1 in x
+=== parse: $parse
+{
+  "body": {
+    "name": "x",
+    "type": "Ident"
+  },
+  "name": "x",
+  "type": "LetExpr",
+  "value": {
+    "type": "Literal",
+    "value": 1
+  }
+}
+
+--- lambda no params
+() => 1
+=== parse: $parse
+{
+  "body": {
+    "type": "Literal",
+    "value": 1
+  },
+  "params": [],
+  "type": "Lambda"
+}
+
+--- lambda with params
+(x, y) => x
+=== parse: $parse
+{
+  "body": {
+    "name": "x",
+    "type": "Ident"
+  },
+  "params": ["x", "y"],
+  "type": "Lambda"
+}
+
+--- if expression
+if true then 1 else 2
+=== parse: $parse
+{
+  "cond": {
+    "type": "Literal",
+    "value": true
+  },
+  "else": {
+    "type": "Literal",
+    "value": 2
+  },
+  "then": {
+    "type": "Literal",
+    "value": 1
+  },
+  "type": "IfExpr"
+}
+
+--- function application
+f(1, 2)
+=== parse: $parse
+{
+  "args": [
+    {
+      "type": "Literal",
+      "value": 1
+    },
+    {
+      "type": "Literal",
+      "value": 2
+    }
+  ],
+  "fn": {
+    "name": "f",
+    "type": "Ident"
+  },
+  "type": "App"
+}
+
+--- member access
+x.y
+=== parse: $parse
+{
+  "key": {
+    "type": "Literal",
+    "value": "y"
+  },
+  "object": {
+    "name": "x",
+    "type": "Ident"
+  },
+  "type": "Index"
+}
+
+--- empty object
+{}
+=== parse: $parse
+{
+  "properties": [],
+  "type": "ObjectExpr"
+}
+
+--- object with properties
+{ x: 1, y: 2 }
+=== parse: $parse
+{
+  "properties": [
+    {
+      "key": "x",
+      "value": {
+        "type": "Literal",
+        "value": 1
+      }
+    },
+    {
+      "key": "y",
+      "value": {
+        "type": "Literal",
+        "value": 2
+      }
+    }
+  ],
+  "type": "ObjectExpr"
+}
+
+--- index access
+x["y"]
+=== parse: $parse
+{
+  "key": {
+    "type": "Literal",
+    "value": "y"
+  },
+  "object": {
+    "name": "x",
+    "type": "Ident"
+  },
+  "type": "Index"
+}
+
+--- setindex
+x["y"] = 1
+=== parse: $parse
+{
+  "key": {
+    "type": "Literal",
+    "value": "y"
+  },
+  "object": {
+    "name": "x",
+    "type": "Ident"
+  },
+  "type": "SetIndex",
+  "value": {
+    "type": "Literal",
+    "value": 1
+  }
+}
+
+--- nested let
+let x = 1 in let y = 2 in x
+=== parse: $parse
+{
+  "body": {
+    "body": {
+      "name": "x",
+      "type": "Ident"
+    },
+    "name": "y",
+    "type": "LetExpr",
+    "value": {
+      "type": "Literal",
+      "value": 2
+    }
+  },
+  "name": "x",
+  "type": "LetExpr",
+  "value": {
+    "type": "Literal",
+    "value": 1
+  }
+}
+
+--- chained member access
+a.b.c
+=== parse: $parse
+{
+  "key": {
+    "type": "Literal",
+    "value": "c"
+  },
+  "object": {
+    "key": {
+      "type": "Literal",
+      "value": "b"
+    },
+    "object": {
+      "name": "a",
+      "type": "Ident"
+    },
+    "type": "Index"
+  },
+  "type": "Index"
+}
+
+--- chained function calls
+f(1)(2)
+=== parse: $parse
+{
+  "args": [
+    {
+      "type": "Literal",
+      "value": 2
+    }
+  ],
+  "fn": {
+    "args": [
+      {
+        "type": "Literal",
+        "value": 1
+      }
+    ],
+    "fn": {
+      "name": "f",
+      "type": "Ident"
+    },
+    "type": "App"
+  },
+  "type": "App"
+}
+
+--- parenthesized expression
+(42)
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": 42
+}
+
+--- nested parentheses
+((42))
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": 42
+}
+
+--- comment before expression
+// this is a comment
+42
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": 42
+}
+
+--- string with escape
+"hello\nworld"
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": "hello\nworld"
+}
+
+--- boolean true
+true
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": true
+}
+
+--- boolean false
+false
+=== parse: $parse
+{
+  "type": "Literal",
+  "value": false
+}

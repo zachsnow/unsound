@@ -1,0 +1,43 @@
+{
+  "name": "unsound",
+  "displayName": "Unsound",
+  "description": "Language support for the Unsound programming language",
+  "version": "0.2.0",
+  "publisher": "unsound",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:unsound"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "unsound",
+        "aliases": ["Unsound", "unsound"],
+        "extensions": [".us"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "unsound",
+        "scopeName": "source.unsound",
+        "path": "./syntaxes/unsound.tmLanguage.json"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "bun build src/extension.ts --outdir out --target node --format cjs --external vscode --external vscode-languageclient",
+    "watch": "bun build src/extension.ts --outdir out --target node --format cjs --external vscode --external vscode-languageclient --watch",
+    "types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0"
+  }
+}

@@ -1,0 +1,39 @@
+//usc -x meso -x thermo
+// typed.us - Type-level computation demo
+
+let Num = { kind: "num" };
+let Str = { kind: "str" };
+let Bool = { kind: "bool" };
+let Arrow = (param, ret) => { kind: "arrow", param: param, ret: ret };
+let Record = (fields) => { kind: "record", fields: fields };
+let TypeError = (msg) => { kind: "error", msg: msg };
+
+let typeEq = (a, b) => a.kind == b.kind;
+
+let showType = (t) =>
+  if t.kind == "num" then "Num"
+  else if t.kind == "str" then "Str"
+  else if t.kind == "bool" then "Bool"
+  else if t.kind == "arrow" then "Arrow"
+  else if t.kind == "error" then "Error: " + t.msg
+  else "?";
+
+let Pair = (a, b) => Record({ fst: a, snd: b });
+let Maybe = (t) => { kind: "maybe", inner: t };
+
+let IfNumThen = (t, yes, no) =>
+  if t.kind == "num" then yes else no;
+
+let demo = {
+  num: Num,
+  str: Str,
+  numToStr: Arrow(Num, Str),
+  pairNumStr: Pair(Num, Str),
+  maybeNum: Maybe(Num),
+  test1: IfNumThen(Num, Str, Bool),
+  test2: IfNumThen(Str, Str, Bool),
+  show1: showType(IfNumThen(Num, Str, Bool)),
+  show2: showType(IfNumThen(Str, Str, Bool))
+};
+
+demo

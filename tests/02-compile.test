@@ -1,0 +1,91 @@
+# Compiler tests (compile produces IR, emit converts to string)
+
+--- literal number
+42
+=== parse: $parse, compile: $compile, emit: $emit
+$.number(42)
+
+--- literal string
+"hello"
+=== parse: $parse, compile: $compile, emit: $emit
+$.string("hello")
+
+--- literal boolean
+true
+=== parse: $parse, compile: $compile, emit: $emit
+$.boolean(true)
+
+--- identifier
+x
+=== parse: $parse, compile: $compile, emit: $emit
+$.lookup($env, "x")
+
+--- simple let
+let x = 1 in x
+=== parse: $parse, compile: $compile, emit: $emit
+$.let($env, "x", ($env) => $.number(1), ($env) => $.lookup($env, "x"))
+
+--- lambda no params
+() => 1
+=== parse: $parse, compile: $compile, emit: $emit
+$.lambda($env, [], ($env) => $.number(1))
+
+--- lambda with param
+(x) => x
+=== parse: $parse, compile: $compile, emit: $emit
+$.lambda($env, ["x"], ($env) => $.lookup($env, "x"))
+
+--- if expression
+if true then 1 else 2
+=== parse: $parse, compile: $compile, emit: $emit
+$.if($.boolean(true), ($env) => $.number(1), ($env) => $.number(2), $env)
+
+--- function call
+f(1)
+=== parse: $parse, compile: $compile, emit: $emit
+$.call($.lookup($env, "f"), [$.number(1)])
+
+--- member access
+x.y
+=== parse: $parse, compile: $compile, emit: $emit
+$.index($.lookup($env, "x"), $.string("y"))
+
+--- index access computed
+x["y"]
+=== parse: $parse, compile: $compile, emit: $emit
+$.index($.lookup($env, "x"), $.string("y"))
+
+--- setindex
+x["y"] = 1
+=== parse: $parse, compile: $compile, emit: $emit
+$.setIndex($.lookup($env, "x"), $.string("y"), $.number(1))
+
+--- empty object
+{}
+=== parse: $parse, compile: $compile, emit: $emit
+$.object({  })
+
+--- object with properties
+{ a: 1, b: 2 }
+=== parse: $parse, compile: $compile, emit: $emit
+$.object({ ["a"]: $.number(1), ["b"]: $.number(2) })
+
+--- lambda multiple params
+(x, y, z) => x
+=== parse: $parse, compile: $compile, emit: $emit
+$.lambda($env, ["x", "y", "z"], ($env) => $.lookup($env, "x"))
+
+--- nested let
+let x = 1 in let y = 2 in x
+=== parse: $parse, compile: $compile, emit: $emit
+$.let($env, "x", ($env) => $.number(1), ($env) => $.let($env, "y", ($env) => $.number(2), ($env) => $.lookup($env, "x")))
+
+--- function call multiple args
+f(1, 2, 3)
+=== parse: $parse, compile: $compile, emit: $emit
+$.call($.lookup($env, "f"), [$.number(1), $.number(2), $.number(3)])
+
+--- chained member access
+a.b.c
+=== parse: $parse, compile: $compile, emit: $emit
+$.index($.index($.lookup($env, "a"), $.string("b")), $.string("c"))

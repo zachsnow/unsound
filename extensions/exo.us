@@ -1,0 +1,261 @@
+//usc -x meso -x thermo
+// exo.us - Type annotations and type checking
+//
+// Adds:
+//   - Type annotations: let x : T = v, const x : T = v
+//   - $type interpreter: abstract interpretation returning types
+//   - Type expressions evaluated via $interpret
+//
+// Type values are objects: { kind: "num" }, { kind: "arrow", param: T, ret: T }
+// Type-level functions are normal functions evaluated by $interpret.
+
+// === Type Constructors ===
+// Defined once, used by both $type (via closure) and $interpret (via env binding)
+
+let Num = { kind: "num" };
+let Str = { kind: "str" };
+let Bool = { kind: "bool" };
+let Void = { kind: "void" };
+let Any = { kind: "any" };
+let Arrow = (param, ret) => { kind: "arrow", param: param, ret: ret };
+let Record = (fields) => { kind: "record", fields: fields };
+let Arr = (elem) => { kind: "array", elem: elem };
+
+let typeEq = (a, b) =>
+  if a === null || b === null then a === b
+  else if a.kind == "any" || b.kind == "any" then true
+  else if a.kind != b.kind then false
+  else if a.kind == "arrow" then typeEq(a.param, b.param) && typeEq(a.ret, b.ret)
+  else if a.kind == "array" then typeEq(a.elem, b.elem)
+  else true;
+
+let showType = (t) =>
+  if t === null then "null"
+  else if t.kind == "num" then "Num"
+  else if t.kind == "str" then "Str"
+  else if t.kind == "bool" then "Bool"
+  else if t.kind == "void" then "Void"
+  else if t.kind == "any" then "Any"
+  else if t.kind == "arrow" then "(" + showType(t.param) + " -> " + showType(t.ret) + ")"
+  else if t.kind == "array" then "[" + showType(t.elem) + "]"
+  else if t.kind == "record" then "Record"
+  else if t.kind == "error" then "TypeError: " + t.msg
+  else "?";
+
+let TypeError = (msg) => { kind: "error", msg: msg };
+
+// === Parser Extension ===
+
+let exoParseExtension = ($) => {
+  let baseLetExpr = $.letExpr;
+
+  // Override letExpr to parse optional type annotation: let x : T = v
+  $.letExpr = () => (input, pos) => {
+    let kw = $.keyword("let")(input, pos);
+    if !(kw.ok) then { ok: false, expected: "let", pos: pos }
+    else {
+      let name = $.ident()(input, kw.pos);
+      if !(name.ok) then { ok: false, expected: "identifier", pos: kw.pos }
+      else {
+        // Try to parse : Type
+        let ws1 = $.ws()(input, name.pos);
+        let colon = $.token(":")(input, ws1.pos);
+        let annotationResult = if colon.ok then {
+          let typeExpr = $.expr()(input, colon.pos);
+          if !(typeExpr.ok) then { ok: false, expected: "type expression", pos: colon.pos }
+          else { ok: true, value: typeExpr.value, pos: typeExpr.pos }
+        }
+        else { ok: true, value: null, pos: ws1.pos };
+
+        if !(annotationResult.ok) then annotationResult
+        else {
+          let eq = $.token("=")(input, annotationResult.pos);
+          if !(eq.ok) then { ok: false, expected: "=", pos: annotationResult.pos }
+          else {
+            let value = $.expr()(input, eq.pos);
+            if !(value.ok) then value
+            else {
+              let result = {
+                type: "LetExpr",
+                name: name.value,
+                value: value.value,
+                body: null
+              };
+              // Add annotation if present
+              if annotationResult.value !== null then
+                result.annotation = annotationResult.value;
+              { ok: true, value: result, pos: value.pos }
+            }
+          }
+        }
+      }
+    }
+  };
+  {}
+};
+
+// === Compiler Extension ===
+
+let exoCompileExtension = ($) => {
+  let baseCompileExpr = $.compileExpr;
+
+  $.compileExpr = (expr) =>
+    if expr.type == "LetExpr" && expr.annotation !== null && expr.annotation !== undefined then
+      // Typed let: compile annotation as a thunk that takes semantics
+      $.ir.$(
+        "typedLet",
+        $.ir.var("$env"),
+        $.ir.string(expr.name),
+        $.ir.thunk($.compileExpr(expr.value)),
+        $.ir.thunk($.compileExpr(expr.annotation)),
+        $.ir.thunk($.compileExpr(expr.body))
+      )
+    else
+      baseCompileExpr(expr);
+  {}
+};
+
+// === Interpret Extension (binds type constructors as globals) ===
+
+let exoInterpretExtension = ($) => {
+  // Override $.env to add type constructors to every new environment
+  let baseEnv = $.env;
+  $.env = () => {
+    let e = baseEnv();
+    e.bind("Num", Num);
+    e.bind("Str", Str);
+    e.bind("Bool", Bool);
+    e.bind("Void", Void);
+    e.bind("Any", Any);
+    e.bind("Arrow", Arrow);
+    e.bind("Record", Record);
+    e.bind("Arr", Arr);
+    e.bind("typeEq", typeEq);
+    e.bind("showType", showType);
+    e.bind("TypeError", TypeError);
+    e
+  };
+
+  // typedLet: ignore annotation at runtime, just evaluate normally
+  $.typedLet = ($env, name, valueThunk, annotThunk, bodyThunk) => {
+    let value = valueThunk($);
+    $env.bind(name, value);
+    bodyThunk($)
+  };
+  {}
+};
+
+// === Type Interpreter Extension ===
+
+let exoTypeExtension = ($) => {
+  // Store reference to eval interpreter for annotation evaluation
+  // This will be set when the extension is applied
+  let evalInterp = null;
+
+  // Primitives return types
+  $.number = (n) => Num;
+  $.string = (s) => Str;
+  $.boolean = (b) => Bool;
+
+  // Object: infer record type
+  $.object = (props) => {
+    let fields = {};
+    props.map((p) => {
+      fields[p.key] = p.value;
+      null
+    });
+    Record(fields)
+  };
+
+  // Lambda: without param annotations, return Any -> returnType
+  // TODO: support param annotations
+  $.lambda = ($env, params, bodyThunk) => {
+    // For now, bind params as Any and infer body type
+    let childEnv = $env.child();
+    params.map((p) => {
+      childEnv.bind(p, Any);
+      null
+    });
+    let retType = bodyThunk(childEnv);
+    // Single param for now
+    let paramType = if params.length == 1 then Any else Any;
+    Arrow(paramType, retType)
+  };
+
+  // Application: if fn is Arrow, return its ret type
+  $.app = (fn, args) =>
+    if fn.kind == "arrow" then fn.ret
+    else if fn.kind == "any" then Any
+    else if fn.kind == "error" then fn
+    else TypeError("Cannot call non-function: " + showType(fn));
+
+  // If: both branches must have compatible types
+  $.if = ($env, condThunk, thenThunk, elseThunk) => {
+    let condType = condThunk($env);
+    let thenType = thenThunk($env);
+    let elseType = elseThunk($env);
+    if !(typeEq(condType, Bool)) && condType.kind != "any" then
+      TypeError("Condition must be Bool, got " + showType(condType))
+    else if typeEq(thenType, elseType) then thenType
+    else if thenType.kind == "any" then elseType
+    else if elseType.kind == "any" then thenType
+    else TypeError("Branch types don't match: " + showType(thenType) + " vs " + showType(elseType))
+  };
+
+  // Index: return field type if known
+  $.index = (obj, key) =>
+    if obj.kind == "record" && obj.fields !== null then {
+      let fieldType = obj.fields[key];
+      if fieldType !== null && fieldType !== undefined then fieldType
+      else Any
+    }
+    else if obj.kind == "any" then Any
+    else Any;
+
+  // Typed let: evaluate annotation with $eval, check against inferred type
+  $.typedLet = ($env, name, valueThunk, annotThunk, bodyThunk) => {
+    // Evaluate type annotation using the eval interpreter
+    let declaredType = annotThunk(evalInterp);
+    // Type-check the value
+    let inferredType = valueThunk($);
+    // Check compatibility
+    if !(typeEq(inferredType, declaredType)) then
+      TypeError("Expected " + showType(declaredType) + " but got " + showType(inferredType));
+    // Bind the declared type (more precise than inferred)
+    $env.bind(name, declaredType);
+    bodyThunk($)
+  };
+
+  // Override $.env to add type constructors for user type functions
+  let baseEnv = $.env;
+  $.env = () => {
+    let e = baseEnv();
+    e.bind("Num", Num);
+    e.bind("Str", Str);
+    e.bind("Bool", Bool);
+    e.bind("Void", Void);
+    e.bind("Any", Any);
+    e.bind("Arrow", Arrow);
+    e.bind("Record", Record);
+    e.bind("Arr", Arr);
+    e.bind("typeEq", typeEq);
+    e.bind("showType", showType);
+    e.bind("TypeError", TypeError);
+    e
+  };
+
+  {}
+};
+
+// === The Extension ===
+
+{
+  name: "exo",
+  description: "Type annotations and type checking",
+  requires: "thermo",
+  version: "1.0.0",
+  $parse: exoParseExtension,
+  $compile: exoCompileExtension,
+  $interpret: exoInterpretExtension,
+  $type: exoTypeExtension
+}
