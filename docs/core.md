@@ -13,12 +13,19 @@ false       // boolean
 null        // null
 ```
 
-## Objects
+## Object literals
 
 ```
 {}                      // empty object
 { x: 1, y: 2 }          // object with properties
 { name: "alice" }       // string keys
+```
+
+## Array literals
+
+```
+[]                      // empty array
+[ 1, true ]             // array with elements
 ```
 
 ## Functions
@@ -53,7 +60,7 @@ if true then 1 else 2   // 1
 if x > 0 then "positive" else "non-positive"
 ```
 
-Both branches required in core.
+Both branches are required.
 
 ## Member Access
 
