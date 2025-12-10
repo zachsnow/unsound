@@ -1,34 +1,37 @@
 // Tests for the extension system
 
-import { createLanguage, applyExtension, run, compileToJS } from './extension.ts';
-import type { Extension, InterpretOps, Env } from './extension.ts';
+import {
+  createLanguage, run,
+  compileToJS
+} from "./extension.ts";
+import type { Extension } from "./extension.ts";
 
 // === Base language tests ===
 
-console.log('Testing base language...');
+console.log("Testing base language...");
 
 const baseLang = createLanguage();
 
-let result = await run(baseLang, '42');
+let result = await run(baseLang, "42");
 if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
-result = await run(baseLang, 'let x = 1 in x');
+result = await run(baseLang, "let x = 1 in x");
 if (result !== 1) {
   throw new Error(`Expected 1, got: ${result}`);
 }
 
-result = await run(baseLang, 'let f = (x) => x in f(42)');
+result = await run(baseLang, "let f = (x) => x in f(42)");
 if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
-console.log('Base language tests passed!');
+console.log("Base language tests passed!");
 
 // === Extension: custom let (demonstrates overriding) ===
 
-console.log('Testing custom let extension...');
+console.log("Testing custom let extension...");
 
 // This extension changes let to log when called
 const letLogExtension: Extension = {
@@ -44,16 +47,16 @@ const letLogExtension: Extension = {
 const logLang = createLanguage([letLogExtension]);
 
 // Test that basic stuff still works
-result = await run(logLang, 'let x = 42 in x');
+result = await run(logLang, "let x = 42 in x");
 if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
-console.log('Custom let extension tests passed!');
+console.log("Custom let extension tests passed!");
 
 // === Extension: tracing interpreter ===
 
-console.log('Testing tracing extension...');
+console.log("Testing tracing extension...");
 
 const trace: string[] = [];
 
@@ -84,37 +87,37 @@ const tracingExtension: Extension = {
 const tracingLang = createLanguage([tracingExtension]);
 
 trace.length = 0;
-result = await run(tracingLang, 'let x = 42 in x');
+result = await run(tracingLang, "let x = 42 in x");
 
-if (!trace.includes('let(x)')) {
+if (!trace.includes("let(x)")) {
   throw new Error(`Expected trace to include let(x), got: ${trace}`);
 }
-if (!trace.includes('number(42)')) {
+if (!trace.includes("number(42)")) {
   throw new Error(`Expected trace to include number(42), got: ${trace}`);
 }
-if (!trace.includes('lookup(x)')) {
+if (!trace.includes("lookup(x)")) {
   throw new Error(`Expected trace to include lookup(x), got: ${trace}`);
 }
 
-console.log('Tracing extension tests passed!');
+console.log("Tracing extension tests passed!");
 
 // === Compile to JS string ===
 
-console.log('Testing compileToJS...');
+console.log("Testing compileToJS...");
 
-const js = compileToJS(baseLang, 'let x = 1 in x');
-if (!js.includes('$.let')) {
+const js = compileToJS(baseLang, "let x = 1 in x");
+if (!js.includes("$.let")) {
   throw new Error(`Expected $.let in output, got: ${js}`);
 }
-if (!js.includes('export default')) {
+if (!js.includes("export default")) {
   throw new Error(`Expected export default in output, got: ${js}`);
 }
 
-console.log('compileToJS tests passed!');
+console.log("compileToJS tests passed!");
 
 // === Multiple extensions ===
 
-console.log('Testing multiple extensions...');
+console.log("Testing multiple extensions...");
 
 const countingExtension: Extension = {
   $interpret: ($) => {
@@ -134,19 +137,19 @@ const countingExtension: Extension = {
 const combinedLang = createLanguage([tracingExtension, countingExtension]);
 
 trace.length = 0;
-result = await run(combinedLang, 'let f = (x) => x in f(42)');
+result = await run(combinedLang, "let f = (x) => x in f(42)");
 if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
-if (!trace.includes('let(f)')) {
+if (!trace.includes("let(f)")) {
   throw new Error(`Expected trace to include let(f)`);
 }
 
-console.log('Multiple extensions tests passed!');
+console.log("Multiple extensions tests passed!");
 
 // === Simple wrapper extension (tests open recursion) ===
 
-console.log('Testing simple wrapper extension...');
+console.log("Testing simple wrapper extension...");
 
 const simpleTrace: string[] = [];
 
@@ -164,16 +167,18 @@ const simpleTracingExtension: Extension = {
 const simpleLang = createLanguage([simpleTracingExtension]);
 
 simpleTrace.length = 0;
-result = await run(simpleLang, 'let x = 42 in x');
+result = await run(simpleLang, "let x = 42 in x");
 if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
 // This is the key test: does the traced number get called inside the let?
-if (!simpleTrace.includes('number(42)')) {
-  throw new Error(`Expected simpleTrace to include number(42), got: ${simpleTrace}`);
+if (!simpleTrace.includes("number(42)")) {
+  throw new Error(
+    `Expected simpleTrace to include number(42), got: ${simpleTrace}`
+  );
 }
 
-console.log('Simple wrapper extension tests passed!');
+console.log("Simple wrapper extension tests passed!");
 
-console.log('\nAll extension tests passed!');
+console.log("\nAll extension tests passed!");
