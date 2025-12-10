@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <div class="left">
+      <a href="/" class="root">Uns&#x2601;und</a>
+      <p class="tagline">An extensible and unsound programming languages framework</p>
+    </div>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </header>
+
+  <nav>
+    <a href="#motivation">Motivation</a>
+    <a href="#overview">Overview</a>
+    <a href="#building">Building</a>
+    <a href="#usage">Usage</a>
+    <a href="#lsp">LSP</a>
+    <a href="#testing">Testing</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <main>
+    <section id="motivation">
+      <h1>Motivation</h1>
+<h2>The Problem: Type-Level Sublanguages</h2>
+<p>Have you ever written TypeScript and found yourself in type-level hell? Consider a simple task: you want a type function that takes a union type and filters it based on some condition. In a normal programming language, you'd write:</p>
+<pre><code class="language-typescript">function filter(items, predicate) {
+  return items.filter(predicate);
+}
+</code></pre>
+<p>But in TypeScript's type system, you write something like:</p>
+<pre><code class="language-typescript">type FilterByKind&lt;T, K&gt; = T extends { kind: K } ? T : never;
+</code></pre>
+<p>This is a <em>conditional type</em> - TypeScript's type-level <code>if</code>. It uses the <code>extends</code> keyword (overloaded to mean something completely different from class extension), a ternary-style <code>? :</code> syntax, and the magic <code>never</code> type to filter. Want to do something more complex? You'll need mapped types, template literal types, recursive conditional types, and a dozen other specialized constructs.</p>
+<p><strong>Why can't I just write an <code>if</code> statement?</strong></p>
+<p>The same pattern appears everywhere. Type-level programming uses a completely different sublanguage than value-level programming:</p>
+<ul>
+<li>Value: <code>if (cond) a else b</code> vs Type: <code>Cond extends true ? A : B</code></li>
+<li>Value: <code>items.map(f)</code> vs Type: <code>{ [K in keyof T]: F&lt;T[K]&gt; }</code></li>
+<li>Value: <code>str.split('.')</code> vs Type: <code>S extends \</code>${infer H}.${infer T}` ? ... : ...`</li>
+</ul>
+<p>You already know how to program. Why should you learn a second, weirder language just to work with types?</p>
+<h2>The Insight: Parameterized Semantics</h2>
+<p>The key insight behind Unsound came from separating <em>compilation</em> from <em>interpretation</em>. Consider a simple expression: <code>42 + 1</code>.</p>
+<p>A traditional interpreter walks an AST and computes directly:</p>
+<pre><code class="language-javascript">function evaluate(expr) {
+  if (expr.type === 'number') return expr.value;
+  if (expr.type === 'add') return evaluate(expr.left) + evaluate(expr.right);
+}
+</code></pre>
+<p>A traditional compiler emits target code - the semantics are baked in:</p>
+<pre><code class="language-asm">mov eax, 42
+add eax, 1
+</code></pre>
+<p>But what if we compiled to code that <em>calls methods on a semantics object</em> <code>$</code>?</p>
+<pre><code class="language-javascript">($) =&gt; $.add($.number(42), $.number(1))
+</code></pre>
+<p>This compiled function doesn't <em>do</em> anything yet - it just describes the structure of the computation. The &quot;meaning&quot; comes from the <code>$</code> we pass in:</p>
+<pre><code class="language-javascript">// Evaluation: actually compute the result
+const $eval = {
+  number: (n) =&gt; n,
+  add: (a, b) =&gt; a + b,
+};
+program($eval);  // =&gt; 43
+
+// Pretty-printing: produce a string representation
+const $print = {
+  number: (n) =&gt; String(n),
+  add: (a, b) =&gt; `(${a} + ${b})`,
+};
+program($print);  // =&gt; &quot;(42 + 1)&quot;
+
+// Type-checking: compute types instead of values
+const $type = {
+  number: (n) =&gt; &quot;Number&quot;,
+  add: (a, b) =&gt; (a === &quot;Number&quot; &amp;&amp; b === &quot;Number&quot;) ? &quot;Number&quot; : &quot;Error&quot;,
+};
+program($type);  // =&gt; &quot;Number&quot;
+</code></pre>
+<p>The same compiled code, interpreted three different ways by swapping out the semantics object.</p>
+<h2>The Payoff: Types in the Language</h2>
+<p>This brings us back to the original goal. With the <code>exo</code> extension, Unsound supports type annotations:</p>
+<pre><code class="language-unsound">let x : Num = 42;
+let f : Arrow(Num, Num) = (x) =&gt; x + 1;
+</code></pre>
+<p>But here's the key: <strong>type expressions are just regular Unsound code</strong>. When the type checker sees <code>Arrow(Num, Num)</code>, it doesn't parse it with special type-level syntax - it <em>evaluates</em> it using the standard <code>$interpret</code> semantics. <code>Arrow</code> is just a function, <code>Num</code> is just a value:</p>
+<pre><code class="language-unsound">let Num = { kind: &quot;num&quot; };
+let Arrow = (param, ret) =&gt; { kind: &quot;arrow&quot;, param: param, ret: ret };
+</code></pre>
+<p>This means you can write type-level functions using normal programming constructs:</p>
+<pre><code class="language-unsound">// A type function - just a regular function!
+let Pair = (a, b) =&gt; Record({ fst: a, snd: b });
+
+// Use it in a type annotation
+let p : Pair(Num, Str) = { fst: 42, snd: &quot;hello&quot; };
+</code></pre>
+<p>No conditional types. No mapped types. No template literal types. Just functions.</p>
+<h2>Tagless Final: It's Been Done Before</h2>
+<p>This approach isn't new - it's essentially the <em>tagless final</em> style of interpreter implementation, developed by Oleg Kiselyov and others. The idea is to represent programs not as tagged AST nodes, but as applications of an abstract interface. The &quot;final&quot; comes from the fact that you work directly with the final result type rather than an intermediate representation.</p>
+<p>Oleg's website (<a href="http://okmij.org/ftp/tagless-final/">okmij.org</a>) is a treasure trove of papers and implementations exploring this idea in depth. Unsound takes this theoretical foundation and applies it practically to building extensible languages.</p>
+<h2>Extending Beyond Evaluation</h2>
+<p>Having achieved the goal of writing &quot;type functions&quot; in the same language as regular functions (by parameterizing the semantics), a natural question arose: we have extensible evaluation; how can we achieve extensible <em>parsing</em> and <em>compilation</em>? Might our approach be related to the tagless final style?</p>
+<p>Honestly, I don't know. What I came up with is not tagless final for parsing or compilation; instead it's
+a complete &quot;open recursive&quot; implementation:</p>
+<ul>
+<li><strong>Parser combinators</strong> with open recursion - parsers can be extended by overriding individual parsing functions</li>
+<li><strong>AST visitors</strong> with open recursion - compilers and emitters can be extended by overriding how specific node types are handled</li>
+</ul>
+<p>The result is a framework where every phase of the language pipeline is extensible: you can add new syntax, new compilation strategies, and new interpretations without modifying the core implementation.</p>
+<h2>What Unsound Is</h2>
+<p>Unsound is an <strong>experiment</strong> in building extensible programming languages. It provides:</p>
+<ol>
+<li>A base language (<code>core</code>) with simple expression-oriented syntax</li>
+<li>Extension layers (<code>meso</code>, <code>thermo</code>) that add operators, blocks, and imperative features</li>
+<li>A framework for defining your own extensions</li>
+<li>Multiple interpretation modes (evaluation, typing, tracing, etc.)</li>
+</ol>
+<p>The name &quot;Unsound&quot; reflects the philosophy: we prioritize expressiveness and extensibility over formal guarantees. The type system (when used) is deliberately unsound - it's a tool for catching obvious errors, not a proof system.</p>
+
+    </section>
+
+    <section id="overview">
+      <h1>Unsound</h1>
+<blockquote>
+<p>An extensible and unsound programming languages framework</p>
+</blockquote>
+<p>Unsound is a framework for building extensible programming languages. It is in large part inspired by the
+work of Oleg Kiselyov and others on the tagless, final approach to language evaluator implementation. It
+further takes the programming approaches developed in that work and applies them to parsing and compilation.</p>
+<p>Unsound is an <strong>experiment</strong> in</p>
+<h2>Architecture</h2>
+<p>Unsound is at its core a framework for implementing programming languages whose <em>syntax</em> and *semantics
+are <em>extensible</em>. Its design is one in which multiple language <em>extensions</em> are composed to produce a
+more or less traditional (though simplified) compiler pipeline: one that first <em>parses</em> a language to an
+abstract syntax tree (AST), then <em>compiles</em> that AST to an intermediate representation (IR), then <em>emits</em>
+that IR to a target language. Extensions can extend each step in that pipeline.</p>
+<p>Beyond allowing the extension of the compiler, Unsound allows extending the <em>runtime semantics</em> of programs.
+The style of code that compilers developed with Unsound output is one in which the evaluation of the compiled program
+is parameterized by a &quot;semantics&quot; that defines what evaluation actually &quot;is&quot;. In the usual evaluation semantics
+this is essentially the identity</p>
+<h3>Phases</h3>
+<p>The core built-in compilation phases are:</p>
+<ul>
+<li><code>$pre</code>: takes a filename of the program to be compiled; generally returns <code>string</code>.</li>
+<li><code>$parse</code>: takes a string to parse; generally returns an AST.</li>
+<li><code>$compile</code>: takes an AST; generally returns an IR.</li>
+<li><code>$emit</code>: takes an IR; generally returns a <code>string</code> of code in the target language (that is -- JS).</li>
+<li><code>$post</code>: takes a string of target language code and a filename; writes it to file.</li>
+</ul>
+<p>The result is a JS file that is &quot;parameterized&quot; by a <em>semantics</em> that can be applied to the output to produce
+an <em>interpretation</em>. The standard interpretation is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
+universe of JS values.</p>
+<p>One case also provide other interpretations; for instance <code>$type</code> can implement an <em>abstract</em> interpretation
+in a universe of simple nominal types.</p>
+<h3>Extension System</h3>
+<p>Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.
+The key idea allowing extension is to implement the various phases (parsing, compilation, evaluation) with
+a similar &quot;open-recursive&quot; approach.</p>
+<p>Extensions have the following form:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; { /* extend parser */ },
+  $compile: ($) =&gt; { /* extend compiler */ },
+  $emit: ($) =&gt; { /* extend emitter */ },
+  $interpret: ($) =&gt; { /* extend default interpreter */ },
+  $type: ($) =&gt; { /* add type checker */ },
+  // ... any $-prefixed key for additional interpreters
+}
+</code></pre>
+<p>All hooks mutate <code>$</code>, adding functionality extension by extension (and initially starting with the &quot;empty&quot;
+language's implementation -- generally <code>() =&gt; {}</code>). To see how this plays out, consider parsing. The framework
+expects that, after all extensions have been loaded, the <code>$parse</code> phase will result in an object <code>$</code> that
+exports a function <code>$.parse</code> that takes the result of the <code>$pre</code> phase and outputs a value that the next phase,
+<code>$compile</code>, will understand. A simple language might implement <code>$.parse</code> as, for example, parsing a simple
+numeric expression:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; {
+    $.parse = (s) =&gt; {
+    };
+
+    $.term = (s) =&gt; {
+    };
+
+    $.addend = (s) =&gt; {
+
+    };
+
+    $.number = (s) =&gt; {
+
+    };
+  }
+}
+</code></pre>
+<p>A subsequent extension can override <code>$parse</code>, say, add exponentiation:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; {
+    let baseParse = $.parse;
+
+  };
+
+  $.exponentiation = (s) =&gt; {
+
+  };
+}
+</code></pre>
+<h2>Languages</h2>
+<p>The Unsound framework comes with several language extensions, all building on the lowest level &quot;empty&quot; language
+extension, which does nothing and returns nothing.  That's not very useful, so Unsound also comes with the
+<code>core</code> language extension, written in Typescript, which actually implements a simple, untyped, expression-based
+programming language:</p>
+<ul>
+<li>Literals: <code>42</code>, <code>&quot;hello&quot;</code>, <code>true</code>, <code>false</code></li>
+<li>Let bindings: <code>let x = 1 in x</code></li>
+<li>Lambdas: <code>(x, y) =&gt; x</code></li>
+<li>Application: <code>f(1, 2)</code></li>
+<li>If/then/else: <code>if cond then a else b</code></li>
+<li>Objects: <code>{ x: 1, y: 2 }</code></li>
+<li>Index access: <code>obj.field</code>, <code>obj[key]</code></li>
+<li>Assignment: <code>obj.field = value</code>, <code>obj[key] = value</code></li>
+</ul>
+<p>Other extensions are provided that build on <code>core</code>. For fun, these extensions form a bootstrappable &quot;tower&quot; -- each
+extension is written in a simpler language. So e.g. the <code>meso</code> extension adds infix, prefix, and postfix
+operators, providing a more usable &quot;layer&quot; over <code>core</code>:</p>
+<ul>
+<li>Numerical operators: <code>42 * 21</code></li>
+<li>Boolean operators: <code>a &amp;&amp; !b</code></li>
+</ul>
+<p>Then <code>thermo</code> adds an imperative layer over <code>meso</code>:</p>
+<p>Finally, <code>exo</code> adds a type annotation syntax, along with a typechecking semantics:</p>
+<ul>
+<li>Let binding annotations: <code>let f: Number = 42; f * f</code></li>
+</ul>
+<p>In addition, example extensions show how other programming features can be composed atop an existing language
+arbitrarily. For instance, <code>const</code> adds the classic <code>const x = y;</code> syntax, raising a parsing error for subsequent
+assignments to <code>x</code>. And <code>dyn</code> implements <em>dynamic scoping</em> for a language; note that <code>dyn</code> actually extends
+the <em>evaluation</em> semantics as well as the parsing and compilation phases.</p>
+<h3>Files</h3>
+<ul>
+<li><code>types.ts</code> - AST types (Expr, LetExpr, Lambda, etc.)</li>
+<li><code>parser.ts</code> - Combinator parser, exports <code>$parse</code></li>
+<li><code>compiler.ts</code> - AST to IR compiler, exports <code>$compile</code></li>
+<li><code>ir.ts</code> - JavaScript IR builders and emitters</li>
+<li><code>interpret.ts</code> - Base interpreter with primitives, exports <code>createInterpret</code></li>
+<li><code>extension.ts</code> - Extension composition, <code>createLanguage</code>, <code>applyExtension</code>, <code>run</code></li>
+<li><code>eval.ts</code> - Default <code>$eval</code> interpreter</li>
+<li><code>cli.ts</code> - Command-line interface</li>
+<li><code>test.ts</code> - Test runner</li>
+</ul>
+<h3>Extensions</h3>
+<p>Located in <code>extensions/</code>:</p>
+<ul>
+<li><code>core.ts</code> - Base implementations for all phases (parser, compiler, emitter, interpreter)</li>
+<li><code>meso.us</code> - Infix operators with precedence (the &quot;middle layer&quot;)</li>
+<li><code>thermo.us</code> - JS-like imperative features (assignment with body)</li>
+<li><code>const.us</code> - Constant bindings with compile-time checking</li>
+<li><code>trace.ts</code> - Tracing/debugging extension</li>
+<li><code>identity.us</code> - No-op extension (test)</li>
+</ul>
+<h2>CLI Usage</h2>
+<pre><code class="language-bash"># Run a program
+usc program.us
+
+# With extensions
+usc -x full.ts program.us
+usc -x extensions/meso.us program.us
+
+# Chain extensions (applied in order)
+usc -x ext1.us -x ext2.us program.us
+
+# Select interpreter (default: interpret)
+usc -x simply-typed.us --interpret type program.us
+
+# Output modes
+usc -m module -o out.js program.us      # Export function
+usc -m standalone -o app.js program.us  # Self-contained
+
+# Debug
+usc --ast --ir --js program.us
+
+# Environment variables
+usc -e 'x=42' program.us
+</code></pre>
+<h2>Test Format</h2>
+<pre><code># File-level extensions
+@ext full.ts
+
+--- test name
+input (source, AST JSON, or IR JSON based on first phase)
+=== phase: $impl[, phase: $impl, ...]
+expected output
+
+--- parse test
+let x = 1 in x
+=== parse: $parse
+{&quot;type&quot;:&quot;LetExpr&quot;,...}
+
+--- compile test (input is AST JSON)
+{&quot;type&quot;:&quot;Literal&quot;,&quot;value&quot;:42}
+=== compile: $compile, emit: $emit
+$.number(42)
+
+--- eval test
+1 + 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+
+--- error test
+let let = 1
+=== parse: $parse
+error: identifier
+</code></pre>
+
+    </section>
+
+    <section id="building">
+      <h1>Building and Installing</h1>
+<p>Bun and TypeScript are the only dependencies. Once <code>bun</code> is available:</p>
+<pre><code class="language-bash">bun install
+</code></pre>
+<p>The following scripts are available:</p>
+<pre><code class="language-bash">bun run build       # Type check and run tests; builds the binary dist/usc
+bun run test        # Run tests only
+bun run types       # Type check only
+bun run usc --help  # CLI help
+</code></pre>
+<h2>Development</h2>
+<p>When developing locally you can run the TypeScript directly instead of recompiling <code>usc</code> every time:</p>
+<pre><code class="language-bash">bun run usc
+</code></pre>
+<h2>Language Server</h2>
+<p>The Unsound language server provides IDE support for VS Code and other editors. To install:</p>
+<pre><code class="language-bash">bun run install
+</code></pre>
+<p>This installs the VS Code extension from <code>editors/vscode/</code>.</p>
+
+    </section>
+
+    <section id="usage">
+      <h1>Usage</h1>
+<h2>Running Programs</h2>
+<pre><code class="language-bash"># Run a program
+usc program.us
+
+# With extensions
+usc -x full.ts program.us
+usc -x extensions/meso.us program.us
+
+# Chain extensions (applied in order)
+usc -x ext1.us -x ext2.us program.us
+</code></pre>
+<h2>Interpreters</h2>
+<p>By default, programs are evaluated using the <code>$interpret</code> semantics. You can select a different interpreter:</p>
+<pre><code class="language-bash"># Select interpreter (default: interpret)
+usc -x simply-typed.us --interpret type program.us
+</code></pre>
+<h2>Output Modes</h2>
+<pre><code class="language-bash"># Output modes
+usc -m module -o out.js program.us      # Export function
+usc -m standalone -o app.js program.us  # Self-contained
+</code></pre>
+<h2>Debugging</h2>
+<pre><code class="language-bash"># Debug output
+usc --ast --ir --js program.us
+
+# Environment variables
+usc -e 'x=42' program.us
+</code></pre>
+<h2>The Language Layers</h2>
+<p>Unsound provides several language extensions that build on each other:</p>
+<h3>Core</h3>
+<p>The base language - a simple expression-oriented language:</p>
+<pre><code class="language-unsound">let x = 42 in x
+let f = (a, b) =&gt; a in f(1, 2)
+if true then &quot;yes&quot; else &quot;no&quot;
+{ x: 1, y: 2 }.x
+</code></pre>
+<h3>Meso</h3>
+<p>Adds infix and prefix operators with precedence:</p>
+<pre><code class="language-unsound">1 + 2 * 3
+x &gt; 0 &amp;&amp; x &lt; 10
+!done || count == 0
+</code></pre>
+<h3>Thermo</h3>
+<p>Adds imperative features - blocks, semicolons, assignment:</p>
+<pre><code class="language-unsound">let x = 1;
+let y = 2;
+{
+  x = x + y;
+  x * 2
+}
+</code></pre>
+
+    </section>
+
+    <section id="lsp">
+      <h1>Language Server</h1>
+<p>Unsound includes a language server that provides IDE support for VS Code and other LSP-compatible editors.</p>
+<h2>Features</h2>
+<ul>
+<li>Syntax highlighting</li>
+<li>Go to definition</li>
+<li>Hover information</li>
+<li>Completion suggestions</li>
+<li>Diagnostic errors</li>
+</ul>
+<h2>Installation</h2>
+<pre><code class="language-bash">bun run install
+</code></pre>
+<p>This installs the VS Code extension from <code>editors/vscode/</code>. The extension automatically starts the language server
+when you open <code>.us</code> files. Unsound files should include <code>//usc</code>-directives so that the extension can load the
+necessary extensions for the file. The <code>$analyze</code> semantics is applied to the file to gather information for
+the language server, which means that extensions can extend the analysis to add more information for the editor.</p>
+
+    </section>
+
+    <section id="testing">
+      <h1>Testing</h1>
+<p>Most of the tests for Unsound amount to testing the result of parsing, compiling, emitting, and interpreting languages composed of various extensions. To this end tests can be defined in custom <code>*.test</code> files that allow easily specifying which language extensions to use, and which phases to run.</p>
+<h2>Test File Format</h2>
+<p>Each file is comprised of a <code>usc</code>-directive indicating how to invoke <code>usc</code>, usually specifying the extensions needed to run the tests.</p>
+<pre><code># usc -x meso -x thermo
+</code></pre>
+<p>Then there are several tests, each consisting of a title, input, and multiple expected outputs. For each output we define which phases of the framework should be executed, using the extensions defined in the <code>usc</code>-comment.</p>
+<pre><code>--- test name
+input (source, AST JSON, or IR JSON based on first phase)
+=== phase: $impl[, phase: $impl, ...]
+expected output
+</code></pre>
+<h2>Multiple Pipelines</h2>
+<p>You can define multiple <code>===</code> blocks, each with their own pipeline:</p>
+<pre><code># usc -x meso.ts
+
+--- parse test
+let x = 1 in x
+=== parse: $parse
+{&quot;type&quot;:&quot;LetExpr&quot;,...}
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
+
+--- compile test (input is AST JSON)
+{&quot;type&quot;:&quot;Literal&quot;,&quot;value&quot;:42}
+=== compile: $compile, emit: $emit
+$.number(42)
+
+--- eval test
+1 + 2
+=== parse: $parse, compile: $compile, interpret: $interpret
+3
+</code></pre>
+<h2>Error Tests</h2>
+<p>You can additionally define a pipeline followed by <code>error</code>; this means that the pipeline should fail with the error described in the block:</p>
+<pre><code>--- error test
+let let = 1
+=== parse: $parse
+error: identifier
+</code></pre>
+<h2>Running Tests</h2>
+<pre><code class="language-bash">bun run test
+</code></pre>
+<p>This runs all <code>*.test</code> files in the project.</p>
+
+    </section>
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
