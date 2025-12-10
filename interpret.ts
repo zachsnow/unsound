@@ -175,9 +175,11 @@ export function build$interpret($: InterpretOps, globals: Record<string, unknown
 
   $.call = (fn, args) => (fn as Function)(...args);
 
-  // Strict equality - works on any values including null/undefined
-  $.strictEq = (a, b) => a === b;
-  $.strictNeq = (a, b) => a !== b;
+  // Strict equality - works on any values including null/undefined.
+  // We can't compile `a === b` as e.g. `a['op==='](b)` because both `a` and `b`
+  // could be null/undefined.
+  $.strictEq = (a: unknown, b: unknown) => a === b;
+  $.strictNeq = (a: unknown, b: unknown) => a !== b;
 
   $.if = (cond, thenFn, elseFn, $env) => cond ? thenFn($env) : elseFn($env);
 
