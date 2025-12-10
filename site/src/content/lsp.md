@@ -16,16 +16,7 @@ Unsound includes a language server that provides IDE support for VS Code and oth
 bun run install
 ```
 
-This installs the VS Code extension from `editors/vscode/`. The extension automatically starts the language server when you open `.us` files.
-
-## Configuration
-
-The language server reads project configuration from `unsound.json` if present:
-
-```json
-{
-  "extensions": ["meso", "thermo"]
-}
-```
-
-This tells the language server which extensions to load for parsing and analysis.
+This installs the VS Code extension from `editors/vscode/`. The extension automatically starts the language server
+when you open `.us` files. Unsound files should include `//usc`-directives so that the extension can load the
+necessary extensions for the file. The `$analyze` semantics is applied to the file to gather information for
+the language server, which means that extensions can extend the analysis to add more information for the editor.
