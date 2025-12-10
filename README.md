@@ -83,7 +83,10 @@ input (source, AST JSON, or IR JSON based on first phase)
 expected output
 ```
 
-You can define multiple
+You can define multiple `===` blocks, each with their own pipeline. To refer the to previous
+pipeline, use `...`
+
+```
 # usc -x meso.ts
 
 --- test name
@@ -95,6 +98,8 @@ expected output
 let x = 1 in x
 === parse: $parse
 {"type":"LetExpr",...}
+=== parse: $parse, compile: $compile, interpret: $interpret
+1
 
 --- compile test (input is AST JSON)
 {"type":"Literal","value":42}
@@ -105,7 +110,12 @@ $.number(42)
 1 + 2
 === parse: $parse, compile: $compile, interpret: $interpret
 3
+```
 
+You can additionally define a pipeline followed by `error`; this means that the pipeline should fail
+with the error described in the block:
+
+```
 --- error test
 let let = 1
 === parse: $parse

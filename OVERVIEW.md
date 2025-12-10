@@ -218,12 +218,3 @@ let let = 1
 === parse: $parse
 error: identifier
 ```
-
-## Building
-
-```bash
-bun run build      # Type check and run tests
-bun run test       # Run tests only
-bun run types      # Type check only
-bun cli.ts --help  # CLI help
-```
