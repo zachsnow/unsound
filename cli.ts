@@ -18,7 +18,7 @@ interface Options {
   compile: string;      // Which compiler key to use (default: "compile")
   emit: string;         // Which emit key to use (default: "emit")
   interpret: string;    // Which interpreter key to use (default: "interpret")
-  mode: 'run' | 'module' | 'standalone';
+  mode: 'run' | 'module' | 'standalone' | 'binary';
   show: ('ast' | 'ir' | 'js')[];
   env: Record<string, unknown>;
   help: boolean;
@@ -57,7 +57,7 @@ function parseArgs(args: string[]): Options {
       i++;
     } else if (arg === '-m' || arg === '--mode') {
       const mode = args[++i];
-      if (mode === 'run' || mode === 'module' || mode === 'standalone') {
+      if (mode === 'run' || mode === 'module' || mode === 'standalone' || mode === 'binary') {
         opts.mode = mode;
       } else {
         console.error(`Unknown mode: ${mode}`);
@@ -119,9 +119,10 @@ Input:
 Output:
   -o, --output <file>  Write output to file (default: stdout for js, none for run)
   -m, --mode <mode>    Output mode:
-                         run        - Execute directly (default)
-                         module     - JS exporting async ($) => result
-                         standalone - Self-contained JS with interpreter
+                          run        - Execute directly (default)
+                          module     - JS exporting async ($) => result
+                          standalone - Self-contained JS with interpreter
+                          binary     - Standalone compiled with bun
 
 Extensions:
   -x, --extension <name>  Load extension by name or path
@@ -170,7 +171,7 @@ function generateModule(lang: Language, source: string): string {
   return compileToJS(lang, source);
 }
 
-async function generateStandalone(source: string, extNames: string[], noCore: boolean): Promise<string> {
+async function generateStandalone(source: string, extNames: string[], noCore: boolean, printResult: boolean = false): Promise<string> {
   // Build language incrementally and compile .us extensions as we go
   let lang = createLanguage([]);
   if (!noCore) {
@@ -230,9 +231,32 @@ ${extSetupParts.join('\n')}
 // Run program
 const program = ${js.replace('export default ', '').replace(/;$/, '')}
 const result = await program(lang.$interpret);
-
+${printResult ? 'if (result !== undefined) console.log(result);' : ''}
 export default result;
 `;
+}
+
+async function generateBinary(source: string, extNames: string[], noCore: boolean, outputPath: string): Promise<void> {
+  // Generate standalone JS with result printing enabled
+  const standaloneJs = await generateStandalone(source, extNames, noCore, true);
+
+  // Write to a temp file
+  const tempFile = path.join(import.meta.dirname, '.tmp-standalone.ts');
+  fs.writeFileSync(tempFile, standaloneJs);
+
+  try {
+    // Compile with bun
+    const proc = Bun.spawnSync(['bun', 'build', '--compile', tempFile, '--outfile', outputPath], {
+      stdio: ['inherit', 'inherit', 'inherit'],
+    });
+
+    if (proc.exitCode !== 0) {
+      throw new Error(`bun build --compile failed with exit code ${proc.exitCode}`);
+    }
+  } finally {
+    // Clean up temp file
+    fs.unlinkSync(tempFile);
+  }
 }
 
 // === Main ===
@@ -373,6 +397,14 @@ async function main() {
 
     case 'standalone':
       output = await generateStandalone(source, extNames, opts.noCore);
+      break;
+
+    case 'binary':
+      if (!opts.output) {
+        console.error('Binary mode requires -o/--output to specify the output file');
+        process.exit(1);
+      }
+      await generateBinary(source, extNames, opts.noCore, opts.output);
       break;
 
     case 'run':
