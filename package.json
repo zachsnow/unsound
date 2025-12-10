@@ -12,7 +12,7 @@
     "types": "tsc --noEmit",
     "build": "./build.sh",
     "clean": "./clean.sh",
-    "dist": "bun run types && mkdir -p dist && bun build --compile --outfile dist/usc ./cli.ts"
+    "dist": "bun generate-embedded.ts && bun run types && mkdir -p dist && bun build --compile --outfile dist/usc ./cli.ts"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

@@ -4,7 +4,10 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { embeddedSources } from './embedded-sources.ts';
+import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, resolveExtension, type Extension, type Language } from './extension.ts';
+import { emitString } from './emit.ts';
+import { formatParseError, ParseError } from './parse.ts';
+import { prettyPrint } from './pretty.ts';
 
 // Detect if running from a compiled binary (bun embeds in /$bunfs/)
 const IS_BUNDLED = import.meta.dirname.startsWith('/$bunfs/');
@@ -13,10 +16,15 @@ const IS_BUNDLED = import.meta.dirname.startsWith('/$bunfs/');
 let extractedSourceDir: string | null = null;
 
 // Write embedded sources to a temp directory and return the path
-function extractEmbeddedSources(): string {
+async function extractEmbeddedSources(): Promise<string> {
   if (extractedSourceDir) {
     return extractedSourceDir;
   }
+
+  // Dynamic import - only loaded when IS_BUNDLED is true
+  // Bun will still bundle this since the path is a string literal
+  const mod = await import('./embedded-sources.json');
+  const embeddedSources: Record<string, string> = mod.default;
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'usc-sources-'));
 
@@ -42,26 +50,22 @@ function cleanupExtractedSources(): void {
 }
 
 // Get source directory for binary mode compilation
-function getSourceDir(): string {
+async function getSourceDir(): Promise<string> {
   if (!IS_BUNDLED) {
     return import.meta.dirname;
   }
   // When bundled, extract embedded sources to temp directory
-  return extractEmbeddedSources();
+  return await extractEmbeddedSources();
 }
 
 // Get extension search paths - when bundled, include the extracted source directory
-function getExtensionSearchPaths(): string[] {
+async function getExtensionSearchPaths(): Promise<string[]> {
   if (!IS_BUNDLED) {
     return ['extensions', '.'];
   }
-  const sourceDir = getSourceDir();
+  const sourceDir = await getSourceDir();
   return [path.join(sourceDir, 'extensions'), sourceDir, 'extensions', '.'];
 }
-import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, resolveExtension, type Extension, type Language } from './extension.ts';
-import { emitString } from './emit.ts';
-import { formatParseError, ParseError } from './parse.ts';
-import { prettyPrint } from './pretty.ts';
 
 // === Argument Parsing ===
 
@@ -229,12 +233,12 @@ function generateModule(lang: Language, source: string): string {
 async function generateStandalone(source: string, extNames: string[], noCore: boolean, printResult: boolean = false): Promise<string> {
   // Build language incrementally and compile .us extensions as we go
   let lang = createLanguage([]);
-  const searchPaths = getExtensionSearchPaths();
+  const searchPaths = await getExtensionSearchPaths();
   if (!noCore) {
     await loadExt('core', lang, searchPaths);
   }
 
-  const sourceDir = getSourceDir();
+  const sourceDir = await getSourceDir();
 
   // Collect imports and extension setup
   const imports: string[] = [];
@@ -352,7 +356,7 @@ async function main() {
   }
 
   // Get extension search paths (includes extracted sources when bundled)
-  const searchPaths = getExtensionSearchPaths();
+  const searchPaths = await getExtensionSearchPaths();
 
   // Load core extension first (unless --no-core)
   if (!opts.noCore) {

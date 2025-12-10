@@ -4,3 +4,4 @@ bun.lockb
 .test-temp/
 *.us.js
 embedded-sources.ts
+embedded-sources.json
