@@ -1,62 +1,28 @@
 # Unsound
 
-Extensible language with open recursion via `$` threading.
+> An extensible and unsound programming languages framework
 
-## Architecture
+Unsound is a framework for building extensible programming languages. See the [overview](OVERVIEW.md)
+for information about the motivation and design of the framework.
 
-### Core Language
+## Building and installing
 
-Minimal expression language:
-- Literals: `42`, `"hello"`, `true`, `false`
-- Let bindings: `let x = 1 in x`
-- Lambdas: `(x, y) => x`
-- Application: `f(1, 2)`
-- If/then/else: `if cond then a else b`
-- Objects: `{ x: 1, y: 2 }`
-- Index access: `obj.field`, `obj[key]`
-- Assignment: `obj.field = value`, `obj[key] = value`
+Bun and Typescript are the only dependencies. Once `bun` is available:
 
-### Extension System
-
-Extensions provide hooks for each phase:
-
-```javascript
-{
-  $parse: ($) => { /* extend parser */ },
-  $compile: ($) => { /* extend compiler */ },
-  $emit: ($) => { /* extend emitter */ },
-  $interpret: ($) => { /* extend default interpreter */ },
-  $type: ($) => { /* add type checker */ },
-  // ... any $-prefixed key for additional interpreters
-}
+```bash
+bun install
 ```
 
-All hooks mutate `$` (open recursion pattern).
+The following scripts are available:
 
-### Files
+```bash
+bun run build       # Type check and run tests; builds the binary `dist/usc`
+bun run test        # Run tests only
+bun run types       # Type check only
+bun run usc --help  # CLI help
+```
 
-- `types.ts` - AST types (Expr, LetExpr, Lambda, etc.)
-- `parser.ts` - Combinator parser, exports `$parse`
-- `compiler.ts` - AST to IR compiler, exports `$compile`
-- `ir.ts` - JavaScript IR builders and emitters
-- `interpret.ts` - Base interpreter with primitives, exports `createInterpret`
-- `extension.ts` - Extension composition, `createLanguage`, `applyExtension`, `run`
-- `eval.ts` - Default `$eval` interpreter
-- `cli.ts` - Command-line interface
-- `test.ts` - Test runner
-
-### Extensions
-
-Located in `extensions/`:
-
-- `core.ts` - Base implementations for all phases (parser, compiler, emitter, interpreter)
-- `meso.us` - Infix operators with precedence (the "middle layer")
-- `thermo.us` - JS-like imperative features (assignment with body)
-- `const.us` - Constant bindings with compile-time checking
-- `trace.ts` - Tracing/debugging extension
-- `identity.us` - No-op extension (test)
-
-## CLI Usage
+## Usage
 
 ```bash
 # Run a program
@@ -83,11 +49,42 @@ usc --ast --ir --js program.us
 usc -e 'x=42' program.us
 ```
 
-## Test Format
+## Development
+
+When developing locally you can run the Typescript directly instead of recompiling `usc` every time:
+
+```bash
+bun run usc
+```
+
+## Language server
+
+## Testing
+
+Most of the tests for Unsound amount to testing the result of parsing, compiling, emitting, and interpreting
+languages composed of various extensions. To this end tests can be defined in custom `*.test` files that
+allow easily specifying which language extensions to use, and which phases to run.
+
+Each file is comprised of a `usc`-directive indicating how to invoke `usc`, usually specifying the extensions
+needed to run the tests.
 
 ```
-# File-level extensions
-@ext full.ts
+# usc -x meso -x thermo
+```
+
+Then there are several tests, each consisting of a title, input, and multiple expected outputs.
+For each output we define which phases of the framework should be executed, using the extensions defined
+in the `usc`-comment.
+
+```
+--- test name
+input (source, AST JSON, or IR JSON based on first phase)
+=== phase: $impl[, phase: $impl, ...]
+expected output
+```
+
+You can define multiple
+# usc -x meso.ts
 
 --- test name
 input (source, AST JSON, or IR JSON based on first phase)
@@ -113,76 +110,4 @@ $.number(42)
 let let = 1
 === parse: $parse
 error: identifier
-```
-
-## Key Concepts
-
-### Open Recursion via $
-
-All phases thread `$` through thunks:
-```javascript
-// Compiled output
-$.let("x", ($) => $.number(1), ($) => $.lookup("x"))
-```
-
-Extensions override methods on `$`:
-```javascript
-function myExtension($) {
-  const baseNumber = $.number;
-  $.number = (n) => { console.log(n); return baseNumber(n); };
-}
-```
-
-### Multiple Interpreters
-
-Extensions can provide multiple interpreter keys:
-```javascript
-{
-  $interpret: ($) => { /* evaluation */ },
-  $type: ($) => { /* type checking */ }
-}
-```
-
-Select with `--interpret <key>`:
-```bash
-usc -x simply-typed.us --interpret type program.us
-```
-
-### Primitives
-
-`$operators` global provides operator functions for bootstrapping:
-```
-let is = $operators["op==="] in
-let add = $operators["op+"] in
-...
-```
-
-### meso.us
-
-The "middle layer" - adds infix operators:
-- Precedence: `||` < `&&` < `==`/`!=` < `<`/`>`/`<=`/`>=` < `+`/`-` < `*`/`/`/`%`
-- Left-associative
-- Operators compile to method calls: `a + b` → `a["op+"](b)`
-- Parser stores `$.operators` table with prec/assoc/method
-
-## IR Structure
-
-JavaScript IR tags:
-- `literal` - JSON value
-- `var` - Variable reference
-- `call` - Function call
-- `member` - Property access ($.foo)
-- `index` - Computed access (x[y])
-- `arrow` - Arrow function
-- `object` - Object literal
-- `array` - Array literal
-- `ternary` - Conditional
-
-## Building
-
-```bash
-bun run build      # Type check and run tests
-bun run test       # Run tests only
-bun run types      # Type check only
-bun cli.ts --help  # CLI help
 ```
