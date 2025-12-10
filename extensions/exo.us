@@ -49,11 +49,6 @@ let TypeError = (msg) => { kind: "error", msg: msg };
 let exoParseExtension = ($) => {
   let baseLetExpr = $.letExpr;
 
-  // Type expression parser: operators but not assignment
-  // Uses operatorExpr directly to bypass thermo's assignment wrapper
-  // This allows `let x : Num + Str = v` but stops at bare `=`
-  $.typeExpr = () => (input, pos) => $.operatorExpr()(input, pos, 0);
-
   // Override letExpr to parse optional type annotation: let x : T = v
   $.letExpr = () => (input, pos) => {
     let kw = $.keyword("let")(input, pos);
@@ -66,8 +61,9 @@ let exoParseExtension = ($) => {
         let ws1 = $.ws()(input, name.pos);
         let colon = $.token(":")(input, ws1.pos);
         let annotationResult = if colon.ok then {
-          // Parse type annotation using typeExpr (stops at =)
-          let typeExpr = $.typeExpr()(input, colon.pos);
+          // Parse type annotation using operatorExpr (from meso) which stops at bare =
+          // This allows Num + Str but not assignment syntax
+          let typeExpr = $.operatorExpr()(input, colon.pos, 0);
           if !(typeExpr.ok) then { ok: false, expected: "type expression", pos: colon.pos }
           else { ok: true, value: typeExpr.value, pos: typeExpr.pos }
         }

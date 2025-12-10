@@ -117,13 +117,13 @@ Oleg's website ([okmij.org](http://okmij.org/ftp/tagless-final/)) is a treasure 
 
 ## Extending Beyond Evaluation
 
-Having achieved the goal of writing "type functions" in the same language as regular functions (by parameterizing the semantics), a natural question arose: could the same approach work for *parsing* and *compilation*?
+Having achieved the goal of writing "type functions" in the same language as regular functions (by parameterizing the semantics), a natural question arose: we have extensible evaluation; how can we achieve extensible *parsing* and *compilation*? Might our approach be related to the tagless final style?
 
-It turns out the answer is yes, though the mechanism is somewhat different. Rather than parameterizing a fixed pipeline, Unsound uses:
+Honestly, I don't know. What I came up with is not tagless final for parsing or compilation; instead it's
+a complete "open recursive" implementation:
 
 - **Parser combinators** with open recursion - parsers can be extended by overriding individual parsing functions
 - **AST visitors** with open recursion - compilers and emitters can be extended by overriding how specific node types are handled
-- **Interpretation hooks** - semantics objects can be extended with new operations
 
 The result is a framework where every phase of the language pipeline is extensible: you can add new syntax, new compilation strategies, and new interpretations without modifying the core implementation.
 

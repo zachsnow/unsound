@@ -10,4 +10,4 @@ git add -A
 git commit -m "Deploy site" || echo "Nothing to commit"
 git push origin gh-pages
 
-echo "Done! Site deployed to https://unsound.vein.io"
+echo "Deployed."

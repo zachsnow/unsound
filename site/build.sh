@@ -18,8 +18,8 @@ if [ -f "src/favicon.ico" ]; then
 fi
 
 # Static files.
-echo "Building SCSS..."
-bunx sass "${INPUT_DIRECTORY}/css/style.scss" "${OUTPUT_DIRECTORY}/css/style.css"
+echo "Copying CSS..."
+cp "${INPUT_DIRECTORY}/css/style.css" "${OUTPUT_DIRECTORY}/css/"
 
 echo "Copying JS..."
 cp ${INPUT_DIRECTORY}/js/app.js "${OUTPUT_DIRECTORY}/js/"
