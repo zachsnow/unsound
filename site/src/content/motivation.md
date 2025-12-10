@@ -30,10 +30,22 @@ You already know how to program. Why should you learn a second, weirder language
 
 ## The Insight: Parameterized Semantics
 
-The key insight behind Unsound came from separating *compilation* from *interpretation*. Consider a simple expression: `42 + 1`. A traditional compiler might emit:
+The key insight behind Unsound came from separating *compilation* from *interpretation*. Consider a simple expression: `42 + 1`.
+
+A traditional interpreter walks an AST and computes directly:
 
 ```javascript
-42 + 1
+function evaluate(expr) {
+  if (expr.type === 'number') return expr.value;
+  if (expr.type === 'add') return evaluate(expr.left) + evaluate(expr.right);
+}
+```
+
+A traditional compiler emits target code - the semantics are baked in:
+
+```asm
+mov eax, 42
+add eax, 1
 ```
 
 But what if we compiled to code that *calls methods on a semantics object* `$`?
