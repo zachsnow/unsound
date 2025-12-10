@@ -114,49 +114,38 @@ export function extensionNameFromPath(filePath: string): string {
   return base.replace(/\.(us|ts|js)$/, '');
 }
 
-// Parse the //usc directive from source to get default extensions
-// Format: //usc -x meso -x const
-export function parseDefaultExtensions(source: string): string[] {
-  const match = source.match(/^\/\/usc\s+(.+)$/m);
-  if (!match) return [];
-
-  const args = match[1].trim();
-  const extensions: string[] = [];
-  const parts = args.split(/\s+/);
-
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i] === '-x' && i + 1 < parts.length) {
-      extensions.push(parts[i + 1]);
-      i++;
-    }
-  }
-
-  return extensions;
-}
-
-// Full directive parsing result
-export interface UscDirective {
+// Shared usc options - used by both CLI and //usc directive
+export interface UscOptions {
   extensions: string[];
   noCore: boolean;
 }
 
-// Parse the full //usc directive including all options
-// Format: //usc --no-core -x meso -x const
-export function parseUscDirective(source: string): UscDirective {
-  const result: UscDirective = { extensions: [], noCore: false };
-  const match = source.match(/^\/\/usc\s+(.+)$/m);
-  if (!match) return result;
-
-  const parts = match[1].trim().split(/\s+/);
-  for (let i = 0; i < parts.length; i++) {
-    if (parts[i] === '-x' && i + 1 < parts.length) {
-      result.extensions.push(parts[i + 1]);
-      i++;
-    } else if (parts[i] === '--no-core') {
-      result.noCore = true;
+// Parse usc-style arguments from an array of strings
+// Shared between CLI args and //usc directive parsing
+export function parseUscArgs(args: string[]): UscOptions {
+  const opts: UscOptions = { extensions: [], noCore: false };
+  for (let i = 0; i < args.length; i++) {
+    if ((args[i] === '-x' || args[i] === '--extension') && i + 1 < args.length) {
+      opts.extensions.push(args[++i]);
+    } else if (args[i] === '--no-core') {
+      opts.noCore = true;
     }
   }
-  return result;
+  return opts;
+}
+
+// Parse the //usc directive from source to get default extensions
+// Format: //usc -x meso -x const
+export function parseDefaultExtensions(source: string): string[] {
+  return parseUscDirective(source).extensions;
+}
+
+// Parse the full //usc directive including all options
+// Format: //usc --no-core -x meso -x const
+export function parseUscDirective(source: string): UscOptions {
+  const match = source.match(/^\/\/usc\s+(.+)$/m);
+  if (!match) return { extensions: [], noCore: false };
+  return parseUscArgs(match[1].trim().split(/\s+/));
 }
 
 // Check that an extension's requirements are satisfied

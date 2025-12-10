@@ -58,10 +58,12 @@ let exoParseExtension = ($) => {
       if !(name.ok) then { ok: false, expected: "identifier", pos: kw.pos }
       else {
         // Try to parse : Type
+        // Use $.typeExpr if available (allows lambdas), else $.operatorExpr (stops at =)
         let ws1 = $.ws()(input, name.pos);
         let colon = $.token(":")(input, ws1.pos);
         let annotationResult = if colon.ok then {
-          let typeExpr = $.expr()(input, colon.pos);
+          // Parse type annotation - use operatorExpr which stops before =
+          let typeExpr = $.operatorExpr()(input, colon.pos, 0);
           if !(typeExpr.ok) then { ok: false, expected: "type expression", pos: colon.pos }
           else { ok: true, value: typeExpr.value, pos: typeExpr.pos }
         }
@@ -148,9 +150,8 @@ let exoInterpretExtension = ($) => {
 // === Type Interpreter Extension ===
 
 let exoTypeExtension = ($) => {
-  // Store reference to eval interpreter for annotation evaluation
-  // This will be set when the extension is applied
-  let evalInterp = null;
+  // Access $interpret via cross-reference (attached by extension system)
+  // This allows type annotations to be evaluated by the standard interpreter
 
   // Primitives return types
   $.number = (n) => Num;
@@ -171,7 +172,7 @@ let exoTypeExtension = ($) => {
   // TODO: support param annotations
   $.lambda = ($env, params, bodyThunk) => {
     // For now, bind params as Any and infer body type
-    let childEnv = $env.child();
+    let childEnv = $env.extend({});
     params.map((p) => {
       childEnv.bind(p, Any);
       null
@@ -212,10 +213,10 @@ let exoTypeExtension = ($) => {
     else if obj.kind == "any" then Any
     else Any;
 
-  // Typed let: evaluate annotation with $eval, check against inferred type
+  // Typed let: evaluate annotation with $interpret, check against inferred type
   $.typedLet = ($env, name, valueThunk, annotThunk, bodyThunk) => {
-    // Evaluate type annotation using the eval interpreter
-    let declaredType = annotThunk(evalInterp);
+    // Evaluate type annotation using the standard interpreter via cross-reference
+    let declaredType = annotThunk($.$interpret);
     // Type-check the value
     let inferredType = valueThunk($);
     // Check compatibility

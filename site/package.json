@@ -1,0 +1,16 @@
+{
+  "name": "unsound-site",
+  "version": "0.0.1",
+  "description": "Unsound (Site)",
+  "author": "Zach Snow",
+  "scripts": {
+    "build": "./build.sh",
+    "watch": "./watch.sh",
+    "deploy": "./deploy.sh"
+  },
+  "devDependencies": {
+    "commonmark": "^0.31.0",
+    "saladplate": "0.1.2",
+    "sass": "^1.76.0"
+  }
+}

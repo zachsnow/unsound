@@ -4,7 +4,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, resolveExtension, type Extension, type Language } from './extension.ts';
+import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, resolveExtension, type Extension, type Language, type UscOptions } from './extension.ts';
 import { emitString } from './emit.ts';
 import { formatParseError, ParseError } from './parse.ts';
 import { prettyPrint } from './pretty.ts';
@@ -69,11 +69,10 @@ async function getExtensionSearchPaths(): Promise<string[]> {
 
 // === Argument Parsing ===
 
-interface Options {
+// CLI-specific options extend shared UscOptions
+type Options = UscOptions & {
   input?: string;
   output?: string;
-  extensions: string[];
-  noCore: boolean;      // Skip loading core extension
   compile: string;      // Which compiler key to use (default: "compile")
   emit: string;         // Which emit key to use (default: "emit")
   interpret: string;    // Which interpreter key to use (default: "interpret")
@@ -82,12 +81,14 @@ interface Options {
   env: Record<string, unknown>;
   help: boolean;
   verbose: boolean;
-}
+};
 
 function parseArgs(args: string[]): Options {
+  // Start with shared options parsed by parseUscArgs
+  const shared = parseUscArgs(args);
+
   const opts: Options = {
-    extensions: [],
-    noCore: false,
+    ...shared,
     compile: 'compile',      // Default to $compile
     emit: 'emit',            // Default to $emit
     interpret: 'interpret',  // Default to $interpret
@@ -98,6 +99,7 @@ function parseArgs(args: string[]): Options {
     verbose: false,
   };
 
+  // Parse CLI-specific options
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
@@ -105,11 +107,9 @@ function parseArgs(args: string[]): Options {
     if (arg === '-h' || arg === '--help') {
       opts.help = true;
       i++;
-    } else if (arg === '--no-core') {
-      opts.noCore = true;
-      i++;
-    } else if (arg === '-x' || arg === '--extension') {
-      opts.extensions.push(args[++i]);
+    } else if (arg === '--no-core' || arg === '-x' || arg === '--extension') {
+      // Already handled by parseUscArgs, skip the value for -x
+      if (arg === '-x' || arg === '--extension') i++;
       i++;
     } else if (arg === '-o' || arg === '--output') {
       opts.output = args[++i];

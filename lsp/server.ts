@@ -17,7 +17,7 @@ import {
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { createLanguage, loadExtension, parseUscDirective, type Language } from '../extension.ts';
+import { createLanguage, loadExtension, parseUscDirective, type Language, type UscOptions } from '../extension.ts';
 import { posToLineCol, type Span } from '../ast.ts';
 import type { AnalysisResult, Definition as AnalysisDef, Reference, Diagnostic as AnalysisDiag } from '../analyze.ts';
 
