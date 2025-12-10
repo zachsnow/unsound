@@ -1,6 +1,6 @@
-@import "lib/normalize";
-@import "lib/codemirror";
-@import "codemirror";
+@use "lib/normalize";
+@use "lib/codemirror";
+@use "codemirror-custom";
 
 * {
   box-sizing: border-box;
