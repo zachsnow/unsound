@@ -49,6 +49,10 @@ let TypeError = (msg) => { kind: "error", msg: msg };
 let exoParseExtension = ($) => {
   let baseLetExpr = $.letExpr;
 
+  // Type expression parser: like appExpr but doesn't include let/if/lambda
+  // This stops at = so we can parse `let x : T = v` correctly
+  $.typeExpr = () => (input, pos) => $.appExpr()(input, pos);
+
   // Override letExpr to parse optional type annotation: let x : T = v
   $.letExpr = () => (input, pos) => {
     let kw = $.keyword("let")(input, pos);
@@ -58,12 +62,11 @@ let exoParseExtension = ($) => {
       if !(name.ok) then { ok: false, expected: "identifier", pos: kw.pos }
       else {
         // Try to parse : Type
-        // Use $.typeExpr if available (allows lambdas), else $.operatorExpr (stops at =)
         let ws1 = $.ws()(input, name.pos);
         let colon = $.token(":")(input, ws1.pos);
         let annotationResult = if colon.ok then {
-          // Parse type annotation - use operatorExpr which stops before =
-          let typeExpr = $.operatorExpr()(input, colon.pos, 0);
+          // Parse type annotation using typeExpr (stops at =)
+          let typeExpr = $.typeExpr()(input, colon.pos);
           if !(typeExpr.ok) then { ok: false, expected: "type expression", pos: colon.pos }
           else { ok: true, value: typeExpr.value, pos: typeExpr.pos }
         }

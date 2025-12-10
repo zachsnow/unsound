@@ -4,7 +4,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, resolveExtension, type Extension, type Language, type UscOptions } from './extension.ts';
+import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, parseUscDirective, resolveExtension, type Extension, type Language, type UscOptions } from './extension.ts';
 import { emitString } from './emit.ts';
 import { formatParseError, ParseError } from './parse.ts';
 import { prettyPrint } from './pretty.ts';
@@ -70,7 +70,8 @@ async function getExtensionSearchPaths(): Promise<string[]> {
 // === Argument Parsing ===
 
 // CLI-specific options extend shared UscOptions
-type Options = UscOptions & {
+// compile/interpret/emit are required here (have defaults)
+type Options = Omit<UscOptions, 'compile' | 'interpret' | 'emit'> & {
   input?: string;
   output?: string;
   compile: string;      // Which compiler key to use (default: "compile")
@@ -88,10 +89,11 @@ function parseArgs(args: string[]): Options {
   const shared = parseUscArgs(args);
 
   const opts: Options = {
-    ...shared,
-    compile: 'compile',      // Default to $compile
-    emit: 'emit',            // Default to $emit
-    interpret: 'interpret',  // Default to $interpret
+    extensions: shared.extensions,
+    noCore: shared.noCore,
+    compile: shared.compile ?? 'compile',      // Default to $compile
+    emit: shared.emit ?? 'emit',               // Default to $emit
+    interpret: shared.interpret ?? 'interpret', // Default to $interpret
     mode: 'run',
     show: [],
     env: {},
@@ -107,9 +109,10 @@ function parseArgs(args: string[]): Options {
     if (arg === '-h' || arg === '--help') {
       opts.help = true;
       i++;
-    } else if (arg === '--no-core' || arg === '-x' || arg === '--extension') {
-      // Already handled by parseUscArgs, skip the value for -x
-      if (arg === '-x' || arg === '--extension') i++;
+    } else if (arg === '--no-core' || arg === '-x' || arg === '--extension' ||
+               arg === '-c' || arg === '--compile' || arg === '-i' || arg === '--interpret' || arg === '--emit') {
+      // Already handled by parseUscArgs, skip the value for options with args
+      if (arg !== '--no-core') i++;
       i++;
     } else if (arg === '-o' || arg === '--output') {
       opts.output = args[++i];
@@ -131,15 +134,6 @@ function parseArgs(args: string[]): Options {
       i++;
     } else if (arg === '--js') {
       opts.show.push('js');
-      i++;
-    } else if (arg === '-c' || arg === '--compile') {
-      opts.compile = args[++i];
-      i++;
-    } else if (arg === '--emit') {
-      opts.emit = args[++i];
-      i++;
-    } else if (arg === '-i' || arg === '--interpret') {
-      opts.interpret = args[++i];
       i++;
     } else if (arg === '-e' || arg === '--env') {
       const [key, value] = args[++i].split('=');
@@ -347,6 +341,19 @@ async function main() {
     source = fs.readFileSync(opts.input, 'utf-8');
   }
 
+  // Parse directive from source to get file defaults
+  const directive = parseUscDirective(source);
+
+  // Merge options: CLI explicit > directive > hardcoded defaults
+  // For extensions: CLI -x flags override directive (not additive)
+  const extNames = opts.extensions.length > 0
+    ? opts.extensions
+    : directive.extensions;
+  const noCore = opts.noCore || directive.noCore;
+  const compile = opts.compile !== 'compile' ? opts.compile : (directive.compile ?? 'compile');
+  const interpret = opts.interpret !== 'interpret' ? opts.interpret : (directive.interpret ?? 'interpret');
+  const emit = opts.emit !== 'emit' ? opts.emit : (directive.emit ?? 'emit');
+
   // Build language incrementally
   let lang = createLanguage([]);
 
@@ -359,17 +366,10 @@ async function main() {
   const searchPaths = await getExtensionSearchPaths();
 
   // Load core extension first (unless --no-core)
-  if (!opts.noCore) {
+  if (!noCore) {
     log('loading extension core');
     await loadExt('core', lang, searchPaths);
   }
-
-  // Determine which extensions to load:
-  // - CLI -x flags override file defaults
-  // - If no CLI flags, use //usc directive from source
-  const extNames = opts.extensions.length > 0
-    ? opts.extensions
-    : parseDefaultExtensions(source);
 
   log(`extensions to load: ${extNames.join(', ')}`);
 
@@ -386,9 +386,9 @@ async function main() {
   }
 
   // Check that the requested interpreter exists
-  const interpKey = `$${opts.interpret}`;
+  const interpKey = `$${interpret}`;
   if (opts.mode === 'run' && !(lang as any)[interpKey]) {
-    console.error(`No interpreter '${opts.interpret}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$') && !['$parse', '$compile', '$emit'].includes(k)).map(k => k.slice(1)).join(', ')
+    console.error(`No interpreter '${interpret}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$') && !['$parse', '$compile', '$emit'].includes(k)).map(k => k.slice(1)).join(', ')
       }`);
     process.exit(1);
   }
@@ -415,21 +415,21 @@ async function main() {
   }
 
   // Compile (using specified compile phase)
-  const compileKey = `$${opts.compile}`;
+  const compileKey = `$${compile}`;
   const compiler = (lang as any)[compileKey];
 
   if (!compiler) {
-    console.error(`No compiler '${opts.compile}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$')).map(k => k.slice(1)).join(', ')
+    console.error(`No compiler '${compile}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$')).map(k => k.slice(1)).join(', ')
       }`);
     process.exit(1);
   }
 
   // For non-standard compile phases, output result directly
-  if (opts.compile !== 'compile') {
+  if (compile !== 'compile') {
     // Call the appropriate entry point (analyzeProgram for analyze, etc.)
-    const entryPoint = opts.compile === 'analyze' ? 'analyzeProgram' : 'compileProgram';
+    const entryPoint = compile === 'analyze' ? 'analyzeProgram' : 'compileProgram';
     if (typeof compiler[entryPoint] !== 'function') {
-      console.error(`Compiler '${opts.compile}' has no ${entryPoint} method`);
+      console.error(`Compiler '${compile}' has no ${entryPoint} method`);
       process.exit(1);
     }
 
@@ -476,7 +476,7 @@ async function main() {
 
     case 'run':
       try {
-        result = await run(lang, source, opts.interpret);
+        result = await run(lang, source, interpret);
         if (result !== undefined) {
           console.log(result);
         }

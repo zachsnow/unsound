@@ -118,6 +118,9 @@ export function extensionNameFromPath(filePath: string): string {
 export interface UscOptions {
   extensions: string[];
   noCore: boolean;
+  compile?: string;    // Which compiler to use (e.g., "compile", "analyze")
+  interpret?: string;  // Which interpreter to use (e.g., "interpret", "type")
+  emit?: string;       // Which emitter to use
 }
 
 // Parse usc-style arguments from an array of strings
@@ -129,6 +132,12 @@ export function parseUscArgs(args: string[]): UscOptions {
       opts.extensions.push(args[++i]);
     } else if (args[i] === '--no-core') {
       opts.noCore = true;
+    } else if ((args[i] === '-c' || args[i] === '--compile') && i + 1 < args.length) {
+      opts.compile = args[++i];
+    } else if ((args[i] === '-i' || args[i] === '--interpret') && i + 1 < args.length) {
+      opts.interpret = args[++i];
+    } else if (args[i] === '--emit' && i + 1 < args.length) {
+      opts.emit = args[++i];
     }
   }
   return opts;

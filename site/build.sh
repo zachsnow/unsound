@@ -19,7 +19,7 @@ fi
 
 # Static files.
 echo "Building SCSS..."
-pnpm exec sass "${INPUT_DIRECTORY}/css/style.scss" "${OUTPUT_DIRECTORY}/css/style.css"
+bunx sass "${INPUT_DIRECTORY}/css/style.scss" "${OUTPUT_DIRECTORY}/css/style.css"
 
 echo "Copying JS..."
 cp ${INPUT_DIRECTORY}/js/app.js "${OUTPUT_DIRECTORY}/js/"
@@ -27,7 +27,7 @@ cp ${INPUT_DIRECTORY}/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 
 # Compile Markdown and render template.
 echo "Templating..."
-pnpm exec saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
+bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
 
 echo "Done."
 echo ""
