@@ -134,6 +134,31 @@ export function parseDefaultExtensions(source: string): string[] {
   return extensions;
 }
 
+// Full directive parsing result
+export interface UscDirective {
+  extensions: string[];
+  noCore: boolean;
+}
+
+// Parse the full //usc directive including all options
+// Format: //usc --no-core -x meso -x const
+export function parseUscDirective(source: string): UscDirective {
+  const result: UscDirective = { extensions: [], noCore: false };
+  const match = source.match(/^\/\/usc\s+(.+)$/m);
+  if (!match) return result;
+
+  const parts = match[1].trim().split(/\s+/);
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === '-x' && i + 1 < parts.length) {
+      result.extensions.push(parts[i + 1]);
+      i++;
+    } else if (parts[i] === '--no-core') {
+      result.noCore = true;
+    }
+  }
+  return result;
+}
+
 // Check that an extension's requirements are satisfied
 // Accepts requires as string or string[] for flexibility
 function checkRequirements(ext: Extension, loadedExtensions: Set<string>, extPath: string): void {

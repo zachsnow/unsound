@@ -1,4 +1,4 @@
-// Unsound Language Server - using self-hosted $analyze semantics
+// Unsound Language Server - using extension system with //usc directive support
 
 import {
   createConnection,
@@ -17,64 +17,73 @@ import {
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { tryParse } from '../parser.ts';
-import { compile } from '../compiler.ts';
-import { $eval } from '../runtime.ts';
-
-// Types for analysis results (matches SourceRange from ast.ts)
-interface AnalysisLoc {
-  start: { line: number; column: number; offset: number };
-  end: { line: number; column: number; offset: number };
-}
-
-interface AnalysisDefinition {
-  name: string;
-  loc: AnalysisLoc;
-  kind: string;
-}
-
-interface AnalysisReference {
-  name: string;
-  loc: AnalysisLoc;
-  definition: AnalysisDefinition | null;
-}
-
-interface AnalysisDiagnostic {
-  message: string;
-  loc: AnalysisLoc;
-  severity: string;
-}
-
-interface AnalysisResult {
-  definitions: AnalysisDefinition[];
-  references: AnalysisReference[];
-  diagnostics: AnalysisDiagnostic[];
-}
-
-// Load $analyze semantics
-let $analyze: any = null;
-
-async function loadAnalyzer() {
-  try {
-    connection.console.log('Loading $analyze semantics...');
-    // @ts-ignore - dynamic import of compiled .us file
-    const $analyzeModule = await import('../semantics/analyze.us.js');
-    $analyze = await $analyzeModule.default($eval);
-    connection.console.log('$analyze loaded successfully');
-  } catch (e: any) {
-    connection.console.log(`Failed to load $analyze: ${e.message || e}`);
-  }
-}
+import { createLanguage, loadExtension, parseUscDirective, type Language } from '../extension.ts';
+import { posToLineCol, type Span } from '../ast.ts';
+import type { AnalysisResult, Definition as AnalysisDef, Reference, Diagnostic as AnalysisDiag } from '../analyze.ts';
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 
-// Cache for analysis results
-const documentCache = new Map<string, AnalysisResult | null>();
+// Cache languages by their configuration (noCore + extensions list)
+const languageCache = new Map<string, Language>();
 
-connection.onInitialize(async (_params: InitializeParams): Promise<InitializeResult> => {
-  await loadAnalyzer();
+// Cache analysis results per document
+const documentCache = new Map<string, { analysis: AnalysisResult | null; source: string }>();
+
+// Get or create a language for the given source's //usc directive
+async function getLanguageForSource(source: string): Promise<Language> {
+  const directive = parseUscDirective(source);
+
+  // Cache key includes noCore flag and extensions
+  const cacheKey = `${directive.noCore ? 'no-core' : 'core'}:${directive.extensions.join(',')}`;
+
+  if (!languageCache.has(cacheKey)) {
+    connection.console.log(`Creating language for: ${cacheKey}`);
+    const lang = createLanguage([]);
+
+    // Load core unless --no-core
+    if (!directive.noCore) {
+      try {
+        await loadExtension('core', lang);
+      } catch (e: any) {
+        connection.console.log(`Failed to load core extension: ${e.message}`);
+      }
+    }
+
+    // Load specified extensions
+    for (const ext of directive.extensions) {
+      try {
+        await loadExtension(ext, lang);
+        connection.console.log(`Loaded extension: ${ext}`);
+      } catch (e: any) {
+        connection.console.log(`Failed to load extension ${ext}: ${e.message}`);
+      }
+    }
+
+    languageCache.set(cacheKey, lang);
+  }
+
+  return languageCache.get(cacheKey)!;
+}
+
+// Convert a Span to LSP range
+function spanToRange(source: string, span: Span): { start: { line: number; character: number }; end: { line: number; character: number } } {
+  const start = posToLineCol(source, span.start);
+  const end = posToLineCol(source, span.end);
+  return {
+    start: { line: start.line - 1, character: start.col - 1 },
+    end: { line: end.line - 1, character: end.col - 1 },
+  };
+}
+
+// Convert a position (byte offset) to LSP position
+function posToLspPosition(source: string, pos: number): { line: number; character: number } {
+  const { line, col } = posToLineCol(source, pos);
+  return { line: line - 1, character: col - 1 };
+}
+
+connection.onInitialize((_params: InitializeParams): InitializeResult => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -88,87 +97,62 @@ connection.onInitialize(async (_params: InitializeParams): Promise<InitializeRes
   };
 });
 
-// Run analysis using $analyze semantics
-async function runAnalysis(source: string): Promise<AnalysisResult | null> {
-  if (!$analyze) {
-    connection.console.log('runAnalysis: $analyze not loaded');
-    return null;
-  }
-
-  try {
-    // Compile the source
-    const compiled = compile(source);
-    connection.console.log('runAnalysis: compiled successfully');
-
-    // Reset analyzer state
-    $analyze.reset();
-
-    // Run compiled code with $analyze
-    // Provide a fake import.meta since we're using new Function()
-    const code = compiled.replace('export default async ($) =>', '');
-    const fn = new Function('$', 'import_meta', `return (async () => {
-      const import_meta_url = import_meta.url;
-      ${code.replace(/import\.meta\.url/g, 'import_meta_url')}
-    })()`);
-
-    await fn($analyze, { url: 'file:///fake/module.js' });
-
-    // Get results
-    const results = $analyze.getResults();
-    connection.console.log(`runAnalysis: got ${results.definitions.length} definitions, ${results.references.length} references`);
-    for (const def of results.definitions) {
-      connection.console.log(`  def: ${def.name} at ${JSON.stringify(def.loc)}`);
-    }
-    for (const ref of results.references) {
-      connection.console.log(`  ref: ${ref.name} at ${JSON.stringify(ref.loc)} -> ${ref.definition?.name || 'null'}`);
-    }
-    return results;
-  } catch (e: any) {
-    connection.console.log(`runAnalysis error: ${e.message || e}`);
-    return null;
-  }
-}
-
 // Validate document and send diagnostics
 async function validateDocument(textDocument: TextDocument): Promise<void> {
-  const text = textDocument.getText();
+  const source = textDocument.getText();
   const diagnostics: Diagnostic[] = [];
 
-  const parseResult = tryParse(text);
+  try {
+    const lang = await getLanguageForSource(source);
 
-  if (!parseResult.success) {
-    // Parse error
-    diagnostics.push({
-      severity: DiagnosticSeverity.Error,
-      range: {
-        start: { line: parseResult.error.loc.start.line - 1, character: parseResult.error.loc.start.column - 1 },
-        end: { line: parseResult.error.loc.end.line - 1, character: parseResult.error.loc.end.column - 1 },
-      },
-      message: parseResult.error.shortMessage,
-      source: 'unsound',
-    });
-    documentCache.set(textDocument.uri, null);
-  } else {
-    // Parse succeeded - run $analyze
-    const analysis = await runAnalysis(text);
-    documentCache.set(textDocument.uri, analysis);
+    // Parse
+    const parseResult = lang.$parse.program()(source, 0);
 
-    if (analysis) {
-      // Add analysis diagnostics
-      for (const diag of analysis.diagnostics) {
-        diagnostics.push({
-          severity: diag.severity === 'error' ? DiagnosticSeverity.Error
-            : diag.severity === 'warning' ? DiagnosticSeverity.Warning
-              : DiagnosticSeverity.Information,
-          range: {
-            start: { line: diag.loc.start.line - 1, character: diag.loc.start.column - 1 },
-            end: { line: diag.loc.end.line - 1, character: diag.loc.end.column - 1 },
-          },
-          message: diag.message,
-          source: 'unsound',
-        });
+    if (!parseResult.ok) {
+      // Parse error - convert position to line/col
+      const pos = posToLspPosition(source, parseResult.pos);
+      diagnostics.push({
+        severity: DiagnosticSeverity.Error,
+        range: {
+          start: pos,
+          end: { line: pos.line, character: pos.character + 1 },
+        },
+        message: `Expected ${parseResult.expected}`,
+        source: 'unsound',
+      });
+      documentCache.set(textDocument.uri, { analysis: null, source });
+    } else {
+      // Parse succeeded - run analysis if $analyze exists
+      let analysis: AnalysisResult | null = null;
+
+      if (lang.$analyze?.analyzeProgram) {
+        try {
+          analysis = lang.$analyze.analyzeProgram(parseResult.value);
+
+          // Convert analysis diagnostics to LSP diagnostics
+          for (const diag of analysis.diagnostics) {
+            if (diag.loc) {
+              const range = spanToRange(source, diag.loc);
+              diagnostics.push({
+                severity: diag.severity === 'error' ? DiagnosticSeverity.Error
+                  : diag.severity === 'warning' ? DiagnosticSeverity.Warning
+                    : DiagnosticSeverity.Information,
+                range,
+                message: diag.message,
+                source: 'unsound',
+              });
+            }
+          }
+        } catch (e: any) {
+          connection.console.log(`Analysis error: ${e.message}`);
+        }
       }
+
+      documentCache.set(textDocument.uri, { analysis, source });
     }
+  } catch (e: any) {
+    connection.console.log(`Validation error: ${e.message}`);
+    documentCache.set(textDocument.uri, { analysis: null, source });
   }
 
   connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
@@ -181,18 +165,20 @@ documents.onDidChangeContent(change => {
 
 // Completion
 connection.onCompletion((params): CompletionItem[] => {
-  const analysis = documentCache.get(params.textDocument.uri);
-  if (!analysis) return [];
+  const cached = documentCache.get(params.textDocument.uri);
+  if (!cached?.analysis) return [];
 
   const items: CompletionItem[] = [];
   const seen = new Set<string>();
 
-  for (const def of analysis.definitions) {
+  for (const def of cached.analysis.definitions) {
     if (!seen.has(def.name)) {
       seen.add(def.name);
       items.push({
         label: def.name,
-        kind: CompletionItemKind.Variable,
+        kind: def.kind === 'param' ? CompletionItemKind.Variable
+          : def.kind === 'const' ? CompletionItemKind.Constant
+            : CompletionItemKind.Variable,
       });
     }
   }
@@ -209,25 +195,28 @@ connection.onCompletion((params): CompletionItem[] => {
   return items;
 });
 
-// Check if position is within a location
-function isInRange(loc: AnalysisLoc, line: number, col: number): boolean {
-  if (line < loc.start.line || line > loc.end.line) return false;
-  if (line === loc.start.line && col < loc.start.column) return false;
-  if (line === loc.end.line && col > loc.end.column) return false;
+// Check if position is within a span
+function isInSpan(source: string, span: Span, line: number, col: number): boolean {
+  const start = posToLineCol(source, span.start);
+  const end = posToLineCol(source, span.end);
+
+  if (line < start.line || line > end.line) return false;
+  if (line === start.line && col < start.col) return false;
+  if (line === end.line && col > end.col) return false;
   return true;
 }
 
 // Find definition at position
-function findDefinitionAt(analysis: AnalysisResult, line: number, col: number): AnalysisDefinition | null {
+function findDefinitionAt(source: string, analysis: AnalysisResult, line: number, col: number): AnalysisDef | null {
   // Check references first
   for (const ref of analysis.references) {
-    if (isInRange(ref.loc, line, col)) {
-      return ref.definition;
+    if (ref.loc && isInSpan(source, ref.loc, line, col)) {
+      return ref.definition || null;
     }
   }
   // Check definitions
   for (const def of analysis.definitions) {
-    if (isInRange(def.loc, line, col)) {
+    if (def.loc && isInSpan(source, def.loc, line, col)) {
       return def;
     }
   }
@@ -236,13 +225,13 @@ function findDefinitionAt(analysis: AnalysisResult, line: number, col: number): 
 
 // Hover
 connection.onHover((params): Hover | null => {
-  const analysis = documentCache.get(params.textDocument.uri);
-  if (!analysis) return null;
+  const cached = documentCache.get(params.textDocument.uri);
+  if (!cached?.analysis) return null;
 
   const line = params.position.line + 1;
   const col = params.position.character + 1;
 
-  const def = findDefinitionAt(analysis, line, col);
+  const def = findDefinitionAt(cached.source, cached.analysis, line, col);
   if (def) {
     return {
       contents: {
@@ -257,18 +246,16 @@ connection.onHover((params): Hover | null => {
 
 // Go to definition
 connection.onDefinition((params): Definition | null => {
-  const analysis = documentCache.get(params.textDocument.uri);
-  if (!analysis) return null;
+  const cached = documentCache.get(params.textDocument.uri);
+  if (!cached?.analysis) return null;
 
   const line = params.position.line + 1;
   const col = params.position.character + 1;
 
-  const def = findDefinitionAt(analysis, line, col);
+  const def = findDefinitionAt(cached.source, cached.analysis, line, col);
   if (def?.loc) {
-    return Location.create(params.textDocument.uri, {
-      start: { line: def.loc.start.line - 1, character: def.loc.start.column - 1 },
-      end: { line: def.loc.end.line - 1, character: def.loc.end.column - 1 },
-    });
+    const range = spanToRange(cached.source, def.loc);
+    return Location.create(params.textDocument.uri, range);
   }
 
   return null;
