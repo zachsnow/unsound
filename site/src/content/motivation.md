@@ -30,33 +30,44 @@ You already know how to program. Why should you learn a second, weirder language
 
 ## The Insight: Parameterized Semantics
 
-The key insight behind Unsound came from thinking about how interpreters work. Consider a simple expression evaluator:
+The key insight behind Unsound came from separating *compilation* from *interpretation*. Consider a simple expression: `42 + 1`. A traditional compiler might emit:
 
 ```javascript
-function evaluate(expr) {
-  if (expr.type === 'number') return expr.value;
-  if (expr.type === 'add') return evaluate(expr.left) + evaluate(expr.right);
-  // ...
-}
+42 + 1
 ```
 
-What if instead of hardcoding the semantics, we parameterized them?
+But what if we compiled to code that *calls methods on a semantics object* `$`?
 
 ```javascript
-function interpret(expr, $) {
-  if (expr.type === 'number') return $.number(expr.value);
-  if (expr.type === 'add') return $.add(interpret(expr.left, $), interpret(expr.right, $));
-  // ...
-}
+($) => $.add($.number(42), $.number(1))
 ```
 
-Now the "meaning" of `$.number` and `$.add` depends on what `$` we pass in:
+This compiled function doesn't *do* anything yet - it just describes the structure of the computation. The "meaning" comes from the `$` we pass in:
 
-- **Evaluation**: `$.number(n) = n`, `$.add(a, b) = a + b` - runs the program
-- **Pretty-printing**: `$.number(n) = String(n)`, `$.add(a, b) = "(" + a + " + " + b + ")"` - produces a string
-- **Type-checking**: `$.number(n) = "Number"`, `$.add(a, b) = a === "Number" && b === "Number" ? "Number" : "Error"` - computes types
+```javascript
+// Evaluation: actually compute the result
+const $eval = {
+  number: (n) => n,
+  add: (a, b) => a + b,
+};
+program($eval);  // => 43
 
-The same syntax, parsed once, can be interpreted in multiple ways by swapping out the semantics object `$`.
+// Pretty-printing: produce a string representation
+const $print = {
+  number: (n) => String(n),
+  add: (a, b) => `(${a} + ${b})`,
+};
+program($print);  // => "(42 + 1)"
+
+// Type-checking: compute types instead of values
+const $type = {
+  number: (n) => "Number",
+  add: (a, b) => (a === "Number" && b === "Number") ? "Number" : "Error",
+};
+program($type);  // => "Number"
+```
+
+The same compiled code, interpreted three different ways by swapping out the semantics object.
 
 ## Tagless Final: It's Been Done Before
 
