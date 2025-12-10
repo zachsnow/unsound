@@ -49,9 +49,10 @@ let TypeError = (msg) => { kind: "error", msg: msg };
 let exoParseExtension = ($) => {
   let baseLetExpr = $.letExpr;
 
-  // Type expression parser: like appExpr but doesn't include let/if/lambda
-  // This stops at = so we can parse `let x : T = v` correctly
-  $.typeExpr = () => (input, pos) => $.appExpr()(input, pos);
+  // Type expression parser: operators but not assignment
+  // Uses operatorExpr directly to bypass thermo's assignment wrapper
+  // This allows `let x : Num + Str = v` but stops at bare `=`
+  $.typeExpr = () => (input, pos) => $.operatorExpr()(input, pos, 0);
 
   // Override letExpr to parse optional type annotation: let x : T = v
   $.letExpr = () => (input, pos) => {
