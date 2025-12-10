@@ -65,20 +65,15 @@ input {
 }
 
 header {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
   margin-bottom: 8px;
   padding: 8px 0;
 }
 
-header a.root,
-header quote {
+header .title {
   display: flex;
-  flex-direction: column;
-  flex-basis: 100%;
-  flex: 1;
-  line-height: 2rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 header a,
@@ -88,17 +83,18 @@ header a:visited {
 
 header a.root {
   font-size: 2rem;
+  line-height: 2rem;
 }
 
 header a.source {
   font-size: 1rem;
 }
 
-header quote {
+header .tagline {
   font-size: 1rem;
   font-style: italic;
   color: var(--color-text-secondary);
-  text-align: right;
+  margin: 4px 0 0 0;
 }
 
 nav {
