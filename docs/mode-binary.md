@@ -48,11 +48,11 @@ When `--mode binary` is invoked from a compiled `usc`:
 
 ### Key Design Decisions
 
-1. **Direct imports for core**: The generated standalone imports `core.ts` directly rather than using `loadExtension()`. This ensures the core extension is bundled by bun and doesn't require runtime file access.
+1. **Direct imports in generated code**: The generated standalone imports `extension.ts` and `core.ts` directly rather than using `loadExtension()`. This lets bun bundle them into the output binary, making it fully standalone with no runtime file dependencies.
 
-2. **Source embedding as strings**: Using `with { type: "file" }` import attribute conflicts with regular module imports of the same files. Instead, `generate-embedded.ts` serializes source files as template strings.
+2. **Source embedding for usc binary**: The `usc` binary embeds source files as strings (via `generate-embedded.ts`). When `--mode binary` is invoked, these are extracted to a temp directory so bun can resolve and bundle the imports.
 
-3. **Extension search paths**: When running from a compiled binary, extension search paths include the extracted temp directory.
+3. **usc uses loadExtension**: The `usc` CLI itself uses `loadExtension()` to find extensions at runtime. This means the compiled `usc` binary needs `extensions/` to be available.
 
 ## Building the usc Binary
 
@@ -77,8 +77,9 @@ This requires Bun 1.2.16+.
 
 ## Limitations
 
-- Custom `.ts`/`.js` extensions specified via `-x` are imported by absolute path, which won't work if the path doesn't exist on the target machine
+- Custom `.ts`/`.js` extensions specified via `-x` are imported by absolute path in the generated code; bun will bundle them, but the paths must exist at compile time
 - `.us` extensions work fine as they're compiled and inlined
+- The `usc` binary itself requires `extensions/` to be available (for running programs, not just for `--mode binary`)
 
 ## References
 
