@@ -69,6 +69,34 @@ program($type);  // => "Number"
 
 The same compiled code, interpreted three different ways by swapping out the semantics object.
 
+## The Payoff: Types in the Language
+
+This brings us back to the original goal. With the `exo` extension, Unsound supports type annotations:
+
+```unsound
+let x : Num = 42;
+let f : Arrow(Num, Num) = (x) => x + 1;
+```
+
+But here's the key: **type expressions are just regular Unsound code**. When the type checker sees `Arrow(Num, Num)`, it doesn't parse it with special type-level syntax - it *evaluates* it using the standard `$interpret` semantics. `Arrow` is just a function, `Num` is just a value:
+
+```unsound
+let Num = { kind: "num" };
+let Arrow = (param, ret) => { kind: "arrow", param: param, ret: ret };
+```
+
+This means you can write type-level functions using normal programming constructs:
+
+```unsound
+// A type function - just a regular function!
+let Pair = (a, b) => Record({ fst: a, snd: b });
+
+// Use it in a type annotation
+let p : Pair(Num, Str) = { fst: 42, snd: "hello" };
+```
+
+No conditional types. No mapped types. No template literal types. Just functions.
+
 ## Tagless Final: It's Been Done Before
 
 This approach isn't new - it's essentially the *tagless final* style of interpreter implementation, developed by Oleg Kiselyov and others. The idea is to represent programs not as tagged AST nodes, but as applications of an abstract interface. The "final" comes from the fact that you work directly with the final result type rather than an intermediate representation.
