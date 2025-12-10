@@ -61,9 +61,9 @@ let exoParseExtension = ($) => {
         let ws1 = $.ws()(input, name.pos);
         let colon = $.token(":")(input, ws1.pos);
         let annotationResult = if colon.ok then {
-          // Parse type annotation using operatorExpr (from meso) which stops at bare =
-          // This allows Num + Str but not assignment syntax
-          let typeExpr = $.operatorExpr()(input, colon.pos, 0);
+          // Parse type annotation - just an identifier or function call for now
+          // TODO: support more complex type expressions
+          let typeExpr = $.atom()(input, colon.pos);
           if !(typeExpr.ok) then { ok: false, expected: "type expression", pos: colon.pos }
           else { ok: true, value: typeExpr.value, pos: typeExpr.pos }
         }
