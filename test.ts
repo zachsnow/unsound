@@ -16,6 +16,7 @@
 //   === emit: $emit                      # Input is IR JSON
 //   === parse: $parse, compile: $compile # Chained phases
 //   === ..., emit: $emit                 # Reuse previous prefix
+//   === parse, compile, emit             # Shorthand: "phase" = "phase: $phase"
 //
 // Input type is inferred from first phase:
 //   parse    → source code (string)
@@ -92,6 +93,14 @@ interface Phase {
   impl: string;       // parser, compiler, $eval, or path to .us file
 }
 
+// Standard implementations for each phase (used when elided)
+const STANDARD_IMPLS: Record<string, string> = {
+  parse: '$parse',
+  compile: '$compile',
+  emit: '$emit',
+  interpret: '$interpret',
+};
+
 // Parse a pipeline specification like "parse: parser, compile: compiler"
 // Supports "..." to reuse previous pipeline prefix (all but last phase)
 function parsePipeline(spec: string, previousPrefix: Phase[] = []): Phase[] {
@@ -107,9 +116,15 @@ function parsePipeline(spec: string, previousPrefix: Phase[] = []): Phase[] {
 
     const [name, impl] = part.split(':').map(s => s.trim());
     if (!impl) {
-      throw new Error(`Invalid pipeline spec: ${part} (expected "phase: impl")`);
+      // Bare phase name - use standard implementation
+      if (STANDARD_IMPLS[name]) {
+        phases.push({ name, impl: STANDARD_IMPLS[name] });
+      } else {
+        throw new Error(`Invalid pipeline spec: ${part} (unknown phase or missing impl)`);
+      }
+    } else {
+      phases.push({ name, impl });
     }
-    phases.push({ name, impl });
   }
 
   return phases;
