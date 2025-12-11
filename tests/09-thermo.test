@@ -5,13 +5,13 @@
 
 --- let in syntax rejected
 let x = 1 in x
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- let in syntax rejected in parens
 (let x = 1 in x)
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 # Assignment tests
 

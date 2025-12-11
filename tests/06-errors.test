@@ -2,80 +2,80 @@
 
 --- parse error: unexpected token
 @#$
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: unclosed paren
 (1 + 2
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: unclosed string
 "hello
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: missing in keyword
 let x = 1 x
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: missing then keyword
 if true 1 else 2
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: missing else keyword
 if true then 1
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: keyword as identifier
 let let = 1 in let
-=== parse: $parse
-error: identifier
+=== parse, error
+identifier
 
 --- parse error: empty lambda body
 () =>
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: unclosed brace
 { a: 1
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: unclosed bracket
 x[1
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: missing arrow in lambda
 (x, y) x
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: trailing comma in object
 { a: 1, }
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: missing colon in object
 { a 1 }
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: if as identifier
 if
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: let as identifier
 let
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
 
 --- parse error: double equals
 let x == 1 in x
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error

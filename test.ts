@@ -407,15 +407,12 @@ async function runTest(test: TestCase, filename: string, lang: Language): Promis
       const { expectError } = parsePipeline(pipelineSpec, previousPrefix);
 
       // Check if error was expected
-      if (expectError || expectedValue.startsWith('error:')) {
-        const expectedError = expectedValue.startsWith('error:')
-          ? expectedValue.slice(6).trim()
-          : expectedValue;
-        if (!expectedError || errMsg.includes(expectedError)) {
+      if (expectError) {
+        if (!expectedValue || errMsg.includes(expectedValue)) {
           // Success - error was expected
           continue;
         }
-        errors.push(`${pipelineSpec}: expected error "${expectedError}", got: ${errMsg}`);
+        errors.push(`${pipelineSpec}: expected error "${expectedValue}", got: ${errMsg}`);
       } else {
         errors.push(`${pipelineSpec}: error: ${errMsg}`);
       }
