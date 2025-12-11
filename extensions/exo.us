@@ -266,17 +266,16 @@ let exoAnalyzeExtension = ($) => {
   $.builtins.add("showType");
   $.builtins.add("TypeError");
 
-  $.analyzeExpr = (expr) => {
+  $.analyzeExpr = (expr) =>
     // Handle LetExpr with annotation - analyze the annotation too
     if expr.type === "LetExpr" && expr.annotation !== null && expr.annotation !== undefined then {
-      let _ = $.define(expr.name, "let", expr.nameLoc);
-      let _ = if expr.nameLoc then $.token(expr.nameLoc, "variable", ["declaration"]) else {};
-      let _ = $.analyzeExpr(expr.annotation);
-      let _ = $.analyzeExpr(expr.value);
-      if expr.body !== null && expr.body !== undefined then $.analyzeExpr(expr.body) else {}
+      $.define(expr.name, "let", expr.nameLoc);
+      if expr.nameLoc then $.token(expr.nameLoc, "variable", ["declaration"]);
+      $.analyzeExpr(expr.annotation);
+      $.analyzeExpr(expr.value);
+      if expr.body !== null && expr.body !== undefined then $.analyzeExpr(expr.body)
     }
-    else baseAnalyzeExpr(expr)
-  };
+    else baseAnalyzeExpr(expr);
   {}
 };
 
