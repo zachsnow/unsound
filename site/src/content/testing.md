@@ -19,6 +19,29 @@ input (source, AST JSON, or IR JSON based on first phase)
 expected output
 ```
 
+## Pipeline Shorthands
+
+When using the standard implementation for a phase, you can omit the `$impl`:
+
+```
+=== parse, compile, emit, interpret
+```
+
+is equivalent to:
+
+```
+=== parse: $parse, compile: $compile, emit: $emit, interpret: $interpret
+```
+
+An empty `===` runs the default pipeline (`parse, compile, emit, interpret`):
+
+```
+--- simple eval test
+1 + 2
+===
+3
+```
+
 ## Multiple Pipelines
 
 You can define multiple `===` blocks, each with their own pipeline:
@@ -46,13 +69,13 @@ $.number(42)
 
 ## Error Tests
 
-You can additionally define a pipeline followed by `error`; this means that the pipeline should fail with the error described in the block:
+A test expects an error when the expected output starts with `error:`:
 
 ```
---- error test
-let let = 1
+--- parse error: missing in keyword
+let x = 1 x
 === parse: $parse
-error: identifier
+error: Parse error
 ```
 
 ## Running Tests
