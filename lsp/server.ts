@@ -14,6 +14,7 @@ import {
   Hover,
   Definition,
   Location,
+  SemanticTokensBuilder,
 } from 'vscode-languageserver/node';
 
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -30,6 +31,10 @@ const languageCache = new Map<string, Language>();
 
 // Cache analysis results per document
 const documentCache = new Map<string, { analysis: AnalysisResult | null; source: string }>();
+
+// Semantic tokens legend
+const tokenTypes = ['keyword', 'variable', 'parameter', 'function', 'number', 'string', 'operator', 'property', 'type'];
+const tokenModifiers = ['declaration', 'definition', 'readonly'];
 
 // Get or create a language for the given source's //usc directive
 async function getLanguageForSource(source: string): Promise<Language> {
@@ -93,6 +98,13 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
       },
       hoverProvider: true,
       definitionProvider: true,
+      semanticTokensProvider: {
+        legend: {
+          tokenTypes,
+          tokenModifiers,
+        },
+        full: true,
+      },
     },
   };
 });
@@ -259,6 +271,32 @@ connection.onDefinition((params): Definition | null => {
   }
 
   return null;
+});
+
+// Semantic tokens
+connection.languages.semanticTokens.on((params) => {
+  const cached = documentCache.get(params.textDocument.uri);
+  if (!cached?.analysis) return { data: [] };
+
+  const builder = new SemanticTokensBuilder();
+
+  // Sort tokens by position (required by LSP protocol)
+  const sortedTokens = [...cached.analysis.tokens].sort((a, b) => a.loc.start - b.loc.start);
+
+  for (const token of sortedTokens) {
+    const start = posToLineCol(cached.source, token.loc.start);
+    const length = token.loc.end - token.loc.start;
+    const typeIndex = tokenTypes.indexOf(token.type);
+    if (typeIndex === -1) continue; // Skip unknown token types
+
+    const modifierBits = (token.modifiers || []).reduce(
+      (acc, mod) => acc | (1 << tokenModifiers.indexOf(mod)), 0
+    );
+
+    builder.push(start.line - 1, start.col - 1, length, typeIndex, modifierBits);
+  }
+
+  return builder.build();
 });
 
 // Start listening
