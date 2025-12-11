@@ -20,10 +20,24 @@ export interface Diagnostic {
   loc?: Span;
 }
 
+// Semantic token types for LSP highlighting
+export type TokenType =
+  | 'keyword' | 'variable' | 'parameter' | 'function'
+  | 'number' | 'string' | 'operator' | 'property' | 'type';
+
+export type TokenModifier = 'declaration' | 'definition' | 'readonly';
+
+export interface SemanticToken {
+  loc: Span;
+  type: TokenType;
+  modifiers?: TokenModifier[];
+}
+
 export interface AnalysisResult {
   definitions: Definition[];
   references: Reference[];
   diagnostics: Diagnostic[];
+  tokens: SemanticToken[];
 }
 
 // Scope for tracking definitions
@@ -50,6 +64,10 @@ export interface AnalyzeOps {
   definitions: Definition[];
   references: Reference[];
   diagnostics: Diagnostic[];
+  tokens: SemanticToken[];
+
+  // Record a semantic token
+  token: (loc: Span, type: TokenType, modifiers?: TokenModifier[]) => void;
 
   // Builtins that shouldn't trigger "undefined" warnings
   builtins: Set<string>;
@@ -61,7 +79,12 @@ export function build$analyze($: AnalyzeOps): void {
   $.definitions = [];
   $.references = [];
   $.diagnostics = [];
+  $.tokens = [];
   $.builtins = new Set(['$operators']);
+
+  $.token = (loc, type, modifiers) => {
+    $.tokens.push({ loc, type, modifiers });
+  };
 
   // Scope stack
   const scopes: Scope[] = [new Map()];
@@ -111,6 +134,7 @@ export function build$analyze($: AnalyzeOps): void {
     $.definitions = [];
     $.references = [];
     $.diagnostics = [];
+    $.tokens = [];
     scopes.length = 1;
     scopes[0].clear();
 
@@ -121,6 +145,7 @@ export function build$analyze($: AnalyzeOps): void {
       definitions: $.definitions,
       references: $.references,
       diagnostics: $.diagnostics,
+      tokens: $.tokens,
     };
   };
 
@@ -128,20 +153,45 @@ export function build$analyze($: AnalyzeOps): void {
   $.analyzeExpr = (expr) => {
     switch (expr.type) {
       case 'Literal':
-        // Nothing to analyze
+        // Record token for literal
+        if (expr.loc) {
+          const v = expr.value;
+          if (typeof v === 'number') {
+            $.token(expr.loc, 'number');
+          } else if (typeof v === 'string') {
+            $.token(expr.loc, 'string');
+          } else if (typeof v === 'boolean' || v === null) {
+            $.token(expr.loc, 'keyword');
+          }
+        }
         break;
 
-      case 'Ident':
+      case 'Ident': {
         $.reference(expr.name, expr.loc);
+        // Record token - type depends on what it resolves to
+        if (expr.loc) {
+          const resolved = $.references[$.references.length - 1]?.definition;
+          if (resolved?.kind === 'param') {
+            $.token(expr.loc, 'parameter');
+          } else {
+            $.token(expr.loc, 'variable');
+          }
+        }
         break;
+      }
 
-      case 'LetExpr':
+      case 'LetExpr': {
         // Analyze value first (before name is in scope for non-recursive)
         // Actually, for letrec semantics, define first
         const def = $.define(expr.name, 'let', expr.nameLoc ?? expr.loc);
+        // Record token for binding name
+        if (expr.nameLoc) {
+          $.token(expr.nameLoc, 'variable', ['declaration']);
+        }
         $.analyzeExpr(expr.value);
         $.analyzeExpr(expr.body);
         break;
+      }
 
       case 'Lambda':
         $.pushScope();
@@ -149,6 +199,10 @@ export function build$analyze($: AnalyzeOps): void {
         for (let i = 0; i < expr.params.length; i++) {
           const paramLoc = expr.paramsLoc?.[i];
           $.define(expr.params[i], 'param', paramLoc);
+          // Record token for parameter
+          if (paramLoc) {
+            $.token(paramLoc, 'parameter', ['declaration']);
+          }
         }
         $.analyzeExpr(expr.body);
         $.popScope();
@@ -169,6 +223,10 @@ export function build$analyze($: AnalyzeOps): void {
 
       case 'ObjectExpr':
         for (const prop of expr.properties) {
+          // Record token for property key
+          if (prop.keyLoc) {
+            $.token(prop.keyLoc, 'property');
+          }
           $.analyzeExpr(prop.value);
         }
         break;

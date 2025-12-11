@@ -57,7 +57,7 @@ let mesoParseExtension = ($) =>
   let tryBinaryN = (input, p, n) =>
     let chars = input.slice(p, add(p, n)) in
     let def = $.operators.binary[chars] in
-    if def then { ok: true, value: chars, pos: add(p, n) }
+    if def then { ok: true, value: chars, pos: add(p, n), start: p }
     else { ok: false }
   in
 
@@ -84,10 +84,10 @@ let mesoParseExtension = ($) =>
     // Special case: ! but not !=
     if is(ch, "!") then
       if is(next, "=") then { ok: false, expected: "prefix", pos: p }
-      else { ok: true, value: "!", pos: add(p, 1) }
+      else { ok: true, value: "!", pos: add(p, 1), start: p }
     else
       let def = $.operators.prefix[ch] in
-      if def then { ok: true, value: ch, pos: add(p, 1) }
+      if def then { ok: true, value: ch, pos: add(p, 1), start: p }
       else { ok: false, expected: "prefix", pos: p }
   in
 
@@ -99,7 +99,7 @@ let mesoParseExtension = ($) =>
     let p = ws.pos in
     let ch = input.slice(p, add(p, 1)) in
     let def = $.operators.postfix[ch] in
-    if def then { ok: true, value: ch, pos: add(p, 1) }
+    if def then { ok: true, value: ch, pos: add(p, 1), start: p }
     else { ok: false, expected: "postfix", pos: p }
   in
 
@@ -114,7 +114,7 @@ let mesoParseExtension = ($) =>
       else
         loop({
           ok: true,
-          value: { type: "PostfixOp", op: opResult.value, operand: current.value },
+          value: { type: "PostfixOp", op: opResult.value, operand: current.value, opLoc: { start: opResult.start, end: opResult.pos } },
           pos: opResult.pos
         })
     in
@@ -133,7 +133,7 @@ let mesoParseExtension = ($) =>
       if is(operandResult.ok, false) then operandResult
       else {
         ok: true,
-        value: { type: "PrefixOp", op: prefixResult.value, operand: operandResult.value },
+        value: { type: "PrefixOp", op: prefixResult.value, operand: operandResult.value, opLoc: { start: prefixResult.start, end: prefixResult.pos } },
         pos: operandResult.pos
       }
     else
@@ -163,7 +163,7 @@ let mesoParseExtension = ($) =>
             else
               loop({
                 ok: true,
-                value: { type: "BinOp", op: op, left: current.value, right: right.value },
+                value: { type: "BinOp", op: op, left: current.value, right: right.value, opLoc: { start: opResult.start, end: opResult.pos } },
                 pos: right.pos
               })
       in
@@ -219,6 +219,28 @@ let mesoCompileExtension = ($) =>
 
 in
 
+// === Analyze Extension ===
+
+let mesoAnalyzeExtension = ($) =>
+  let baseAnalyzeExpr = $.analyzeExpr in
+  let _ = $.analyzeExpr = (expr) =>
+    if is(expr.type, "BinOp") then
+      let _ = if expr.opLoc then $.token(expr.opLoc, "operator") else {} in
+      let _ = $.analyzeExpr(expr.left) in
+      $.analyzeExpr(expr.right)
+    else if is(expr.type, "PrefixOp") then
+      let _ = if expr.opLoc then $.token(expr.opLoc, "operator") else {} in
+      $.analyzeExpr(expr.operand)
+    else if is(expr.type, "PostfixOp") then
+      let _ = if expr.opLoc then $.token(expr.opLoc, "operator") else {} in
+      $.analyzeExpr(expr.operand)
+    else
+      baseAnalyzeExpr(expr)
+  in
+  {}
+
+in
+
 // === The Extension ===
 
 {
@@ -226,5 +248,6 @@ in
   description: "Operators with precedence: binary, prefix, postfix",
   version: "1.0.0",
   $parse: mesoParseExtension,
-  $compile: mesoCompileExtension
+  $compile: mesoCompileExtension,
+  $analyze: mesoAnalyzeExtension
 }

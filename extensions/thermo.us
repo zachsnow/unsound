@@ -39,7 +39,7 @@ let thermoParseExtension = ($) =>
         if !(value.ok) then value
         else {
           ok: true,
-          value: { type: "LetStmt", name: binding.value.name, value: value.value },
+          value: { type: "LetStmt", name: binding.value.name, nameLoc: binding.value.nameLoc, value: value.value },
           pos: value.pos
         }
   in
@@ -144,7 +144,7 @@ let thermoParseExtension = ($) =>
         if !(rhsResult.ok) then rhsResult
         else {
           ok: true,
-          value: { type: "Assign", name: result.value.name, value: rhsResult.value },
+          value: { type: "Assign", name: result.value.name, nameLoc: result.value.loc, value: rhsResult.value },
           pos: rhsResult.pos
         }
       else result
@@ -250,6 +250,34 @@ let thermoInterpretExtension = ($) =>
   {}
 in
 
+// === Analyze Extension ===
+
+let thermoAnalyzeExtension = ($) =>
+  let baseAnalyzeExpr = $.analyzeExpr in
+  let _ = $.analyzeExpr = (expr) =>
+    if expr.type === "Block" then
+      let loop = (stmts, idx) =>
+        if idx >= stmts.length then {}
+        else
+          let _ = $.analyzeExpr(stmts[idx]) in
+          loop(stmts, idx + 1)
+      in
+      loop(expr.stmts, 0)
+    else if expr.type === "LetStmt" then
+      let _ = $.define(expr.name, "let", expr.nameLoc) in
+      let _ = if expr.nameLoc then $.token(expr.nameLoc, "variable", ["declaration"]) else {} in
+      $.analyzeExpr(expr.value)
+    else if expr.type === "Assign" then
+      let _ = $.reference(expr.name, expr.nameLoc) in
+      $.analyzeExpr(expr.value)
+    else if expr.type === "Void" then
+      {}
+    else
+      baseAnalyzeExpr(expr)
+  in
+  {}
+in
+
 // === The Extension ===
 
 {
@@ -259,5 +287,6 @@ in
   version: "2.0.0",
   $parse: thermoParseExtension,
   $compile: thermoCompileExtension,
-  $interpret: thermoInterpretExtension
+  $interpret: thermoInterpretExtension,
+  $analyze: thermoAnalyzeExtension
 }
