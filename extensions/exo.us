@@ -248,6 +248,38 @@ let exoTypeExtension = ($) => {
   {}
 };
 
+// === Analyze Extension ===
+
+let exoAnalyzeExtension = ($) => {
+  let baseAnalyzeExpr = $.analyzeExpr;
+
+  // Add type constructors as builtins so they don't trigger undefined errors
+  $.builtins.add("Num");
+  $.builtins.add("Str");
+  $.builtins.add("Bool");
+  $.builtins.add("Void");
+  $.builtins.add("Any");
+  $.builtins.add("Arrow");
+  $.builtins.add("Record");
+  $.builtins.add("Arr");
+  $.builtins.add("typeEq");
+  $.builtins.add("showType");
+  $.builtins.add("TypeError");
+
+  $.analyzeExpr = (expr) => {
+    // Handle LetExpr with annotation - analyze the annotation too
+    if expr.type === "LetExpr" && expr.annotation !== null && expr.annotation !== undefined then {
+      let _ = $.define(expr.name, "let", expr.nameLoc);
+      let _ = if expr.nameLoc then $.token(expr.nameLoc, "variable", ["declaration"]) else {};
+      let _ = $.analyzeExpr(expr.annotation);
+      let _ = $.analyzeExpr(expr.value);
+      if expr.body !== null && expr.body !== undefined then $.analyzeExpr(expr.body) else {}
+    }
+    else baseAnalyzeExpr(expr)
+  };
+  {}
+};
+
 // === The Extension ===
 
 {
@@ -258,5 +290,6 @@ let exoTypeExtension = ($) => {
   $parse: exoParseExtension,
   $compile: exoCompileExtension,
   $interpret: exoInterpretExtension,
-  $type: exoTypeExtension
+  $type: exoTypeExtension,
+  $analyze: exoAnalyzeExtension
 }
