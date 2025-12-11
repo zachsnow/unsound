@@ -17,6 +17,7 @@
 //   === parse: $parse, compile: $compile # Chained phases
 //   === ..., emit: $emit                 # Reuse previous prefix
 //   === parse, compile, emit             # Shorthand: "phase" = "phase: $phase"
+//   ===                                  # Default: parse, compile, emit, interpret
 //
 // Input type is inferred from first phase:
 //   parse    → source code (string)
@@ -100,6 +101,9 @@ const STANDARD_IMPLS: Record<string, string> = {
   emit: '$emit',
   interpret: '$interpret',
 };
+
+// Default pipeline when none specified
+const DEFAULT_PIPELINE = 'parse, compile, emit, interpret';
 
 // Parse a pipeline specification like "parse: parser, compile: compiler"
 // Supports "..." to reuse previous pipeline prefix (all but last phase)
@@ -302,7 +306,9 @@ function parseTestFile(content: string, _testDir: string): TestFile {
         valueLines.push(line);
       }
       const value = valueLines.join('\n').trim();
-      expectations[pipelineSpec] = value;
+      // Empty pipeline spec means default pipeline
+      const key = pipelineSpec || DEFAULT_PIPELINE;
+      expectations[key] = value;
     }
 
     if (input || Object.keys(expectations).length > 0) {
