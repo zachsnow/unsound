@@ -4,10 +4,30 @@ set -euo pipefail
 # Initial build
 ./build.sh
 
-# Start server in background
-echo "Starting server at http://localhost:8000..."
+# Start server in background (0.0.0.0 binds to all interfaces)
+TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "")
+echo "Starting server at http://localhost:8000"
+[ -n "$TAILSCALE_IP" ] && echo "                   http://$TAILSCALE_IP:8000"
 cd dist
-bun -e "Bun.serve({ port: 8000, fetch(req) { return new Response(Bun.file('.' + new URL(req.url).pathname.replace(/\/$/, '/index.html'))) } }); console.log('Serving on http://localhost:8000')" &
+bun -e "
+Bun.serve({
+  hostname: '0.0.0.0',
+  port: 8000,
+  async fetch(req) {
+    const url = new URL(req.url);
+    let path = '.' + url.pathname;
+    if (path.endsWith('/')) path += 'index.html';
+    const file = Bun.file(path);
+    if (await file.exists()) return new Response(file);
+    // Redirect to trailing slash if directory exists (like GitHub Pages)
+    const indexFile = Bun.file(path + '/index.html');
+    if (await indexFile.exists()) {
+      return Response.redirect(url.pathname + '/', 301);
+    }
+    return new Response('Not found', { status: 404 });
+  }
+});
+" &
 SERVER_PID=$!
 cd ..
 
@@ -16,4 +36,4 @@ trap "kill $SERVER_PID 2>/dev/null" EXIT
 
 # Watch for changes
 echo "Watching src/ for changes..."
-fswatch -o src ../OVERVIEW.md | xargs -n1 ./build.sh
+fswatch -o src | xargs -n1 ./build.sh

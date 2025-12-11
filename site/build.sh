@@ -25,9 +25,24 @@ echo "Copying JS..."
 cp ${INPUT_DIRECTORY}/js/app.js "${OUTPUT_DIRECTORY}/js/"
 cp ${INPUT_DIRECTORY}/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 
-# Compile Markdown and render template.
-echo "Templating..."
+# Build index page
+echo "Building index..."
 bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
+
+# Build each content page
+echo "Building pages..."
+PAGES="overview building usage lsp testing"
+for page in $PAGES; do
+    mkdir -p "${OUTPUT_DIRECTORY}/${page}"
+    # Generate content from markdown to temp file
+    bunx saladplate "${INPUT_DIRECTORY}/pages/${page}.html" > "/tmp/${page}_content.html"
+    # Inject into layout
+    bun -e "
+      const layout = await Bun.file('${INPUT_DIRECTORY}/layout.html').text();
+      const content = await Bun.file('/tmp/${page}_content.html').text();
+      console.log(layout.replace('{{CONTENT}}', content));
+    " > "${OUTPUT_DIRECTORY}/${page}/index.html"
+done
 
 echo "Done."
 echo ""

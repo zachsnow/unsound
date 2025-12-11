@@ -1,13 +1,3 @@
-# Unsound
-
-> An extensible and unsound programming languages framework
-
-Unsound is a framework for building extensible programming languages. It is in large part inspired by the
-work of Oleg Kiselyov and others on the tagless, final approach to language evaluator implementation. It
-further takes the programming approaches developed in that work and applies them to parsing and compilation.
-
-Unsound is an **experiment** in
-
 ## Architecture
 
 Unsound is at its core a framework for implementing programming languages whose *syntax* and *semantics
