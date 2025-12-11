@@ -18,6 +18,8 @@
 //   === ..., emit: $emit                 # Reuse previous prefix
 //   === parse, compile, emit             # Shorthand: "phase" = "phase: $phase"
 //   ===                                  # Default: parse, compile, emit, interpret
+//   === parse, error                     # Expect error after parse
+//   === error                            # Expect error in default pipeline
 //
 // Input type is inferred from first phase:
 //   parse    → source code (string)
@@ -105,16 +107,35 @@ const STANDARD_IMPLS: Record<string, string> = {
 // Default pipeline when none specified
 const DEFAULT_PIPELINE = 'parse, compile, emit, interpret';
 
+interface Pipeline {
+  phases: Phase[];
+  expectError: boolean;
+}
+
 // Parse a pipeline specification like "parse: parser, compile: compiler"
 // Supports "..." to reuse previous pipeline prefix (all but last phase)
-function parsePipeline(spec: string, previousPrefix: Phase[] = []): Phase[] {
+// Supports "error" as terminal to indicate error is expected
+function parsePipeline(spec: string, previousPrefix: Phase[] = []): Pipeline {
   const phases: Phase[] = [];
   const parts = spec.split(',').map(s => s.trim());
+  let expectError = false;
 
   for (const part of parts) {
     // Handle ... to reuse previous prefix
     if (part === '...') {
       phases.push(...previousPrefix);
+      continue;
+    }
+
+    // Handle "error" as special terminal marker
+    if (part === 'error') {
+      expectError = true;
+      // If no phases yet, use default pipeline
+      if (phases.length === 0) {
+        for (const name of ['parse', 'compile', 'emit', 'interpret']) {
+          phases.push({ name, impl: STANDARD_IMPLS[name] });
+        }
+      }
       continue;
     }
 
@@ -131,7 +152,7 @@ function parsePipeline(spec: string, previousPrefix: Phase[] = []): Phase[] {
     }
   }
 
-  return phases;
+  return { phases, expectError };
 }
 
 // Run a single phase
@@ -349,7 +370,7 @@ async function runTest(test: TestCase, filename: string, lang: Language): Promis
 
   for (const [pipelineSpec, expectedValue] of Object.entries(expectations)) {
     try {
-      const phases = parsePipeline(pipelineSpec, previousPrefix);
+      const { phases, expectError } = parsePipeline(pipelineSpec, previousPrefix);
 
       if (phases.length === 0) {
         errors.push(`${pipelineSpec}: empty pipeline`);
@@ -368,6 +389,12 @@ async function runTest(test: TestCase, filename: string, lang: Language): Promis
         result = await runPhase(phase, result, lang);
       }
 
+      // If we expected an error but didn't get one, that's a failure
+      if (expectError) {
+        errors.push(`${pipelineSpec}: expected error but got result: ${formatOutput(result)}`);
+        continue;
+      }
+
       // Format and compare
       const actual = formatOutput(result);
       const expected = normalizeExpected(expectedValue);
@@ -377,9 +404,10 @@ async function runTest(test: TestCase, filename: string, lang: Language): Promis
       }
     } catch (e) {
       const errMsg = (e as Error).message;
+      const { expectError } = parsePipeline(pipelineSpec, previousPrefix);
 
-      // Check if error was expected (pipeline contains "error" or expected starts with "error:")
-      if (pipelineSpec.includes('error') || expectedValue.startsWith('error:')) {
+      // Check if error was expected
+      if (expectError || expectedValue.startsWith('error:')) {
         const expectedError = expectedValue.startsWith('error:')
           ? expectedValue.slice(6).trim()
           : expectedValue;

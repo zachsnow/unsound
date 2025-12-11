@@ -58,37 +58,61 @@ numeric expression:
 ```javascript
 {
   $parse: ($) => {
+    // Parse addition: term (('+' | '-') term)*
     $.parse = (s) => {
+      let result = $.term(s);
+      while (s.peek() === '+' || s.peek() === '-') {
+        let op = s.next();
+        let right = $.term(s);
+        result = { type: op === '+' ? 'Add' : 'Sub', left: result, right };
+      }
+      return result;
     };
 
+    // Parse multiplication: number (('*' | '/') number)*
     $.term = (s) => {
+      let result = $.number(s);
+      while (s.peek() === '*' || s.peek() === '/') {
+        let op = s.next();
+        let right = $.number(s);
+        result = { type: op === '*' ? 'Mul' : 'Div', left: result, right };
+      }
+      return result;
     };
 
-    $.addend = (s) => {
-
-    };
-
+    // Parse a number literal
     $.number = (s) => {
-
+      let n = '';
+      while (s.peek() >= '0' && s.peek() <= '9') n += s.next();
+      return { type: 'Num', value: parseInt(n) };
     };
   }
 }
 ```
 
-A subsequent extension can override `$parse`, say, add exponentiation:
+A subsequent extension can override parsing to add exponentiation with higher precedence:
 
 ```javascript
 {
   $parse: ($) => {
-    let baseParse = $.parse;
+    // Save the base number parser
+    let baseNumber = $.number;
 
-  };
-
-  $.exponentiation = (s) => {
-
-  };
+    // Exponentiation: number ('^' exponent)*
+    $.number = (s) => {
+      let result = baseNumber(s);
+      while (s.peek() === '^') {
+        s.next();
+        let right = baseNumber(s);
+        result = { type: 'Exp', base: result, power: right };
+      }
+      return result;
+    };
+  }
 }
 ```
+
+Now `2^3*4+1` parses with the correct precedence: `((2^3)*4)+1`.
 
 
 
@@ -149,62 +173,3 @@ Located in `extensions/`:
 - `const.us` - Constant bindings with compile-time checking
 - `trace.ts` - Tracing/debugging extension
 - `identity.us` - No-op extension (test)
-
-## CLI Usage
-
-```bash
-# Run a program
-usc program.us
-
-# With extensions
-usc -x full.ts program.us
-usc -x extensions/meso.us program.us
-
-# Chain extensions (applied in order)
-usc -x ext1.us -x ext2.us program.us
-
-# Select interpreter (default: interpret)
-usc -x simply-typed.us --interpret type program.us
-
-# Output modes
-usc -m module -o out.js program.us      # Export function
-usc -m standalone -o app.js program.us  # Self-contained
-
-# Debug
-usc --ast --ir --js program.us
-
-# Environment variables
-usc -e 'x=42' program.us
-```
-
-## Test Format
-
-```
-# File-level extensions
-@ext full.ts
-
---- test name
-input (source, AST JSON, or IR JSON based on first phase)
-=== phase: $impl[, phase: $impl, ...]
-expected output
-
---- parse test
-let x = 1 in x
-=== parse: $parse
-{"type":"LetExpr",...}
-
---- compile test (input is AST JSON)
-{"type":"Literal","value":42}
-=== compile: $compile, emit: $emit
-$.number(42)
-
---- eval test
-1 + 2
-=== parse: $parse, compile: $compile, interpret: $interpret
-3
-
---- error test
-let let = 1
-=== parse: $parse
-error: identifier
-```

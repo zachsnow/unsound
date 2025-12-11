@@ -69,14 +69,25 @@ $.number(42)
 
 ## Error Tests
 
-A test expects an error when the expected output starts with `error:`:
+Use `error` as a terminal phase to indicate an error is expected:
 
 ```
 --- parse error: missing in keyword
 let x = 1 x
-=== parse: $parse
-error: Parse error
+=== parse, error
+Parse error
+
+--- compile error: const assignment
+const x = 1; x = 2
+=== parse, compile, error
+Cannot assign to const
+
+--- any error in full pipeline
+some bad code
+=== error
 ```
+
+The expected output is matched against the error message (partial match). If omitted, any error is accepted.
 
 ## Running Tests
 
