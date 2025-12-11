@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview/">Overview</a>
+    <a href="/building/">Building</a>
+    <a href="/usage/">Usage</a>
+    <a href="/lsp/">LSP</a>
+    <a href="/testing/">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <main>
+    <h1>Language Server</h1>
+<p>Unsound includes a language server that provides IDE support for VS Code and other LSP-compatible editors.</p>
+<h2>Features</h2>
+<ul>
+<li>Syntax highlighting</li>
+<li>Go to definition</li>
+<li>Hover information</li>
+<li>Completion suggestions</li>
+<li>Diagnostic errors</li>
+</ul>
+<h2>Installation</h2>
+<pre><code class="language-bash">bun run install
+</code></pre>
+<p>This installs the VS Code extension from <code>editors/vscode/</code>. The extension automatically starts the language server
+when you open <code>.us</code> files. Unsound files should include <code>//usc</code>-directives so that the extension can load the
+necessary extensions for the file. The <code>$analyze</code> semantics is applied to the file to gather information for
+the language server, which means that extensions can extend the analysis to add more information for the editor.</p>
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
+

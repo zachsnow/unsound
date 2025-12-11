@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview/">Overview</a>
+    <a href="/building/">Building</a>
+    <a href="/usage/">Usage</a>
+    <a href="/lsp/">LSP</a>
+    <a href="/testing/">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <main>
+    <h1>Usage</h1>
+<h2>Running Programs</h2>
+<pre><code class="language-bash"># Run a program
+usc program.us
+
+# With extensions
+usc -x full.ts program.us
+usc -x extensions/meso.us program.us
+
+# Chain extensions (applied in order)
+usc -x ext1.us -x ext2.us program.us
+</code></pre>
+<h2>Interpreters</h2>
+<p>By default, programs are evaluated using the <code>$interpret</code> semantics. You can select a different interpreter:</p>
+<pre><code class="language-bash"># Select interpreter (default: interpret)
+usc -x simply-typed.us --interpret type program.us
+</code></pre>
+<h2>Output Modes</h2>
+<pre><code class="language-bash"># Output modes
+usc -m module -o out.js program.us      # Export function
+usc -m standalone -o app.js program.us  # Self-contained
+</code></pre>
+<h2>Debugging</h2>
+<pre><code class="language-bash"># Debug output
+usc --ast --ir --js program.us
+
+# Environment variables
+usc -e 'x=42' program.us
+</code></pre>
+<h2>The Language Layers</h2>
+<p>Unsound provides several language extensions that build on each other:</p>
+<h3>Core</h3>
+<p>The base language - a simple expression-oriented language:</p>
+<pre><code class="language-unsound">let x = 42 in x
+let f = (a, b) =&gt; a in f(1, 2)
+if true then &quot;yes&quot; else &quot;no&quot;
+{ x: 1, y: 2 }.x
+</code></pre>
+<h3>Meso</h3>
+<p>Adds infix and prefix operators with precedence:</p>
+<pre><code class="language-unsound">1 + 2 * 3
+x &gt; 0 &amp;&amp; x &lt; 10
+!done || count == 0
+</code></pre>
+<h3>Thermo</h3>
+<p>Adds imperative features - blocks, semicolons, assignment:</p>
+<pre><code class="language-unsound">let x = 1;
+let y = 2;
+{
+  x = x + y;
+  x * 2
+}
+</code></pre>
+
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
+

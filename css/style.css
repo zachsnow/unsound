@@ -43,10 +43,11 @@ html {
   --color-highlight: #7ec8f0;
   --color-shade: #f5f9fc;
   --color-border: #d0e0eb;
+  overflow-x: hidden;
 }
 
 body {
-  max-width: 752px;
+  max-width: 720px;
   padding: 16px;
   margin: 0 auto;
   color: var(--color-text);
@@ -65,17 +66,7 @@ input {
 }
 
 header {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  padding: 8px 0;
-}
-
-header .left {
-  display: flex;
-  flex-direction: column;
+  margin-bottom: 4px;
 }
 
 header a,
@@ -84,29 +75,26 @@ header a:visited {
 }
 
 header a.root {
-  font-size: 2rem;
-  line-height: 2rem;
-}
-
-header a.source {
-  font-size: 1rem;
+  font-size: 1.5rem;
+  line-height: 1.5rem;
 }
 
 header .tagline {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-style: italic;
   color: var(--color-text-secondary);
-  margin: 4px 0 0 0;
+  margin: 2px 0 0 0;
 }
 
 nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 16px;
-  padding: 8px 0;
+  gap: 4px 12px;
+  margin-bottom: 12px;
+  padding: 4px 0;
   border-top: 1px solid var(--color-border);
   border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
 }
 
 nav a {
@@ -117,6 +105,15 @@ nav a {
 nav a:hover {
   color: var(--color-highlight);
   text-decoration: underline;
+}
+
+#pitch {
+  margin-bottom: 16px;
+  color: var(--color-text-secondary);
+}
+
+#pitch p {
+  margin: 0;
 }
 
 footer {
@@ -212,6 +209,7 @@ pre {
   padding: 8px;
   margin: 0 0 16px 0;
   overflow-x: auto;
+  max-width: 100%;
 }
 
 pre code {

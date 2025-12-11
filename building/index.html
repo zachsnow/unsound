@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview/">Overview</a>
+    <a href="/building/">Building</a>
+    <a href="/usage/">Usage</a>
+    <a href="/lsp/">LSP</a>
+    <a href="/testing/">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <main>
+    <h1>Building and Installing</h1>
+<p>Bun and TypeScript are the only dependencies. Once <code>bun</code> is available:</p>
+<pre><code class="language-bash">bun install
+</code></pre>
+<p>The following scripts are available:</p>
+<pre><code class="language-bash">bun run build       # Type check and run tests; builds the binary dist/usc
+bun run test        # Run tests only
+bun run types       # Type check only
+bun run usc --help  # CLI help
+</code></pre>
+<h2>Development</h2>
+<p>When developing locally you can run the TypeScript directly instead of recompiling <code>usc</code> every time:</p>
+<pre><code class="language-bash">bun run usc
+</code></pre>
+<h2>Language Server</h2>
+<p>The Unsound language server provides IDE support for VS Code and other editors. To install:</p>
+<pre><code class="language-bash">bun run install
+</code></pre>
+<p>This installs the VS Code extension from <code>editors/vscode/</code>.</p>
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
+

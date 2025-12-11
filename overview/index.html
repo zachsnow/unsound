@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview/">Overview</a>
+    <a href="/building/">Building</a>
+    <a href="/usage/">Usage</a>
+    <a href="/lsp/">LSP</a>
+    <a href="/testing/">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <main>
+    <h2>Architecture</h2>
+<p>Unsound is at its core a framework for implementing programming languages whose <em>syntax</em> and *semantics
+are <em>extensible</em>. Its design is one in which multiple language <em>extensions</em> are composed to produce a
+more or less traditional (though simplified) compiler pipeline: one that first <em>parses</em> a language to an
+abstract syntax tree (AST), then <em>compiles</em> that AST to an intermediate representation (IR), then <em>emits</em>
+that IR to a target language. Extensions can extend each step in that pipeline.</p>
+<p>Beyond allowing the extension of the compiler, Unsound allows extending the <em>runtime semantics</em> of programs.
+The style of code that compilers developed with Unsound output is one in which the evaluation of the compiled program
+is parameterized by a &quot;semantics&quot; that defines what evaluation actually &quot;is&quot;. In the usual evaluation semantics
+this is essentially the identity</p>
+<h3>Phases</h3>
+<p>The core built-in compilation phases are:</p>
+<ul>
+<li><code>$pre</code>: takes a filename of the program to be compiled; generally returns <code>string</code>.</li>
+<li><code>$parse</code>: takes a string to parse; generally returns an AST.</li>
+<li><code>$compile</code>: takes an AST; generally returns an IR.</li>
+<li><code>$emit</code>: takes an IR; generally returns a <code>string</code> of code in the target language (that is -- JS).</li>
+<li><code>$post</code>: takes a string of target language code and a filename; writes it to file.</li>
+</ul>
+<p>The result is a JS file that is &quot;parameterized&quot; by a <em>semantics</em> that can be applied to the output to produce
+an <em>interpretation</em>. The standard interpretation is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
+universe of JS values.</p>
+<p>One case also provide other interpretations; for instance <code>$type</code> can implement an <em>abstract</em> interpretation
+in a universe of simple nominal types.</p>
+<h3>Extension System</h3>
+<p>Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.
+The key idea allowing extension is to implement the various phases (parsing, compilation, evaluation) with
+a similar &quot;open-recursive&quot; approach.</p>
+<p>Extensions have the following form:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; { /* extend parser */ },
+  $compile: ($) =&gt; { /* extend compiler */ },
+  $emit: ($) =&gt; { /* extend emitter */ },
+  $interpret: ($) =&gt; { /* extend default interpreter */ },
+  $type: ($) =&gt; { /* add type checker */ },
+  // ... any $-prefixed key for additional interpreters
+}
+</code></pre>
+<p>All hooks mutate <code>$</code>, adding functionality extension by extension (and initially starting with the &quot;empty&quot;
+language's implementation -- generally <code>() =&gt; {}</code>). To see how this plays out, consider parsing. The framework
+expects that, after all extensions have been loaded, the <code>$parse</code> phase will result in an object <code>$</code> that
+exports a function <code>$.parse</code> that takes the result of the <code>$pre</code> phase and outputs a value that the next phase,
+<code>$compile</code>, will understand. A simple language might implement <code>$.parse</code> as, for example, parsing a simple
+numeric expression:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; {
+    // Parse addition: term (('+' | '-') term)*
+    $.parse = (s) =&gt; {
+      let result = $.term(s);
+      while (s.peek() === '+' || s.peek() === '-') {
+        let op = s.next();
+        let right = $.term(s);
+        result = { type: op === '+' ? 'Add' : 'Sub', left: result, right };
+      }
+      return result;
+    };
+
+    // Parse multiplication: number (('*' | '/') number)*
+    $.term = (s) =&gt; {
+      let result = $.number(s);
+      while (s.peek() === '*' || s.peek() === '/') {
+        let op = s.next();
+        let right = $.number(s);
+        result = { type: op === '*' ? 'Mul' : 'Div', left: result, right };
+      }
+      return result;
+    };
+
+    // Parse a number literal
+    $.number = (s) =&gt; {
+      let n = '';
+      while (s.peek() &gt;= '0' &amp;&amp; s.peek() &lt;= '9') n += s.next();
+      return { type: 'Num', value: parseInt(n) };
+    };
+  }
+}
+</code></pre>
+<p>A subsequent extension can override parsing to add exponentiation with higher precedence:</p>
+<pre><code class="language-javascript">{
+  $parse: ($) =&gt; {
+    // Save the base number parser
+    let baseNumber = $.number;
+
+    // Exponentiation: number ('^' exponent)*
+    $.number = (s) =&gt; {
+      let result = baseNumber(s);
+      while (s.peek() === '^') {
+        s.next();
+        let right = baseNumber(s);
+        result = { type: 'Exp', base: result, power: right };
+      }
+      return result;
+    };
+  }
+}
+</code></pre>
+<p>Now <code>2^3*4+1</code> parses with the correct precedence: <code>((2^3)*4)+1</code>.</p>
+<h2>Languages</h2>
+<p>The Unsound framework comes with several language extensions, all building on the lowest level &quot;empty&quot; language
+extension, which does nothing and returns nothing.  That's not very useful, so Unsound also comes with the
+<code>core</code> language extension, written in Typescript, which actually implements a simple, untyped, expression-based
+programming language:</p>
+<ul>
+<li>Literals: <code>42</code>, <code>&quot;hello&quot;</code>, <code>true</code>, <code>false</code></li>
+<li>Let bindings: <code>let x = 1 in x</code></li>
+<li>Lambdas: <code>(x, y) =&gt; x</code></li>
+<li>Application: <code>f(1, 2)</code></li>
+<li>If/then/else: <code>if cond then a else b</code></li>
+<li>Objects: <code>{ x: 1, y: 2 }</code></li>
+<li>Index access: <code>obj.field</code>, <code>obj[key]</code></li>
+<li>Assignment: <code>obj.field = value</code>, <code>obj[key] = value</code></li>
+</ul>
+<p>Other extensions are provided that build on <code>core</code>. For fun, these extensions form a bootstrappable &quot;tower&quot; -- each
+extension is written in a simpler language. So e.g. the <code>meso</code> extension adds infix, prefix, and postfix
+operators, providing a more usable &quot;layer&quot; over <code>core</code>:</p>
+<ul>
+<li>Numerical operators: <code>42 * 21</code></li>
+<li>Boolean operators: <code>a &amp;&amp; !b</code></li>
+</ul>
+<p>Then <code>thermo</code> adds an imperative layer over <code>meso</code>:</p>
+<p>Finally, <code>exo</code> adds a type annotation syntax, along with a typechecking semantics:</p>
+<ul>
+<li>Let binding annotations: <code>let f: Number = 42; f * f</code></li>
+</ul>
+<p>In addition, example extensions show how other programming features can be composed atop an existing language
+arbitrarily. For instance, <code>const</code> adds the classic <code>const x = y;</code> syntax, raising a parsing error for subsequent
+assignments to <code>x</code>. And <code>dyn</code> implements <em>dynamic scoping</em> for a language; note that <code>dyn</code> actually extends
+the <em>evaluation</em> semantics as well as the parsing and compilation phases.</p>
+<h3>Files</h3>
+<ul>
+<li><code>types.ts</code> - AST types (Expr, LetExpr, Lambda, etc.)</li>
+<li><code>parser.ts</code> - Combinator parser, exports <code>$parse</code></li>
+<li><code>compiler.ts</code> - AST to IR compiler, exports <code>$compile</code></li>
+<li><code>ir.ts</code> - JavaScript IR builders and emitters</li>
+<li><code>interpret.ts</code> - Base interpreter with primitives, exports <code>createInterpret</code></li>
+<li><code>extension.ts</code> - Extension composition, <code>createLanguage</code>, <code>applyExtension</code>, <code>run</code></li>
+<li><code>eval.ts</code> - Default <code>$eval</code> interpreter</li>
+<li><code>cli.ts</code> - Command-line interface</li>
+<li><code>test.ts</code> - Test runner</li>
+</ul>
+<h3>Extensions</h3>
+<p>Located in <code>extensions/</code>:</p>
+<ul>
+<li><code>core.ts</code> - Base implementations for all phases (parser, compiler, emitter, interpreter)</li>
+<li><code>meso.us</code> - Infix operators with precedence (the &quot;middle layer&quot;)</li>
+<li><code>thermo.us</code> - JS-like imperative features (assignment with body)</li>
+<li><code>const.us</code> - Constant bindings with compile-time checking</li>
+<li><code>trace.ts</code> - Tracing/debugging extension</li>
+<li><code>identity.us</code> - No-op extension (test)</li>
+</ul>
+
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
+
