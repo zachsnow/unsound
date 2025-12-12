@@ -39,7 +39,7 @@ import type { CompilerOps } from './compile.ts';
 import type { IR } from './ir.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TESTS_DIR = join(__dirname, 'tests');
+const TESTS_DIR = join(__dirname, '..', 'tests');
 
 // Colors for terminal output
 const green = (s: string): string => `\x1b[32m${s}\x1b[0m`;

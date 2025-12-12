@@ -65,7 +65,7 @@ export interface Language {
 
 // Default extension search paths (relative to cwd)
 const DEFAULT_SEARCH_PATHS = [
-  'extensions',
+  'src/extensions',
   '.',
 ];
 
