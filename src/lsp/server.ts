@@ -142,7 +142,7 @@ async function validateDocument(textDocument: TextDocument): Promise<void> {
           analysis = lang.$analyze.analyzeProgram(parseResult.value);
 
           // Convert analysis diagnostics to LSP diagnostics
-          for (const diag of analysis.diagnostics) {
+          for (const diag of analysis?.diagnostics ?? []) {
             if (diag.loc) {
               const range = spanToRange(source, diag.loc);
               diagnostics.push({

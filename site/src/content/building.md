@@ -6,13 +6,13 @@ Bun and TypeScript are the only dependencies. Once `bun` is available:
 bun install
 ```
 
-The following scripts are available:
+Now you can run the Unsound compiler directly, build a binary, or
+install the language server:
 
 ```bash
-bun run build       # Type check and run tests; builds the binary dist/usc
-bun run test        # Run tests only
-bun run types       # Type check only
-bun run usc --help  # CLI help
+bun run usc         # Run the compiler directly
+bun run build       # Build a usc binary
+bun run install     # Build and install the language server and extension
 ```
 
 ## Development
@@ -20,8 +20,11 @@ bun run usc --help  # CLI help
 When developing locally you can run the TypeScript directly instead of recompiling `usc` every time:
 
 ```bash
-bun run usc
+bun run usc         # Run the compiler directly
+bun run types       # Check types
 ```
+
+Run TypeScript
 
 ## Language Server
 

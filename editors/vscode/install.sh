@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Install Unsound VS Code extension
-set -e
-
+set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "../.." && pwd)"
 DEST="$HOME/.vscode/extensions/unsound"
 
 # Check if usc-language-server is installed

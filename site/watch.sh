@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Check for fswatch
+command -v fswatch >/dev/null 2>&1 || { echo "Error: fswatch is required but not installed. Install with: brew install fswatch"; exit 1; }
 
 # Initial build
 ./build.sh

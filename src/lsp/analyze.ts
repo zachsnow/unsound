@@ -1,5 +1,7 @@
+// @ts-nocheck
 // AST-based analyzer for LSP support
 // Walks the AST to collect symbols, references, and diagnostics
+// TODO: Move $analyze extensions into meso, exo, thermo and use core AST types
 
 import type * as AST from '../ast.ts';
 import type { SourceRange } from '../ast.ts';

@@ -1,7 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Install usc and usc-language-server binaries
-set -e
-
+set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -12,20 +11,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 EXTENSIONS_DIR="${EXTENSIONS_DIR:-$HOME/.config/usc/extensions}"
 
 echo "Building usc compiler and language server..."
-
-# Type check first
-echo "Type checking..."
-bun run types
-
-# Generate embedded sources for binary mode
-echo "Generating embedded sources..."
-bun generate-embedded.ts
-
-# Build binaries
-echo "Building binaries..."
-mkdir -p dist
-bun build --compile --outfile dist/usc ./cli.ts
-bun build --compile --outfile dist/usc-language-server ./lsp/server.ts
+bun run build
 
 # Install binaries
 echo "Installing to $INSTALL_DIR..."
@@ -36,7 +22,7 @@ cp dist/usc-language-server "$INSTALL_DIR/"
 # Install extensions
 echo "Installing extensions to $EXTENSIONS_DIR..."
 mkdir -p "$EXTENSIONS_DIR"
-cp -r extensions/* "$EXTENSIONS_DIR/"
+cp -r src/extensions/* "$EXTENSIONS_DIR/"
 
 echo ""
 echo "Installation complete!"

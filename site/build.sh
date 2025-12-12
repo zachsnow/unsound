@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 INPUT_DIRECTORY="./src"
 OUTPUT_DIRECTORY="./dist"
@@ -22,8 +24,8 @@ echo "Copying CSS..."
 cp "${INPUT_DIRECTORY}/css/style.css" "${OUTPUT_DIRECTORY}/css/"
 
 echo "Copying JS..."
-cp ${INPUT_DIRECTORY}/js/app.js "${OUTPUT_DIRECTORY}/js/"
-cp ${INPUT_DIRECTORY}/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
+cp "${INPUT_DIRECTORY}/js/app.js" "${OUTPUT_DIRECTORY}/js/"
+cp "${INPUT_DIRECTORY}"/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 
 # Build index page
 echo "Building index..."

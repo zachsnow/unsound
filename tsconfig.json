@@ -8,11 +8,11 @@
     "skipLibCheck": true,
     "declaration": true,
     "outDir": "./dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "types": ["bun-types"],
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "include": ["*.ts", "extensions/*.ts"],
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -23,7 +23,7 @@ async function extractEmbeddedSources(): Promise<string> {
 
   // Dynamic import - only loaded when IS_BUNDLED is true
   // Bun will still bundle this since the path is a string literal
-  const mod = await import('./embedded-sources.json');
+  const mod = await import('../embedded-sources.json');
   const embeddedSources: Record<string, string> = mod.default;
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'usc-sources-'));
@@ -110,7 +110,7 @@ function parseArgs(args: string[]): Options {
       opts.help = true;
       i++;
     } else if (arg === '--no-core' || arg === '-x' || arg === '--extension' ||
-               arg === '-c' || arg === '--compile' || arg === '-i' || arg === '--interpret' || arg === '--emit') {
+      arg === '-c' || arg === '--compile' || arg === '-i' || arg === '--interpret' || arg === '--emit') {
       // Already handled by parseUscArgs, skip the value for options with args
       if (arg !== '--no-core') i++;
       i++;

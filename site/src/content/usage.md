@@ -1,3 +1,7 @@
+First make sure you've [installed](/building/) the Unsound binary `usc` in your path; if you don't want
+to do that, you can always run Unsound via bun; replace `usc` with `bun run usc` in the following to run
+the TypeScript source directly.
+
 ## Running Programs
 
 ```bash
