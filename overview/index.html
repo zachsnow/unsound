@@ -24,6 +24,7 @@
     <a href="/overview/">Overview</a>
     <a href="/building/">Building</a>
     <a href="/usage/">Usage</a>
+    <a href="/languages/">Languages</a>
     <a href="/lsp/">LSP</a>
     <a href="/testing/">Testing</a>
     <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
@@ -45,17 +46,29 @@
     <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
   </h3>
 
+  <aside>
+    <p>Unsound is an <strong>experimental</strong> framework for building extensible programming languages,
+created to explore first class type checking, language extensions, and
+inspired by the <a href="http://okmij.org/ftp/tagless-final/">tagless final</a> approach to
+language implementation. <a href="/try/">Try it out</a> or learn more about <a href="/overview/">how it works</a>.</p>
+
+  </aside>
+
   <main>
     <h2>Architecture</h2>
-<p>Unsound is at its core a framework for implementing programming languages whose <em>syntax</em> and *semantics
+<p>Unsound is at its core a framework for implementing programming languages whose syntax and semantics
 are <em>extensible</em>. Its design is one in which multiple language <em>extensions</em> are composed to produce a
-more or less traditional (though simplified) compiler pipeline: one that first <em>parses</em> a language to an
-abstract syntax tree (AST), then <em>compiles</em> that AST to an intermediate representation (IR), then <em>emits</em>
-that IR to a target language. Extensions can extend each step in that pipeline.</p>
+more or less traditional (though simplified) compiler pipeline:</p>
+<ul>
+<li>parsing a language to an abstract syntax tree (AST)</li>
+<li>compiling that AST to an intermediate representation (IR)</li>
+<li>emitting that IR to a target language</li>
+</ul>
+<p>Extensions can extend each step in that pipeline.</p>
 <p>Beyond allowing the extension of the compiler, Unsound allows extending the <em>runtime semantics</em> of programs.
-The style of code that compilers developed with Unsound output is one in which the evaluation of the compiled program
-is parameterized by a &quot;semantics&quot; that defines what evaluation actually &quot;is&quot;. In the usual evaluation semantics
-this is essentially the identity</p>
+The style of code that languages developed with Unsound compile to is one in which the evaluation of the
+compiled program is parameterized by a &quot;semantics&quot; that defines what evaluation actually &quot;is&quot;. In the
+usual evaluation semantics this is essentially the identity</p>
 <h3>Phases</h3>
 <p>The core built-in compilation phases are:</p>
 <ul>
@@ -65,10 +78,10 @@ this is essentially the identity</p>
 <li><code>$emit</code>: takes an IR; generally returns a <code>string</code> of code in the target language (that is -- JS).</li>
 <li><code>$post</code>: takes a string of target language code and a filename; writes it to file.</li>
 </ul>
-<p>The result is a JS file that is &quot;parameterized&quot; by a <em>semantics</em> that can be applied to the output to produce
-an <em>interpretation</em>. The standard interpretation is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
+<p>The result is a JS file that is parameterized by a <em>semantics</em> that can be applied to the output to produce
+an <em>interpretation</em>. The standard semantics is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
 universe of JS values.</p>
-<p>One case also provide other interpretations; for instance <code>$type</code> can implement an <em>abstract</em> interpretation
+<p>One case also provide other semantics; for instance <code>$type</code> can implement an &quot;abstract interpretation&quot;
 in a universe of simple nominal types.</p>
 <h3>Extension System</h3>
 <p>Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.

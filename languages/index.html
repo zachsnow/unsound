@@ -55,23 +55,33 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
   </aside>
 
   <main>
-    <h1>Language Server</h1>
-<p>Unsound includes a language server that provides IDE support for VS Code and other LSP-compatible editors.</p>
-<h2>Features</h2>
-<ul>
-<li>Syntax highlighting</li>
-<li>Go to definition</li>
-<li>Hover information</li>
-<li>Completion suggestions</li>
-<li>Diagnostic errors</li>
-</ul>
-<h2>Installation</h2>
-<pre><code class="language-bash">bun run install
+    <p>Unsound provides several language extensions that build on each other:</p>
+<h2>Core</h2>
+<p>The base language - a simple expression-oriented language:</p>
+<pre><code class="language-unsound">let x = 42 in x
+let f = (a, b) =&gt; a in f(1, 2)
+if true then &quot;yes&quot; else &quot;no&quot;
+{ x: 1, y: 2 }.x
 </code></pre>
-<p>This installs the VS Code extension from <code>editors/vscode/</code>. The extension automatically starts the language server
-when you open <code>.us</code> files. Unsound files should include <code>//usc</code>-directives so that the extension can load the
-necessary extensions for the file. The <code>$analyze</code> semantics is applied to the file to gather information for
-the language server, which means that extensions can extend the analysis to add more information for the editor.</p>
+<h2>Meso</h2>
+<p>Adds infix and prefix operators with precedence:</p>
+<pre><code class="language-unsound">1 + 2 * 3
+x &gt; 0 &amp;&amp; x &lt; 10
+!done || count == 0
+</code></pre>
+<h2>Thermo</h2>
+<p>Adds imperative features - blocks, semicolons, assignment:</p>
+<pre><code class="language-unsound">let x = 1;
+let y = 2;
+{
+  x = x + y;
+  x * 2
+}
+</code></pre>
+<h2>Exo</h2>
+<p>Exo adds type annotation syntax, along with typechecking semantics:</p>
+<pre><code class="language-unsound">let x : Num = 42;
+</code></pre>
 
   </main>
 

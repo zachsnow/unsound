@@ -55,19 +55,30 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
 
   <main>
     <h1>Motivation</h1>
-<h2>Types in JavaScript</h2>
-<p>I wanted to write types in JavaScript, not an ad hoc, pure, functional type sublanguage. TypeScript's type system is expressive, but it's a completely separate language:</p>
+<blockquote>
+<p>Have you ever found yourself writing an elaborate TypeScript type, 3 conditionals deep and 2 mapped types to the wind,
+and thought &quot;I sure wish I could write this in plain old TypeScript?&quot; This is for you. And you is me. This is for me.</p>
+</blockquote>
+<h2>TypeScript terms as TypeScript types</h2>
+<p>I wanted to write types in something more like JavaScript, not in an ad hoc, pure, functional type sublanguage.TypeScript's type system is expressive, but it's a completely separate language:</p>
 <ul>
 <li>Value: <code>if (cond) a else b</code> vs Type: <code>Cond extends true ? A : B</code></li>
 <li>Value: <code>items.map(f)</code> vs Type: <code>{ [K in keyof T]: F&lt;T[K]&gt; }</code></li>
 <li>Value: <code>str.split('.')</code> vs Type: <code>S extends `${infer H}.${infer T}` </code></li>
 </ul>
-<p>I understand why TypeScript is designed this way - the separate sublanguage enables powerful inference. But I wanted to explore something different.</p>
-<h2>Implementing Types in the Language</h2>
-<p>More than just writing type expressions in the value language, I wanted to <em>implement</em> typing rules in the language too. How does member access work at the type level? How does function application propagate types? I wanted to define that behavior in the language itself.</p>
-<p>For example: what if objects could have a <code>type()</code> method, and the type of the object would be the result of calling that method rather than the usual inferred structural type? What would that even mean? What's an effective way to implement it?</p>
-<h2>The Journey</h2>
-<p>I explored a number of strategies and eventually arrived at compiling to something like a tagless final representation - code parameterized over a semantics object <code>$</code>:</p>
+<p>Sure, you get nice things intuitive (well) and powerful inference. But what else can try?</p>
+<h2>Implementing types in the language</h2>
+<p>More than just writing types in the value language, I wanted to <em>implement</em> typing rules in the language, too.
+How does member access work at the type level? How does function application propagate types? I wanted
+to define that behavior in the language itself.</p>
+<p>And extend it! What if objects could have a <code>type()</code> method, and the type of the object would be the result of
+calling that method rather than the usual inferred structural type? What would that even mean? What's an
+effective way to implement it?</p>
+<h2>Extensible semantics</h2>
+<p>I explored a number of strategies, frequently revisiting an interesting observation: <em>evaluation and typechecking
+share a lot of structure</em>. I found myself reimplementing similar folds over abstract syntax trees, etc. Eventually
+I arrived at compiling to something like the following, code parameterized over a semantics object <code>$</code>, so that
+I could implement evaluation and typing separately:</p>
 <pre><code class="language-javascript">// &quot;42 + 1&quot; compiles to:
 ($) =&gt; $.add($.number(42), $.number(1))
 </code></pre>
@@ -78,16 +89,23 @@ program($eval);  // =&gt; 43
 const $type = { number: (n) =&gt; &quot;Num&quot;, add: (a, b) =&gt; checkAdd(a, b) };
 program($type);  // =&gt; &quot;Num&quot;
 </code></pre>
-<p>Claude kindly pointed out the similarity to Oleg Kiselyov's tagless final style and helped me refine the approach. Oleg's website (<a href="http://okmij.org/ftp/tagless-final/">okmij.org</a>) explores this idea in depth.</p>
-<h2>Extensible Parsing</h2>
-<p>I could have stopped there - parameterized semantics gives us extensible interpretation. But once you have extensible semantics, you want extensible parsing. What good is adding a new typing rule if you can't add the syntax for it?</p>
-<p>So I built an open recursive pipeline: parsing, compilation, and emission, all extensible via the same override mechanism.</p>
-<p>A few notes on the implementation:</p>
+<p>Claude kindly pointed out the similarity to Oleg Kiselyov's <strong>tagless final</strong> style. A visit to Oleg's website
+<a href="http://okmij.org/ftp/tagless-final/">okmij.org</a> -- a treasure trove of type theory made explicit in the form
+of functional programming -- explores this topic in depth, and was elucidating.</p>
+<aside>
 <ul>
 <li>To make binding more customizable, we only make partial use of higher-order abstract syntax (HOAS).</li>
-<li>We aren't trying to achieve type safety in the target via type safety in the meta language, so that hasn't been a focus. Many of the extensibility techniques Oleg describes don't translate well to TypeScript anyway.</li>
+<li>We aren't trying to achieve type safety in the target language via type safety in the meta-language (TypeScript),
+so that hasn't been a focus of the implementaiton. Many of the type-safe extensibility techniques Oleg describes
+don't translate well to TypeScript, anyway.</li>
 </ul>
-<h2>The Result</h2>
+</aside>
+<h2>Extensible syntax</h2>
+<p>Parameterized semantics gives us extensible interpretation, one that can power both evaluation <em>and</em> type checking or
+inference... but once you have extensible semantics, you want extensible parsing! What good is adding a new typing
+rule if you can't add the syntax for it?</p>
+<p>So I built an open recursive pipeline: parsing, compilation, and code emission, all extensible via the same mechanism.</p>
+<h2>Therefore ∴</h2>
 <p>At long last we can answer what it means to implement types in the language itself - tightly integrated, without implementing multiple fixed interpretations. With the <code>exo</code> extension, Unsound supports type annotations:</p>
 <pre><code class="language-unsound">let x : Num = 42;
 let f : Arrow(Num, Num) = (x) =&gt; x + 1;
@@ -101,15 +119,16 @@ let Arrow = (param, ret) =&gt; { kind: &quot;arrow&quot;, param: param, ret: ret
 let p : Pair(Num, Str) = { fst: 42, snd: &quot;hello&quot; };
 </code></pre>
 <p>No conditional types, no mapped types, no template literal types - just functions.</p>
-<h2>What Unsound Is</h2>
-<p>Unsound is an experiment in building extensible programming languages. It provides:</p>
+<h2>What Unsound is</h2>
+<p>Unsound is an experiment in building extensible programming languages. It provides an extensible compiler pipeline,
+designed for compiling languages to a tagless final representation, so that programs can be interpreted in a variety
+of ways. It also includes a number of prebuilt <a href="/languages/">language extensions</a>:</p>
 <ol>
 <li>A base language (<code>core</code>) with simple expression-oriented syntax</li>
 <li>Extension layers (<code>meso</code>, <code>thermo</code>, <code>exo</code>) that add operators, blocks, imperative features, and type annotations</li>
-<li>A framework for defining your own extensions to parsing, compilation, and interpretation</li>
-<li>Multiple interpretation modes (evaluation, typing, tracing, etc.)</li>
+<li>Additional extensions to <code>exo</code> implementing dynamic scoping, <code>const</code> bindings, and more.</li>
 </ol>
-<p>The name &quot;Unsound&quot; reflects the philosophy: expressiveness and extensibility over formal guarantees. The type system is deliberately unsound - a tool for catching obvious errors, not a proof system.</p>
+<p>The name &quot;Unsound&quot; reflects the philosophy: expressiveness and extensibility at all levels, over all else.</p>
 <p><a href="/overview/">How It Works →</a></p>
 
   </main>

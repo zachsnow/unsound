@@ -24,6 +24,7 @@
     <a href="/overview/">Overview</a>
     <a href="/building/">Building</a>
     <a href="/usage/">Usage</a>
+    <a href="/languages/">Languages</a>
     <a href="/lsp/">LSP</a>
     <a href="/testing/">Testing</a>
     <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
@@ -45,21 +46,31 @@
     <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
   </h3>
 
+  <aside>
+    <p>Unsound is an <strong>experimental</strong> framework for building extensible programming languages,
+created to explore first class type checking, language extensions, and
+inspired by the <a href="http://okmij.org/ftp/tagless-final/">tagless final</a> approach to
+language implementation. <a href="/try/">Try it out</a> or learn more about <a href="/overview/">how it works</a>.</p>
+
+  </aside>
+
   <main>
-    <h1>Building and Installing</h1>
+    <h1>Building and installing</h1>
 <p>Bun and TypeScript are the only dependencies. Once <code>bun</code> is available:</p>
 <pre><code class="language-bash">bun install
 </code></pre>
-<p>The following scripts are available:</p>
-<pre><code class="language-bash">bun run build       # Type check and run tests; builds the binary dist/usc
-bun run test        # Run tests only
-bun run types       # Type check only
-bun run usc --help  # CLI help
+<p>Now you can run the Unsound compiler directly, build a binary, or
+install the language server:</p>
+<pre><code class="language-bash">bun run usc         # Run the compiler directly
+bun run build       # Build a usc binary
+bun run install     # Build and install the language server and extension
 </code></pre>
 <h2>Development</h2>
 <p>When developing locally you can run the TypeScript directly instead of recompiling <code>usc</code> every time:</p>
-<pre><code class="language-bash">bun run usc
+<pre><code class="language-bash">bun run usc         # Run the compiler directly
+bun run types       # Check types
 </code></pre>
+<p>Run TypeScript</p>
 <h2>Language Server</h2>
 <p>The Unsound language server provides IDE support for VS Code and other editors. To install:</p>
 <pre><code class="language-bash">bun run install
