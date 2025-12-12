@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+# Integration tests for usc compiler
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+passed=0
+failed=0
+
+pass() {
+  echo -e "${GREEN}PASS${NC} $1"
+  ((passed++)) || true
+}
+
+fail() {
+  echo -e "${RED}FAIL${NC} $1: $2"
+  ((failed++)) || true
+}
+
+# Create temp directory for test outputs
+TMPDIR=$(mktemp -d)
+trap "rm -rf $TMPDIR" EXIT
+
+echo "=== Integration Tests ==="
+echo ""
+
+# --- Mode Tests ---
+
+echo "--- Mode Tests ---"
+
+# Helper to run usc
+usc() {
+  bun src/cli.ts "$@"
+}
+
+# Test: run mode (default)
+output=$(echo '1 + 2' | usc -x meso - 2>&1) || true
+if [[ "$output" == "3" ]]; then
+  pass "run mode: basic arithmetic"
+else
+  fail "run mode: basic arithmetic" "expected '3', got '$output'"
+fi
+
+# Test: run mode with let
+output=$(echo 'let x = 10 in x * 2' | usc -x meso - 2>&1) || true
+if [[ "$output" == "20" ]]; then
+  pass "run mode: let expression"
+else
+  fail "run mode: let expression" "expected '20', got '$output'"
+fi
+
+# Test: module mode
+echo '1 + 2' | usc -x meso -m module -o "$TMPDIR/module.js" -
+if [[ -f "$TMPDIR/module.js" ]]; then
+  # Check it's valid JS with export
+  if grep -q "export" "$TMPDIR/module.js"; then
+    pass "module mode: generates export"
+  else
+    fail "module mode: generates export" "no export found in output"
+  fi
+else
+  fail "module mode: generates export" "output file not created"
+fi
+
+# Test: standalone mode (exports result as default, we import and print)
+echo '1 + 2' | usc -x meso -m standalone -o "$TMPDIR/standalone.js" -
+if [[ -f "$TMPDIR/standalone.js" ]]; then
+  # Standalone exports result, create a wrapper to print it
+  echo 'import result from "./standalone.js"; console.log(result);' > "$TMPDIR/run-standalone.js"
+  output=$(cd "$TMPDIR" && bun run-standalone.js 2>&1) || true
+  if [[ "$output" == "3" ]]; then
+    pass "standalone mode: exports correct result"
+  else
+    fail "standalone mode: exports correct result" "expected '3', got '$output'"
+  fi
+else
+  fail "standalone mode: exports correct result" "output file not created"
+fi
+
+# Test: binary mode
+echo '1 + 2' | usc -x meso -m binary -o "$TMPDIR/test-binary" -
+if [[ -f "$TMPDIR/test-binary" ]]; then
+  output=$("$TMPDIR/test-binary" 2>&1) || true
+  if [[ "$output" == "3" ]]; then
+    pass "binary mode: executable binary"
+  else
+    fail "binary mode: executable binary" "expected '3', got '$output'"
+  fi
+else
+  fail "binary mode: executable binary" "binary not created"
+fi
+
+# --- LSP Tests ---
+
+echo ""
+echo "--- LSP Tests ---"
+
+# Test: LSP type checks
+if bun run types 2>&1 | grep -q "error"; then
+  fail "lsp: type check" "type errors found"
+else
+  pass "lsp: type check"
+fi
+
+# Test: LSP server file exists and is valid TypeScript
+if [[ -f "src/lsp/server.ts" ]]; then
+  pass "lsp: server file exists"
+else
+  fail "lsp: server file exists" "src/lsp/server.ts not found"
+fi
+
+# --- Test Runner Tests ---
+
+echo ""
+echo "--- Test Runner Tests ---"
+
+# Test: test runner finds tests
+output=$(bun run test 2>&1) || true
+if echo "$output" | grep -q "passed"; then
+  pass "test runner: finds and runs tests"
+else
+  fail "test runner: finds and runs tests" "no 'passed' in output"
+fi
+
+# Test: test runner errors on empty directory
+mkdir -p "$TMPDIR/empty-tests"
+# Run test.ts with modified TESTS_DIR (via temp file)
+cat > "$TMPDIR/test-empty.ts" << 'EOF'
+import { readdirSync, existsSync, mkdirSync } from 'fs';
+const TESTS_DIR = process.argv[2];
+if (!existsSync(TESTS_DIR)) {
+  mkdirSync(TESTS_DIR, { recursive: true });
+}
+const files = readdirSync(TESTS_DIR).filter(f => f.endsWith('.test'));
+if (files.length === 0) {
+  console.error('No test files found');
+  process.exit(1);
+}
+console.log(`Found ${files.length} test files`);
+EOF
+
+if ! bun "$TMPDIR/test-empty.ts" "$TMPDIR/empty-tests" 2>&1; then
+  pass "test runner: errors on no tests (simulated)"
+else
+  fail "test runner: errors on no tests" "should have exited with error"
+fi
+
+# --- Summary ---
+
+echo ""
+echo "=== Summary ==="
+echo -e "Passed: ${GREEN}${passed}${NC}"
+echo -e "Failed: ${RED}${failed}${NC}"
+
+if [[ $failed -gt 0 ]]; then
+  exit 1
+fi

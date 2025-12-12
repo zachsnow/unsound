@@ -15,12 +15,20 @@ import {
   Definition,
   Location,
   SemanticTokensBuilder,
-} from 'vscode-languageserver/node';
+} from "vscode-languageserver/node";
 
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { createLanguage, loadExtension, parseUscDirective, type Language, type UscOptions } from '../extension.ts';
-import { posToLineCol, type Span } from '../ast.ts';
-import type { AnalysisResult, Definition as AnalysisDef, Reference, Diagnostic as AnalysisDiag } from '../analyze.ts';
+import { TextDocument } from "vscode-languageserver-textdocument";
+import {
+  createLanguage,
+  loadExtension,
+  parseUscDirective,
+  type Language
+} from "../extension.ts";
+import { posToLineCol, type Span } from "../ast.ts";
+import type {
+  AnalysisResult,
+  Definition as AnalysisDef
+} from "../analyze.ts";
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
@@ -30,18 +38,32 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 const languageCache = new Map<string, Language>();
 
 // Cache analysis results per document
-const documentCache = new Map<string, { analysis: AnalysisResult | null; source: string }>();
+const documentCache = new Map<
+  string,
+  { analysis: AnalysisResult | null; source: string }
+>();
 
 // Semantic tokens legend
-const tokenTypes = ['keyword', 'variable', 'parameter', 'function', 'number', 'string', 'operator', 'property', 'type'];
-const tokenModifiers = ['declaration', 'definition', 'readonly'];
+const tokenTypes = [
+  "keyword",
+  "variable",
+  "parameter",
+  "function",
+  "number",
+  "string",
+  "operator",
+  "property",
+  "type",
+];
+const tokenModifiers = ["declaration", "definition", "readonly"];
 
 // Get or create a language for the given source's //usc directive
 async function getLanguageForSource(source: string): Promise<Language> {
   const directive = parseUscDirective(source);
 
   // Cache key includes noCore flag and extensions
-  const cacheKey = `${directive.noCore ? 'no-core' : 'core'}:${directive.extensions.join(',')}`;
+  const cacheKey = `${directive.noCore ? "no-core" : "core"
+    }:${directive.extensions.join(",")}`;
 
   if (!languageCache.has(cacheKey)) {
     connection.console.log(`Creating language for: ${cacheKey}`);
@@ -50,7 +72,7 @@ async function getLanguageForSource(source: string): Promise<Language> {
     // Load core unless --no-core
     if (!directive.noCore) {
       try {
-        await loadExtension('core', lang);
+        await loadExtension("core", lang);
       } catch (e: any) {
         connection.console.log(`Failed to load core extension: ${e.message}`);
       }
@@ -73,7 +95,13 @@ async function getLanguageForSource(source: string): Promise<Language> {
 }
 
 // Convert a Span to LSP range
-function spanToRange(source: string, span: Span): { start: { line: number; character: number }; end: { line: number; character: number } } {
+function spanToRange(
+  source: string,
+  span: Span
+): {
+  start: { line: number; character: number };
+  end: { line: number; character: number };
+} {
   const start = posToLineCol(source, span.start);
   const end = posToLineCol(source, span.end);
   return {
@@ -83,7 +111,10 @@ function spanToRange(source: string, span: Span): { start: { line: number; chara
 }
 
 // Convert a position (byte offset) to LSP position
-function posToLspPosition(source: string, pos: number): { line: number; character: number } {
+function posToLspPosition(
+  source: string,
+  pos: number
+): { line: number; character: number } {
   const { line, col } = posToLineCol(source, pos);
   return { line: line - 1, character: col - 1 };
 }
@@ -94,7 +125,7 @@ connection.onInitialize((_params: InitializeParams): InitializeResult => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: {
         resolveProvider: false,
-        triggerCharacters: ['.'],
+        triggerCharacters: ["."],
       },
       hoverProvider: true,
       definitionProvider: true,
@@ -130,7 +161,7 @@ async function validateDocument(textDocument: TextDocument): Promise<void> {
           end: { line: pos.line, character: pos.character + 1 },
         },
         message: `Expected ${parseResult.expected}`,
-        source: 'unsound',
+        source: "unsound",
       });
       documentCache.set(textDocument.uri, { analysis: null, source });
     } else {
@@ -146,12 +177,15 @@ async function validateDocument(textDocument: TextDocument): Promise<void> {
             if (diag.loc) {
               const range = spanToRange(source, diag.loc);
               diagnostics.push({
-                severity: diag.severity === 'error' ? DiagnosticSeverity.Error
-                  : diag.severity === 'warning' ? DiagnosticSeverity.Warning
-                    : DiagnosticSeverity.Information,
+                severity:
+                  diag.severity === "error"
+                    ? DiagnosticSeverity.Error
+                    : diag.severity === "warning"
+                      ? DiagnosticSeverity.Warning
+                      : DiagnosticSeverity.Information,
                 range,
                 message: diag.message,
-                source: 'unsound',
+                source: "unsound",
               });
             }
           }
@@ -171,7 +205,7 @@ async function validateDocument(textDocument: TextDocument): Promise<void> {
 }
 
 // Document change handler
-documents.onDidChangeContent(change => {
+documents.onDidChangeContent((change) => {
   validateDocument(change.document);
 });
 
@@ -188,15 +222,32 @@ connection.onCompletion((params): CompletionItem[] => {
       seen.add(def.name);
       items.push({
         label: def.name,
-        kind: def.kind === 'param' ? CompletionItemKind.Variable
-          : def.kind === 'const' ? CompletionItemKind.Constant
-            : CompletionItemKind.Variable,
+        kind:
+          def.kind === "param"
+            ? CompletionItemKind.Variable
+            : def.kind === "const"
+              ? CompletionItemKind.Constant
+              : CompletionItemKind.Variable,
       });
     }
   }
 
   // Add keywords
-  const keywords = ['let', 'if', 'then', 'else', 'return', 'true', 'false', 'null', 'undefined', 'this', 'do', 'import', 'from'];
+  const keywords = [
+    "let",
+    "if",
+    "then",
+    "else",
+    "return",
+    "true",
+    "false",
+    "null",
+    "undefined",
+    "this",
+    "do",
+    "import",
+    "from",
+  ];
   for (const kw of keywords) {
     items.push({
       label: kw,
@@ -208,7 +259,12 @@ connection.onCompletion((params): CompletionItem[] => {
 });
 
 // Check if position is within a span
-function isInSpan(source: string, span: Span, line: number, col: number): boolean {
+function isInSpan(
+  source: string,
+  span: Span,
+  line: number,
+  col: number
+): boolean {
   const start = posToLineCol(source, span.start);
   const end = posToLineCol(source, span.end);
 
@@ -219,7 +275,12 @@ function isInSpan(source: string, span: Span, line: number, col: number): boolea
 }
 
 // Find definition at position
-function findDefinitionAt(source: string, analysis: AnalysisResult, line: number, col: number): AnalysisDef | null {
+function findDefinitionAt(
+  source: string,
+  analysis: AnalysisResult,
+  line: number,
+  col: number
+): AnalysisDef | null {
   // Check references first
   for (const ref of analysis.references) {
     if (ref.loc && isInSpan(source, ref.loc, line, col)) {
@@ -247,7 +308,7 @@ connection.onHover((params): Hover | null => {
   if (def) {
     return {
       contents: {
-        kind: 'markdown',
+        kind: "markdown",
         value: `**${def.name}** (${def.kind})`,
       },
     };
@@ -281,7 +342,9 @@ connection.languages.semanticTokens.on((params) => {
   const builder = new SemanticTokensBuilder();
 
   // Sort tokens by position (required by LSP protocol)
-  const sortedTokens = [...cached.analysis.tokens].sort((a, b) => a.loc.start - b.loc.start);
+  const sortedTokens = [...cached.analysis.tokens].sort(
+    (a, b) => a.loc.start - b.loc.start
+  );
 
   for (const token of sortedTokens) {
     const start = posToLineCol(cached.source, token.loc.start);
@@ -290,10 +353,17 @@ connection.languages.semanticTokens.on((params) => {
     if (typeIndex === -1) continue; // Skip unknown token types
 
     const modifierBits = (token.modifiers || []).reduce(
-      (acc, mod) => acc | (1 << tokenModifiers.indexOf(mod)), 0
+      (acc, mod) => acc | (1 << tokenModifiers.indexOf(mod)),
+      0
     );
 
-    builder.push(start.line - 1, start.col - 1, length, typeIndex, modifierBits);
+    builder.push(
+      start.line - 1,
+      start.col - 1,
+      length,
+      typeIndex,
+      modifierBits
+    );
   }
 
   return builder.build();

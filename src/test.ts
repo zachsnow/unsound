@@ -451,14 +451,14 @@ async function runTests(): Promise<void> {
   }
 
   if (files.length === 0) {
-    console.log(dim('No test files found in tests/'));
+    console.error(red('No test files found in tests/'));
     console.log(dim('Create .test files with the format:'));
     console.log(dim('  #usc -x meso           # Optional extensions'));
     console.log(dim('  --- test name'));
     console.log(dim('  source code'));
     console.log(dim('  === parse: $parse'));
     console.log(dim('  { "type": "Literal", ... }'));
-    return;
+    process.exit(1);
   }
 
   for (const file of files.sort()) {

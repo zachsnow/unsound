@@ -61,7 +61,7 @@ async function getSourceDir(): Promise<string> {
 // Get extension search paths - when bundled, include the extracted source directory
 async function getExtensionSearchPaths(): Promise<string[]> {
   if (!IS_BUNDLED) {
-    return ['extensions', '.'];
+    return ['src/extensions', '.'];
   }
   const sourceDir = await getSourceDir();
   return [path.join(sourceDir, 'extensions'), sourceDir, 'extensions', '.'];
