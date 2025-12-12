@@ -1,4 +1,4 @@
-# Building and Installing
+# Building and installing
 
 Bun and TypeScript are the only dependencies. Once `bun` is available:
 

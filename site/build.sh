@@ -28,10 +28,11 @@ cp ${INPUT_DIRECTORY}/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 # Build index page
 echo "Building index..."
 bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
+bunx commonmark "${INPUT_DIRECTORY}/content/pitch.md" > "/tmp/pitch.html"
 
 # Build each content page
 echo "Building pages..."
-PAGES="overview building usage lsp testing"
+PAGES="overview building usage lsp testing languages"
 for page in $PAGES; do
     mkdir -p "${OUTPUT_DIRECTORY}/${page}"
     # Generate content from markdown to temp file
@@ -40,7 +41,8 @@ for page in $PAGES; do
     bun -e "
       const layout = await Bun.file('${INPUT_DIRECTORY}/layout.html').text();
       const content = await Bun.file('/tmp/${page}_content.html').text();
-      console.log(layout.replace('{{CONTENT}}', content));
+      const pitch = await Bun.file('/tmp/pitch.html').text();
+      console.log(layout.replace('{{CONTENT}}', content).replace('{{PITCH}}', pitch));
     " > "${OUTPUT_DIRECTORY}/${page}/index.html"
 done
 

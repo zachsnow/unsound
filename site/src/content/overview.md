@@ -1,15 +1,19 @@
 ## Architecture
 
-Unsound is at its core a framework for implementing programming languages whose *syntax* and *semantics
+Unsound is at its core a framework for implementing programming languages whose syntax and semantics
 are *extensible*. Its design is one in which multiple language *extensions* are composed to produce a
-more or less traditional (though simplified) compiler pipeline: one that first *parses* a language to an
-abstract syntax tree (AST), then *compiles* that AST to an intermediate representation (IR), then *emits*
-that IR to a target language. Extensions can extend each step in that pipeline.
+more or less traditional (though simplified) compiler pipeline:
+
+* parsing a language to an abstract syntax tree (AST)
+* compiling that AST to an intermediate representation (IR)
+* emitting that IR to a target language
+
+Extensions can extend each step in that pipeline.
 
 Beyond allowing the extension of the compiler, Unsound allows extending the *runtime semantics* of programs.
-The style of code that compilers developed with Unsound output is one in which the evaluation of the compiled program
-is parameterized by a "semantics" that defines what evaluation actually "is". In the usual evaluation semantics
-this is essentially the identity
+The style of code that languages developed with Unsound compile to is one in which the evaluation of the
+compiled program is parameterized by a "semantics" that defines what evaluation actually "is". In the
+usual evaluation semantics this is essentially the identity
 
 ### Phases
 
@@ -21,11 +25,11 @@ The core built-in compilation phases are:
 * `$emit`: takes an IR; generally returns a `string` of code in the target language (that is -- JS).
 * `$post`: takes a string of target language code and a filename; writes it to file.
 
-The result is a JS file that is "parameterized" by a *semantics* that can be applied to the output to produce
-an *interpretation*. The standard interpretation is `$eval`, a "concrete interpretation" of the program in the
+The result is a JS file that is parameterized by a *semantics* that can be applied to the output to produce
+an *interpretation*. The standard semantics is `$eval`, a "concrete interpretation" of the program in the
 universe of JS values.
 
-One case also provide other interpretations; for instance `$type` can implement an *abstract* interpretation
+One case also provide other semantics; for instance `$type` can implement an "abstract interpretation"
 in a universe of simple nominal types.
 
 ### Extension System

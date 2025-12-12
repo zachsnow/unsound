@@ -1,5 +1,3 @@
-# Usage
-
 ## Running Programs
 
 ```bash
@@ -25,56 +23,30 @@ usc -x simply-typed.us --interpret type program.us
 
 ## Output Modes
 
+Unsound supports several output modes. These are:
+
+* `run`: compile and then immediately interpret
+* `module`: compile to a JS module exporting a function `($) => { ... }`
+* `standalone`: compile to standalone JS program
+* `binary`: produce a standlone binary program from the standalone JS program
+
 ```bash
 # Output modes
-usc -m module -o out.js program.us      # Export function
-usc -m standalone -o app.js program.us  # Self-contained
+usc -m run -o app.js program.us           # Run immediately
+usc -m module -o mod.js program.us        # Module exporting function
+usc -m standalone -o prog.js program.us   # Self-contained JS program
+usc -m binary -o prog program.us          # Standalone binary
 ```
 
+Currently the `binary` option produces an executable using the bun `--compile` option,
+which bundles the entire bun runtime. This makes for quite large binaries.
+
 ## Debugging
+
+Unsound supports printing the values produced by the various phases:
 
 ```bash
 # Debug output
 usc --ast --ir --js program.us
-
-# Environment variables
-usc -e 'x=42' program.us
 ```
 
-## The Language Layers
-
-Unsound provides several language extensions that build on each other:
-
-### Core
-
-The base language - a simple expression-oriented language:
-
-```unsound
-let x = 42 in x
-let f = (a, b) => a in f(1, 2)
-if true then "yes" else "no"
-{ x: 1, y: 2 }.x
-```
-
-### Meso
-
-Adds infix and prefix operators with precedence:
-
-```unsound
-1 + 2 * 3
-x > 0 && x < 10
-!done || count == 0
-```
-
-### Thermo
-
-Adds imperative features - blocks, semicolons, assignment:
-
-```unsound
-let x = 1;
-let y = 2;
-{
-  x = x + y;
-  x * 2
-}
-```
