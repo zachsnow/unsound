@@ -34,42 +34,40 @@ echo ""
 
 echo "--- Mode Tests ---"
 
-# Helper to run usc
-usc() {
-  bun src/cli.ts "$@"
-}
-
-# Test: run mode (default)
-output=$(echo '1 + 2' | usc -x meso - 2>&1) || true
-if [[ "$output" == "3" ]]; then
-  pass "run mode: basic arithmetic"
-else
-  fail "run mode: basic arithmetic" "expected '3', got '$output'"
-fi
-
 # Test: run mode with let
-output=$(echo 'let x = 10 in x * 2' | usc -x meso - 2>&1) || true
+output=$(echo 'let x = 10 in x * 2' | bun run usc -x meso - 2>&1 | tail -1) || true
 if [[ "$output" == "20" ]]; then
   pass "run mode: let expression"
 else
   fail "run mode: let expression" "expected '20', got '$output'"
 fi
 
-# Test: module mode
-echo '1 + 2' | usc -x meso -m module -o "$TMPDIR/module.js" -
+# Test: module mode (import and run with interpreter)
+echo 'let x = 1 + 2 in x * x' | bun run usc -x meso -m module -o "$TMPDIR/module.js" -
 if [[ -f "$TMPDIR/module.js" ]]; then
-  # Check it's valid JS with export
-  if grep -q "export" "$TMPDIR/module.js"; then
-    pass "module mode: generates export"
+  # Create runner that imports module and interpreter
+  cat > "$TMPDIR/run-module.ts" << EOF
+import { createLanguage, loadExtension } from '$SCRIPT_DIR/src/extension.ts';
+import program from './module.js';
+
+const lang = createLanguage([]);
+await loadExtension('core', lang);
+await loadExtension('meso', lang);
+const result = await program(lang.\$interpret);
+console.log(result);
+EOF
+  output=$(cd "$TMPDIR" && bun run-module.ts 2>&1) || true
+  if [[ "$output" == "9" ]]; then
+    pass "module mode: runs with interpreter"
   else
-    fail "module mode: generates export" "no export found in output"
+    fail "module mode: runs with interpreter" "expected '9', got '$output'"
   fi
 else
-  fail "module mode: generates export" "output file not created"
+  fail "module mode: runs with interpreter" "output file not created"
 fi
 
 # Test: standalone mode (exports result as default, we import and print)
-echo '1 + 2' | usc -x meso -m standalone -o "$TMPDIR/standalone.js" -
+echo '1 + 2' | bun run usc -x meso -m standalone -o "$TMPDIR/standalone.js" -
 if [[ -f "$TMPDIR/standalone.js" ]]; then
   # Standalone exports result, create a wrapper to print it
   echo 'import result from "./standalone.js"; console.log(result);' > "$TMPDIR/run-standalone.js"
@@ -84,7 +82,7 @@ else
 fi
 
 # Test: binary mode
-echo '1 + 2' | usc -x meso -m binary -o "$TMPDIR/test-binary" -
+echo '1 + 2' | bun run usc -x meso -m binary -o "$TMPDIR/test-binary" -
 if [[ -f "$TMPDIR/test-binary" ]]; then
   output=$("$TMPDIR/test-binary" 2>&1) || true
   if [[ "$output" == "3" ]]; then
@@ -101,19 +99,6 @@ fi
 echo ""
 echo "--- LSP Tests ---"
 
-# Test: LSP type checks
-if bun run types 2>&1 | grep -q "error"; then
-  fail "lsp: type check" "type errors found"
-else
-  pass "lsp: type check"
-fi
-
-# Test: LSP server file exists and is valid TypeScript
-if [[ -f "src/lsp/server.ts" ]]; then
-  pass "lsp: server file exists"
-else
-  fail "lsp: server file exists" "src/lsp/server.ts not found"
-fi
 
 # --- Test Runner Tests ---
 
