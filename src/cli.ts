@@ -4,7 +4,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, parseUscDirective, resolveExtension, type Extension, type Language, type UscOptions } from './extension.ts';
+import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, parseUscDirective, resolveExtension, getExtensionSearchPaths as getSearchPaths, type Extension, type Language, type UscOptions } from './extension.ts';
 import { emitString } from './emit.ts';
 import { formatParseError, ParseError } from './parse.ts';
 import { prettyPrint } from './pretty.ts';
@@ -58,13 +58,16 @@ async function getSourceDir(): Promise<string> {
   return await extractEmbeddedSources();
 }
 
-// Get extension search paths - when bundled, include the extracted source directory
-async function getExtensionSearchPaths(): Promise<string[]> {
+// Get extension search paths for a given source file
+// When bundled, uses extracted embedded sources for compiler extensions
+async function getExtensionSearchPaths(sourceFile?: string): Promise<string[]> {
   if (!IS_BUNDLED) {
-    return ['src/extensions', '.'];
+    // Use the standard search paths from extension.ts
+    return getSearchPaths(sourceFile);
   }
-  const sourceDir = await getSourceDir();
-  return [path.join(sourceDir, 'extensions'), sourceDir, 'extensions', '.'];
+  // When bundled, override compiler extensions dir with extracted sources
+  const extractedDir = await extractEmbeddedSources();
+  return getSearchPaths(sourceFile, path.join(extractedDir, 'extensions'));
 }
 
 // === Argument Parsing ===
@@ -224,10 +227,10 @@ function generateModule(lang: Language, source: string): string {
   return compileToJS(lang, source);
 }
 
-async function generateStandalone(source: string, extNames: string[], noCore: boolean, printResult: boolean = false): Promise<string> {
+async function generateStandalone(source: string, extNames: string[], noCore: boolean, printResult: boolean = false, sourceFile?: string): Promise<string> {
   // Build language incrementally and compile .us extensions as we go
   let lang = createLanguage([]);
-  const searchPaths = await getExtensionSearchPaths();
+  const searchPaths = await getExtensionSearchPaths(sourceFile);
   if (!noCore) {
     await loadExt('core', lang, searchPaths);
   }
@@ -293,9 +296,9 @@ export default result;
 `;
 }
 
-async function generateBinary(source: string, extNames: string[], noCore: boolean, outputPath: string): Promise<void> {
+async function generateBinary(source: string, extNames: string[], noCore: boolean, outputPath: string, sourceFile?: string): Promise<void> {
   // Generate standalone JS with result printing enabled
-  const standaloneJs = await generateStandalone(source, extNames, noCore, true);
+  const standaloneJs = await generateStandalone(source, extNames, noCore, true, sourceFile);
 
   // Write to a temp file in system temp directory
   const tempFile = path.join(os.tmpdir(), `.usc-standalone-${process.pid}.ts`);
@@ -363,7 +366,9 @@ async function main() {
   }
 
   // Get extension search paths (includes extracted sources when bundled)
-  const searchPaths = await getExtensionSearchPaths();
+  // Pass source file path so we can find project-local extensions
+  const sourceFile = opts.input && opts.input !== '-' ? path.resolve(opts.input) : undefined;
+  const searchPaths = await getExtensionSearchPaths(sourceFile);
 
   // Load core extension first (unless --no-core)
   if (!noCore) {
@@ -463,7 +468,7 @@ async function main() {
       break;
 
     case 'standalone':
-      output = await generateStandalone(source, extNames, opts.noCore);
+      output = await generateStandalone(source, extNames, opts.noCore, false, sourceFile);
       break;
 
     case 'binary':
@@ -471,7 +476,7 @@ async function main() {
         console.error('Binary mode requires -o/--output to specify the output file');
         process.exit(1);
       }
-      await generateBinary(source, extNames, opts.noCore, opts.output);
+      await generateBinary(source, extNames, opts.noCore, opts.output, sourceFile);
       break;
 
     case 'run':

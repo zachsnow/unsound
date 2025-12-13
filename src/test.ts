@@ -31,7 +31,7 @@ import { readdirSync, readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { emitString, emitProgramString, emitProgramClosure } from './emit.ts';
-import { createLanguage, loadExtension as loadExt, type Language } from './extension.ts';
+import { createLanguage, loadExtension as loadExt, getExtensionSearchPaths, type Language } from './extension.ts';
 import { prettyPrint } from './pretty.ts';
 import type { Expr } from './ast.ts';
 import type { ParserOps } from './parse.ts';
@@ -468,11 +468,12 @@ async function runTests(): Promise<void> {
 
     // Build language with core extension first, then file-specific extensions
     let lang = createLanguage([]);
-    await loadExt('core', lang);
+    const searchPaths = getExtensionSearchPaths(filePath);
+    await loadExt('core', lang, searchPaths);
 
     for (const extName of testFile.extensions) {
       try {
-        await loadExt(extName, lang);
+        await loadExt(extName, lang, searchPaths);
       } catch (e) {
         console.error(`${red('✗')} ${file}: Failed to load extension ${extName}`);
         console.error(`  ${dim((e as Error).message)}`);

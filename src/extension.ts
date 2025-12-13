@@ -11,6 +11,7 @@
 
 import { existsSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join, basename, dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { ParseError, formatParseError, type ParserOps } from "./parse.ts";
 import type { CompilerOps } from './compile.ts';
 import { createInterpret, type InterpretOps, type Env } from './interpret.ts';
@@ -63,11 +64,27 @@ export interface Language {
   [key: `$${string}`]: InterpretOps | ParserOps | CompilerOps | AnalyzeOps | EmitOps | PreOps | PostOps | undefined;
 }
 
-// Default extension search paths (relative to cwd)
-const DEFAULT_SEARCH_PATHS = [
-  'src/extensions',
-  '.',
-];
+// Get the compiler's extensions directory (stdlib)
+// When running from source, this is src/extensions relative to the module
+export const COMPILER_EXTENSIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'extensions');
+
+// Build search paths for extension resolution
+// Order: source-dir/extensions, source-dir, compiler-extensions
+// compilerExtDir can be overridden (e.g., when running from bundled binary)
+export function getExtensionSearchPaths(sourceFile?: string, compilerExtDir: string = COMPILER_EXTENSIONS_DIR): string[] {
+  const paths: string[] = [];
+
+  if (sourceFile) {
+    const sourceDir = dirname(sourceFile);
+    paths.push(join(sourceDir, 'extensions'));
+    paths.push(sourceDir);
+  }
+
+  // Always include compiler's extensions (stdlib)
+  paths.push(compilerExtDir);
+
+  return paths;
+}
 
 // Add cross-references: every phase can access every other phase via $.<phaseName>
 function attachCrossReferences(lang: Language): void {
@@ -81,7 +98,7 @@ function attachCrossReferences(lang: Language): void {
 
 // Resolve an extension name to a file path
 // Searches: exact path, then search paths with .us, .ts, .js extensions (in order)
-export function resolveExtension(name: string, searchPaths: string[] = DEFAULT_SEARCH_PATHS): string | null {
+export function resolveExtension(name: string, searchPaths: string[] = getExtensionSearchPaths()): string | null {
   // If it's already a full path that exists, use it
   if (existsSync(name)) {
     return name;
@@ -382,7 +399,7 @@ export default result;
 export async function loadExtension(
   nameOrPath: string,
   lang: Language,
-  searchPaths: string[] = DEFAULT_SEARCH_PATHS
+  searchPaths: string[] = getExtensionSearchPaths()
 ): Promise<Extension> {
   const resolvedPath = resolveExtension(nameOrPath, searchPaths);
   if (!resolvedPath) {
@@ -401,7 +418,7 @@ export async function loadExtension(
 export async function loadExtensions(
   names: string[],
   lang: Language,
-  searchPaths: string[] = DEFAULT_SEARCH_PATHS
+  searchPaths: string[] = getExtensionSearchPaths()
 ): Promise<void> {
   for (const name of names) {
     await loadExtension(name, lang, searchPaths);
