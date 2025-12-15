@@ -2,15 +2,21 @@
 
 import {
   createLanguage, run,
-  compileToJS
+  compileToJS,
+  createLanguageWithExtensions,
+  resolveExtension,
+  loadExtension
 } from "./extension.ts";
-import type { Extension } from "./extension.ts";
+import { CoreInterpretOps } from "./interpret.ts";
+import type { Extension, InterpretOps } from "./types.ts";
 
 // === Base language tests ===
 
-console.log("Testing base language...");
+console.log("Testing core language...");
+const searchPaths: string[] = [];
 
-const baseLang = createLanguage();
+const core = await loadExtension("core", searchPaths);
+const baseLang = await createLanguageWithExtensions([core]);
 
 let result = await run(baseLang, "42");
 if (result !== 42) {
@@ -34,17 +40,17 @@ console.log("Base language tests passed!");
 console.log("Testing custom let extension...");
 
 // This extension changes let to log when called
-const letLogExtension: Extension = {
-  $interpret: ($) => {
+const letLogExtension = {
+  $interpret: ($: CoreInterpretOps) => {
     const baseLet = $.let;
     $.let = ($env, name, valueFn, bodyFn) => {
       console.log(`  [let ${name}]`);
       return baseLet($env, name, valueFn, bodyFn);
     };
   },
-};
+} as Extension;
 
-const logLang = createLanguage([letLogExtension]);
+const logLang = await createLanguageWithExtensions([letLogExtension]);
 
 // Test that basic stuff still works
 result = await run(logLang, "let x = 42 in x");
@@ -61,8 +67,8 @@ console.log("Testing tracing extension...");
 const trace: string[] = [];
 
 // Tracing extension - wraps methods to log calls
-const tracingExtension: Extension = {
-  $interpret: ($) => {
+const tracingExtension = {
+  $interpret: ($: CoreInterpretOps) => {
     const baseNumber = $.number;
     const baseLookup = $.lookup;
     const baseLet = $.let;
@@ -82,9 +88,9 @@ const tracingExtension: Extension = {
       return baseLet($env, name, valueFn, bodyFn);
     };
   },
-};
+} as Extension;
 
-const tracingLang = createLanguage([tracingExtension]);
+const tracingLang = await createLanguageWithExtensions([core, tracingExtension]);
 
 trace.length = 0;
 result = await run(tracingLang, "let x = 42 in x");
@@ -118,9 +124,8 @@ console.log("compileToJS tests passed!");
 // === Multiple extensions ===
 
 console.log("Testing multiple extensions...");
-
-const countingExtension: Extension = {
-  $interpret: ($) => {
+const countingExtension = {
+  $interpret: ($: CoreInterpretOps) => {
     const baseCall = $.call;
     let callCount = 0;
 
@@ -131,10 +136,10 @@ const countingExtension: Extension = {
       return baseCall(fn, args);
     };
   },
-};
+} as Extension;
 
 // Compose tracing + counting
-const combinedLang = createLanguage([tracingExtension, countingExtension]);
+const combinedLang = await createLanguageWithExtensions([core, tracingExtension, countingExtension]);
 
 trace.length = 0;
 result = await run(combinedLang, "let f = (x) => x in f(42)");
@@ -154,17 +159,17 @@ console.log("Testing simple wrapper extension...");
 const simpleTrace: string[] = [];
 
 // This extension ONLY wraps number - mutation style
-const simpleTracingExtension: Extension = {
-  $interpret: ($) => {
+const simpleTracingExtension = {
+  $interpret: ($: CoreInterpretOps) => {
     const baseNumber = $.number;
     $.number = (n) => {
       simpleTrace.push(`number(${n})`);
       return baseNumber(n);
     };
   },
-};
+} as Extension;
 
-const simpleLang = createLanguage([simpleTracingExtension]);
+const simpleLang = await createLanguageWithExtensions([core, simpleTracingExtension]);
 
 simpleTrace.length = 0;
 result = await run(simpleLang, "let x = 42 in x");

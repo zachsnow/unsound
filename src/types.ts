@@ -68,7 +68,7 @@ export interface ExtensionMeta {
   version?: string;
 }
 
-export type Builder<T> = ($: T) => void;
+export type Builder<T = any> = ($: T) => void;
 
 export type PhaseKey = `$${string}`;
 
@@ -78,16 +78,12 @@ export type PhaseKey = `$${string}`;
 // essentially allows composition of extensions (as if each extension were
 // a class that extends the previous one) without extensions needing to "understand"
 // inheritance, prototypes, or classes.
-export interface Extension<
-  PreParse = unknown,
-  ParseCompile = unknown,
-  CompileEmit = unknown,
-> extends ExtensionMeta {
-  $parse?: Builder<ParseOps<PreParse, ParseCompile>>,
-  $compile?: Builder<CompileOps<ParseCompile, CompileEmit>>,
-  $analyze?: Builder<AnalyzeOps<ParseCompile>>,
-  $emit?: Builder<EmitOps<CompileEmit>>,
-  $interpret?: Builder<InterpretOps>,
+export interface Extension extends ExtensionMeta {
+  $parse?: Builder,
+  $compile?: Builder,
+  $analyze?: Builder,
+  $emit?: Builder,
+  $interpret?: Builder,
 
   // Additional interpreters, compilers, etc. (e.g., $type for type checking)
   // Note: index signature must be compatible with all specific properties

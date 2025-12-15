@@ -1,6 +1,6 @@
 // Tests for the combinator-based parser
 
-import { parse, build$parse, type ParserOps } from './parse.ts';
+import { parse, build$parse, CoreParseOps } from './parse.ts';
 import { Expr } from './ast.ts';
 import { fix } from './util.ts';
 
@@ -63,13 +63,13 @@ expectParse('() => 1', {
 
 expectParse('(x) => x', {
   type: 'LambdaExpr',
-  params: ['x'],
+  params: [{ name: 'x' }],
   body: { type: 'IdentifierExpr', name: 'x' }
 });
 
 expectParse('(x, y) => x', {
   type: 'LambdaExpr',
-  params: ['x', 'y'],
+  params: [{ name: 'x' }, { name: 'y' }],
   body: { type: 'IdentifierExpr', name: 'x' }
 });
 
@@ -207,7 +207,7 @@ expectParse('{ x }', {
 console.log('Testing parser extension...');
 
 // Add a 'dyn' expression form (mutation style)
-function dynParserExtension($: ParserOps): void {
+function dynParserExtension($: CoreParseOps): void {
   const baseExpr = $.expr;
 
   // Extend expr to try dyn first
@@ -236,8 +236,8 @@ function dynParserExtension($: ParserOps): void {
 }
 
 // Compose base + extension
-const $parseWithDyn = fix(($: ParserOps) => {
-  build$parse($);
+const $parseWithDyn = fix(($: CoreParseOps) => {
+  build$parse($ as any);
   dynParserExtension($);
 });
 

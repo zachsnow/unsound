@@ -43,9 +43,7 @@ interface LazyInterpretOps extends CoreInterpretOps {
   lazyLambda: (env: any, params: string[], body: any) => any;
 }
 
-export type LazyExtension = Extension<string, LazyExpr, IR>
-
-export const lazyExtension: LazyExtension = {
+export const lazyExtension: Extension = {
   name: "lazy",
   description: "Adds lazy parameters to lambda expressions",
   version: "1.0.0",
@@ -144,9 +142,13 @@ export const lazyExtension: LazyExtension = {
     // Analyze expressions, treating lazy lambda just like a normal lambda.
     $.analyzeExpr = (expr: LazyExpr) => {
       if (expr.type === "LazyLambdaExpr") {
-        $.analyzeLambda(expr);
+        // HACK: cast to normal LambdaExpr for analysis purposes;
+        // analyzeLambda doesn't depend on type: "LambdaExpr" specifically.
+        $.analyzeLambda(expr as any as LambdaExpr);
+        return;
       }
-      originalAnalyzeExpr(expr);
+
+      originalAnalyzeExpr(expr as LambdaExpr);
     };
   },
 

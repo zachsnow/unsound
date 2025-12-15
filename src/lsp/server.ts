@@ -20,15 +20,17 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createLanguage,
+  getSearchPaths,
   loadExtension,
   parseUscDirective,
-  type Language
 } from "../extension.ts";
-import { posToLineCol, type Span } from "../ast.ts";
+import { type Span } from "../ast.ts";
 import type {
   AnalysisResult,
   Definition as AnalysisDef
 } from "../analyze.ts";
+import { Language } from "../types.ts";
+import { posToLineCol } from "../util.ts";
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
@@ -58,37 +60,20 @@ const tokenTypes = [
 const tokenModifiers = ["declaration", "definition", "readonly"];
 
 // Get or create a language for the given source's //usc directive
-async function getLanguageForSource(source: string): Promise<Language> {
+async function getLanguageForSource(uri: string, source: string): Promise<Language> {
+  const fileScheme = "file://";
+  const filename = uri.startsWith(fileScheme) ? uri.slice(fileScheme.length) : uri;
   const directive = parseUscDirective(source);
 
   // Cache key includes noCore flag and extensions
   const cacheKey = `${directive.noCore ? "no-core" : "core"
     }:${directive.extensions.join(",")}`;
 
+  // Check the cache and built the language if we don't find a composed language.
   if (!languageCache.has(cacheKey)) {
     connection.console.log(`Creating language for: ${cacheKey}`);
-    const lang = createLanguage([]);
-
-    // Load core unless --no-core
-    if (!directive.noCore) {
-      try {
-        await loadExtension("core", lang);
-      } catch (e: any) {
-        connection.console.log(`Failed to load core extension: ${e.message}`);
-      }
-    }
-
-    // Load specified extensions
-    for (const ext of directive.extensions) {
-      try {
-        await loadExtension(ext, lang);
-        connection.console.log(`Loaded extension: ${ext}`);
-      } catch (e: any) {
-        connection.console.log(`Failed to load extension ${ext}: ${e.message}`);
-      }
-    }
-
-    languageCache.set(cacheKey, lang);
+    const language = await createLanguage(directive.extensions, getSearchPaths(filename));
+    languageCache.set(cacheKey, language);
   }
 
   return languageCache.get(cacheKey)!;
@@ -146,7 +131,7 @@ async function validateDocument(textDocument: TextDocument): Promise<void> {
   const diagnostics: Diagnostic[] = [];
 
   try {
-    const lang = await getLanguageForSource(source);
+    const lang = await getLanguageForSource(textDocument.uri, source);
 
     // Parse
     const parseResult = lang.$parse.program()(source, 0);

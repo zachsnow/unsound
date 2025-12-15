@@ -13,37 +13,17 @@ import { build$compile } from '../compile.ts';
 import { build$emit } from '../emit.ts';
 import { build$interpret, defaultEnv } from '../interpret.ts';
 import { build$analyze } from '../analyze.ts';
-import { Expr } from '../ast.ts';
-import { IR } from '../ir.ts';
 
-export type CoreExtension = Extension<string, Expr, IR>
-
-export const coreExtension: CoreExtension = {
+export const coreExtension: Extension = {
   name: 'core',
   description: 'Core extension providing base implementations for all phases',
   version: '1.0.0',
 
-  $parse: ($) => {
-    // Build parser ops directly on $ so closures reference the right object
-    build$parse($);
-  },
-
-  $compile: ($) => {
-    // Build compiler ops directly on $ so closures reference the right object
-    build$compile($);
-  },
-
-  $emit: ($) => {
-    build$emit($);
-  },
-
-  $interpret: ($) => {
-    build$interpret($, defaultEnv);
-  },
-
-  $analyze: ($) => {
-    build$analyze($);
-  },
+  $parse: build$parse,
+  $compile: build$compile,
+  $emit: build$emit,
+  $interpret: build$interpret,
+  $analyze: build$analyze,
 };
 
 export default coreExtension;

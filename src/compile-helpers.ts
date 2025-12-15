@@ -1,7 +1,8 @@
 import { Expr } from "./ast";
 import { $compile } from "./compile";
-import { build$emit, EmitOps, Env } from "./emit";
+import { build$emit, } from "./emit";
 import { IR } from "./ir";
+import { EmitOps } from "./types";
 import { fix } from "./util";
 
 const $emit: EmitOps = fix(build$emit);
@@ -12,9 +13,8 @@ export function compile(expr: Expr): IR {
 }
 
 export function compileToString(expr: Expr): string {
-  return $emit.string(compile(expr));
+  return $emit.program(compile(expr));
 }
-
 
 export function compileToClosure(expr: Expr): ($: unknown) => Promise<unknown> {
   return $emit.programClosure(compile(expr))({}) as ($: unknown) => Promise<unknown>;

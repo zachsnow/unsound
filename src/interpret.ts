@@ -4,6 +4,8 @@
 // Key design: env is an opaque lexically-scoped value passed explicitly.
 // The compiler threads env through; interpreters decide what env contains.
 
+import { InterpretOps } from "./types";
+
 // Environment interface - what operations can be done on env
 // Different interpreters can provide different implementations
 export interface Env {
@@ -241,8 +243,8 @@ export const defaultEnv: Record<string, unknown> = {
 };
 
 // Convenience: create interpreter with default globals
-export function createInterpret(globals: Record<string, unknown> = {}): InterpretOps {
-  const $ = {} as InterpretOps;
+export function createInterpret(globals: Record<string, unknown> = {}): CoreInterpretOps {
+  const $ = {} as CoreInterpretOps;
   build$interpret($, { ...defaultEnv, ...globals });
   return $;
 }

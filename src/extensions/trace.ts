@@ -1,7 +1,9 @@
 // trace.ts - Tracing extension for debugging
 //   $interpret: logs every operation being evaluated
 
+import { Expr } from '../ast.ts';
 import { CoreInterpretOps } from '../interpret.ts';
+import { IR } from '../ir.ts';
 import { prettyPrint } from '../pretty.ts';
 import { Extension } from '../types.ts';
 

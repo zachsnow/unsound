@@ -2,12 +2,13 @@
 
 
 import { compile, compileToString, compileToClosure } from "./compile-helpers.ts";
-import { build$compile, type CompilerOps } from './compile.ts';
+import { build$compile, CoreCompileOps } from './compile.ts';
 import { emitString } from './emit.ts';
 import { parse } from './parse.ts';
 import type { Expr } from './ast.ts';
 import { ir } from "./ir.ts";
 import { fix } from "./util.ts";
+import { CompileOps } from "./types.ts";
 
 // Helper to compile source to IR, then to string body
 function compileBody(source: string): string {
@@ -179,7 +180,7 @@ if ((irNode.fn as any).field !== 'let') {
 console.log('Testing compiler extension...');
 
 // Add compilation for 'DynExpr' node type (mutation style)
-function dynCompilerExtension($: CompilerOps): void {
+function dynCompilerExtension($: CoreCompileOps): void {
   const baseCompileExpr = $.compileExpr;
 
   $.compileExpr = (expr: Expr) => {
@@ -199,8 +200,8 @@ function dynCompilerExtension($: CompilerOps): void {
 }
 
 // Compose base + extension
-const $compileWithDyn = fix(($: CompilerOps) => {
-  build$compile($);
+const $compileWithDyn = fix(($: CoreCompileOps) => {
+  build$compile($ as any);
   dynCompilerExtension($);
 });
 
