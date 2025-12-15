@@ -10,7 +10,7 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 # Extensions install location (defaults to ~/.config/usc/extensions)
 EXTENSIONS_DIR="${EXTENSIONS_DIR:-$HOME/.config/usc/extensions}"
 
-echo "Building usc compiler and language server..."
+echo "Building usc and usc-language-server..."
 bun run build
 
 # Install binaries
@@ -23,6 +23,9 @@ cp dist/usc-language-server "$INSTALL_DIR/"
 echo "Installing extensions to $EXTENSIONS_DIR..."
 mkdir -p "$EXTENSIONS_DIR"
 cp -r src/extensions/* "$EXTENSIONS_DIR/"
+
+# Install VS Code extension (if code command is available).
+cd editors/vscode && ./install.sh
 
 echo ""
 echo "Installation complete!"

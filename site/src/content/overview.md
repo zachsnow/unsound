@@ -19,11 +19,9 @@ usual evaluation semantics this is essentially the identity
 
 The core built-in compilation phases are:
 
-* `$pre`: takes a filename of the program to be compiled; generally returns `string`.
 * `$parse`: takes a string to parse; generally returns an AST.
 * `$compile`: takes an AST; generally returns an IR.
 * `$emit`: takes an IR; generally returns a `string` of code in the target language (that is -- JS).
-* `$post`: takes a string of target language code and a filename; writes it to file.
 
 The result is a JS file that is parameterized by a *semantics* that can be applied to the output to produce
 an *interpretation*. The standard semantics is `$eval`, a "concrete interpretation" of the program in the
@@ -55,7 +53,7 @@ Extensions have the following form:
 All hooks mutate `$`, adding functionality extension by extension (and initially starting with the "empty"
 language's implementation -- generally `() => {}`). To see how this plays out, consider parsing. The framework
 expects that, after all extensions have been loaded, the `$parse` phase will result in an object `$` that
-exports a function `$.parse` that takes the result of the `$pre` phase and outputs a value that the next phase,
+exports a function `$.parse` that takes the contents of a file and outputs a value that the next phase,
 `$compile`, will understand. A simple language might implement `$.parse` as, for example, parsing a simple
 numeric expression:
 

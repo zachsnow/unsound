@@ -46,7 +46,7 @@ else
 fi
 
 # Test: module mode (import and run with interpreter)
-echo 'let x = 1 + 2 in x * x' | bun run usc -x meso -m module -o "$TMPDIR/module.js" -
+echo "$TEST_SCRIPT" | bun run usc -x meso -m module -o "$TMPDIR/module.js" -
 if [[ -f "$TMPDIR/module.js" ]]; then
   # Create runner that imports module and interpreter
   cat > "$TMPDIR/run-module.ts" << EOF
@@ -60,7 +60,7 @@ const result = await program(lang.\$interpret);
 console.log(result);
 EOF
   output=$(cd "$TMPDIR" && bun run-module.ts 2>&1) || true
-  if [[ "$output" == "9" ]]; then
+  if [[ "$output" == "$TEST_OUTPUT" ]]; then
     pass "module mode: runs with interpreter"
   else
     fail "module mode: runs with interpreter" "expected '9', got '$output'"
@@ -109,41 +109,6 @@ else
   fail "lsp: server initializes and processes document" "$output"
 fi
 
-# --- Test Runner Tests ---
-
-echo ""
-echo "--- Test Runner Tests ---"
-
-# Test: test runner finds tests
-output=$(bun run test 2>&1) || true
-if echo "$output" | grep -q "passed"; then
-  pass "test runner: finds and runs tests"
-else
-  fail "test runner: finds and runs tests" "no 'passed' in output"
-fi
-
-# Test: test runner errors on empty directory
-mkdir -p "$TMPDIR/empty-tests"
-# Run test.ts with modified TESTS_DIR (via temp file)
-cat > "$TMPDIR/test-empty.ts" << 'EOF'
-import { readdirSync, existsSync, mkdirSync } from 'fs';
-const TESTS_DIR = process.argv[2];
-if (!existsSync(TESTS_DIR)) {
-  mkdirSync(TESTS_DIR, { recursive: true });
-}
-const files = readdirSync(TESTS_DIR).filter(f => f.endsWith('.test'));
-if (files.length === 0) {
-  console.error('No test files found');
-  process.exit(1);
-}
-console.log(`Found ${files.length} test files`);
-EOF
-
-if ! bun "$TMPDIR/test-empty.ts" "$TMPDIR/empty-tests" 2>&1; then
-  pass "test runner: errors on no tests (simulated)"
-else
-  fail "test runner: errors on no tests" "should have exited with error"
-fi
 
 # --- Summary ---
 

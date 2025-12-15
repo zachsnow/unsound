@@ -66,6 +66,14 @@ rule if you can't add the syntax for it?
 
 So I built an open recursive pipeline: parsing, compilation, and code emission, all extensible via the same mechanism.
 
+<aside>
+
+Instead of relying on a hierarchy of classes to allow for extension, I used a prototypal approach, for 2 reasons:
+* Language extensions do not need access to the source of other language extensions that they extend
+* Target languages don't need to understand JS classes in order to write further language extensions *in the target*
+  language, which I wanted to do (primarily for fun).
+
+</aside>
 
 ## Therefore &there4;
 

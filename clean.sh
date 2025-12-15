@@ -11,4 +11,4 @@ rm -rf dist/ || true
 echo "  Removing *.us.js files"
 find . -name "*.us.js" -type f -delete 2>/dev/null || true
 
-echo "Done"
+echo "Done."

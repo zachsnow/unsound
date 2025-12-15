@@ -1,16 +1,26 @@
 #!/usr/bin/env bun
-// usc - Unsound compiler CLI (next-gen)
+// usc - Unsound compiler CLI
 
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { createLanguage, run, compileToJS, loadExtension as loadExt, parseDefaultExtensions, parseUscArgs, parseUscDirective, resolveExtension, getExtensionSearchPaths as getSearchPaths, type Extension, type Language, type UscOptions } from './extension.ts';
-import { emitString } from './emit.ts';
-import { formatParseError, ParseError } from './parse.ts';
-import { prettyPrint } from './pretty.ts';
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
+import {
+  createLanguage,
+  run, parseUscArgs,
+  parseUscDirective,
+  getSearchPaths,
+  type UscOptions,
+  BUILT_IN_PHASES
+} from "./extension.ts";
+import type { Language, PhaseKey } from "./types.ts";
+import { emitString } from "./emit.ts";
+import { formatParseError, ParseError } from "./parse.ts";
+import { prettyPrint } from "./pretty.ts";
+import { logger, setVerbose } from "./logger.ts";
+import { IR } from "./ir.ts";
 
 // Detect if running from a compiled binary (bun embeds in /$bunfs/)
-const IS_BUNDLED = import.meta.dirname.startsWith('/$bunfs/');
+const IS_BUNDLED = import.meta.dirname.startsWith("/$bunfs/");
 
 // Track extracted temp directory for cleanup
 let extractedSourceDir: string | null = null;
@@ -23,18 +33,18 @@ async function extractEmbeddedSources(): Promise<string> {
 
   // Dynamic import - only loaded when IS_BUNDLED is true
   // Bun will still bundle this since the path is a string literal
-  const mod = await import('../embedded-sources.json');
+  const mod = await import("../embedded-sources.json");
   const embeddedSources: Record<string, string> = mod.default;
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'usc-sources-'));
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "usc-sources-"));
 
   // Create extensions subdirectory
-  fs.mkdirSync(path.join(tempDir, 'extensions'), { recursive: true });
+  await fs.mkdir(path.join(tempDir, "extensions"), { recursive: true });
 
   // Write all embedded source files (content is stored as strings)
   for (const [relativePath, content] of Object.entries(embeddedSources)) {
     const destPath = path.join(tempDir, relativePath);
-    fs.writeFileSync(destPath, content);
+    await fs.writeFile(destPath, content);
   }
 
   extractedSourceDir = tempDir;
@@ -42,9 +52,9 @@ async function extractEmbeddedSources(): Promise<string> {
 }
 
 // Clean up extracted sources
-function cleanupExtractedSources(): void {
+async function cleanupExtractedSources(): Promise<void> {
   if (extractedSourceDir) {
-    fs.rmSync(extractedSourceDir, { recursive: true, force: true });
+    await fs.rm(extractedSourceDir, { recursive: true, force: true });
     extractedSourceDir = null;
   }
 }
@@ -60,28 +70,28 @@ async function getSourceDir(): Promise<string> {
 
 // Get extension search paths for a given source file
 // When bundled, uses extracted embedded sources for compiler extensions
-async function getExtensionSearchPaths(sourceFile?: string): Promise<string[]> {
+async function getBundledSearchPaths(filename?: string): Promise<string[]> {
   if (!IS_BUNDLED) {
     // Use the standard search paths from extension.ts
-    return getSearchPaths(sourceFile);
+    return getSearchPaths(filename);
   }
   // When bundled, override compiler extensions dir with extracted sources
   const extractedDir = await extractEmbeddedSources();
-  return getSearchPaths(sourceFile, path.join(extractedDir, 'extensions'));
+  return getSearchPaths(filename, path.join(extractedDir, "extensions"));
 }
 
 // === Argument Parsing ===
 
 // CLI-specific options extend shared UscOptions
 // compile/interpret/emit are required here (have defaults)
-type Options = Omit<UscOptions, 'compile' | 'interpret' | 'emit'> & {
+type Options = Omit<UscOptions, "compile" | "interpret" | "emit"> & {
   input?: string;
   output?: string;
-  compile: string;      // Which compiler key to use (default: "compile")
-  emit: string;         // Which emit key to use (default: "emit")
-  interpret: string;    // Which interpreter key to use (default: "interpret")
-  mode: 'run' | 'module' | 'standalone' | 'binary';
-  show: ('ast' | 'ir' | 'js')[];
+  compile: string; // Which compiler key to use (default: "compile")
+  emit: string; // Which emit key to use (default: "emit")
+  interpret: string; // Which interpreter key to use (default: "interpret")
+  mode: "run" | "module" | "standalone" | "binary";
+  show: ("ast" | "ir" | "js")[];
   env: Record<string, unknown>;
   help: boolean;
   verbose: boolean;
@@ -94,10 +104,10 @@ function parseArgs(args: string[]): Options {
   const opts: Options = {
     extensions: shared.extensions,
     noCore: shared.noCore,
-    compile: shared.compile ?? 'compile',      // Default to $compile
-    emit: shared.emit ?? 'emit',               // Default to $emit
-    interpret: shared.interpret ?? 'interpret', // Default to $interpret
-    mode: 'run',
+    compile: shared.compile ?? "compile", // Default to $compile
+    emit: shared.emit ?? "emit", // Default to $emit
+    interpret: shared.interpret ?? "interpret", // Default to $interpret
+    mode: "run",
     show: [],
     env: {},
     help: false,
@@ -109,50 +119,63 @@ function parseArgs(args: string[]): Options {
   while (i < args.length) {
     const arg = args[i];
 
-    if (arg === '-h' || arg === '--help') {
+    if (arg === "-h" || arg === "--help") {
       opts.help = true;
       i++;
-    } else if (arg === '--no-core' || arg === '-x' || arg === '--extension' ||
-      arg === '-c' || arg === '--compile' || arg === '-i' || arg === '--interpret' || arg === '--emit') {
+    } else if (
+      arg === "--no-core" ||
+      arg === "-x" ||
+      arg === "--extension" ||
+      arg === "-c" ||
+      arg === "--compile" ||
+      arg === "-i" ||
+      arg === "--interpret" ||
+      arg === "--emit"
+    ) {
       // Already handled by parseUscArgs, skip the value for options with args
-      if (arg !== '--no-core') i++;
+      if (arg !== "--no-core") i++;
       i++;
-    } else if (arg === '-o' || arg === '--output') {
+    } else if (arg === "-o" || arg === "--output") {
       opts.output = args[++i];
       i++;
-    } else if (arg === '-m' || arg === '--mode') {
+    } else if (arg === "-m" || arg === "--mode") {
       const mode = args[++i];
-      if (mode === 'run' || mode === 'module' || mode === 'standalone' || mode === 'binary') {
+      if (
+        mode === "run" ||
+        mode === "module" ||
+        mode === "standalone" ||
+        mode === "binary"
+      ) {
         opts.mode = mode;
       } else {
         console.error(`Unknown mode: ${mode}`);
         process.exit(1);
       }
       i++;
-    } else if (arg === '--ast') {
-      opts.show.push('ast');
+    } else if (arg === "--ast") {
+      opts.show.push("ast");
       i++;
-    } else if (arg === '--ir') {
-      opts.show.push('ir');
+    } else if (arg === "--ir") {
+      opts.show.push("ir");
       i++;
-    } else if (arg === '--js') {
-      opts.show.push('js');
+    } else if (arg === "--js") {
+      opts.show.push("js");
       i++;
-    } else if (arg === '-e' || arg === '--env') {
-      const [key, value] = args[++i].split('=');
+    } else if (arg === "-e" || arg === "--env") {
+      const [key, value] = args[++i].split("=");
       try {
         opts.env[key] = JSON.parse(value);
       } catch {
         opts.env[key] = value;
       }
       i++;
-    } else if (arg === '-v' || arg === '--verbose') {
+    } else if (arg === "-v" || arg === "--verbose") {
       opts.verbose = true;
       i++;
-    } else if (arg === '-') {
-      opts.input = '-';
+    } else if (arg === "-") {
+      opts.input = "-";
       i++;
-    } else if (!arg.startsWith('-')) {
+    } else if (!arg.startsWith("-")) {
       opts.input = arg;
       i++;
     } else {
@@ -165,7 +188,7 @@ function parseArgs(args: string[]): Options {
 }
 
 function printHelp() {
-  console.log(`usc - Unsound compiler (next-gen)
+  console.log(`usc - Unsound compiler
 
 Usage: usc [options] <input>
 
@@ -223,101 +246,92 @@ Examples:
 
 // === Output Generation ===
 
-function generateModule(lang: Language, source: string): string {
-  return compileToJS(lang, source);
-}
-
-async function generateStandalone(source: string, extNames: string[], noCore: boolean, printResult: boolean = false, sourceFile?: string): Promise<string> {
-  // Build language incrementally and compile .us extensions as we go
-  let lang = createLanguage([]);
-  const searchPaths = await getExtensionSearchPaths(sourceFile);
-  if (!noCore) {
-    await loadExt('core', lang, searchPaths);
-  }
-
+async function generateStandalone(
+  lang: Language,
+  ir: unknown,
+  extNames: string[],
+  noCore: boolean,
+  printResult: boolean = false,
+  sourceFile?: string
+): Promise<string> {
   const sourceDir = await getSourceDir();
 
-  // Collect imports and extension setup
-  const imports: string[] = [];
-  const tsExtNames: string[] = [];  // Extensions to pass to createLanguage
-  const usExtSetup: string[] = [];  // .us extensions need runtime evaluation
-
-  // Core extension
-  if (!noCore) {
-    imports.push(`import core from '${path.resolve(sourceDir, 'extensions/core.ts')}';`);
-    tsExtNames.push('core');
-  }
-
-  // Process additional extensions
-  for (const name of extNames) {
-    const resolvedPath = resolveExtension(name, searchPaths);
-    if (!resolvedPath) {
-      throw new Error(`Extension not found: ${name}`);
-    }
-
-    const absPath = path.resolve(resolvedPath);
-    const safeName = name.replace(/[^a-zA-Z0-9]/g, '_');
-
-    if (resolvedPath.endsWith('.us')) {
-      // Compile .us extension to JS using current language
-      const extSource = fs.readFileSync(resolvedPath, 'utf-8');
-      const extJs = compileToJS(lang, extSource);
-      // .us extensions must be evaluated at runtime with the interpreter
-      usExtSetup.push(`const ${safeName} = await (${extJs.replace('export default ', '').replace(/;$/, '')})(lang.$interpret);`);
-      usExtSetup.push(`applyExtension(lang, ${safeName});`);
-      // Load into lang for subsequent extensions
-      await loadExt(name, lang, searchPaths);
-    } else {
-      // .ts/.js extension - import directly
-      imports.push(`import ${safeName} from '${absPath}';`);
-      tsExtNames.push(safeName);
-      await loadExt(name, lang, searchPaths);
-    }
-  }
-
   // Compile the main program with the full language
-  const programJs = compileToJS(lang, source);
+  const program = lang.$emit.program(ir);
+  if (typeof program !== "string") {
+    throw new Error(
+      "bad pipeline: expected emitted program to be a string when generating standalone"
+    );
+  }
 
   return `// Generated by usc (Unsound compiler)
-import { createLanguage, applyExtension } from '${path.resolve(sourceDir, 'extension.ts')}';
-${imports.join('\n')}
-
-const lang = createLanguage([${tsExtNames.join(', ')}]);
-
-${usExtSetup.length > 0 ? '// Runtime-evaluated extensions\n' + usExtSetup.join('\n') : ''}
-
+import { createLanguage } from '${path.resolve(sourceDir, "extension.ts")}';
+const lang = createLanguage([${lang.extensions
+      .map((ext) => `"${ext}"`)
+      .join(", ")}]);
 const $ = lang.$interpret;
-
-const _output = ${programJs.replace('export default ', '').replace(/;$/, '')};
-
-const result = await _output($);
-${printResult ? 'if (result !== undefined) console.log(result);' : ''}
+const output = ${program.replace("export default ", "").replace(/;$/, "")};
+const result = await output($);
+${printResult ? "if (result !== undefined) console.log(result);" : ""}
 export default result;
 `;
 }
 
-async function generateBinary(source: string, extNames: string[], noCore: boolean, outputPath: string, sourceFile?: string): Promise<void> {
+async function generateBinary(
+  lang: Language,
+  ir: unknown,
+  extNames: string[],
+  noCore: boolean,
+  outputPath: string,
+  sourceFile?: string
+): Promise<void> {
   // Generate standalone JS with result printing enabled
-  const standaloneJs = await generateStandalone(source, extNames, noCore, true, sourceFile);
+  const standaloneJs = await generateStandalone(
+    lang,
+    ir,
+    extNames,
+    noCore,
+    true,
+    sourceFile
+  );
 
   // Write to a temp file in system temp directory
   const tempFile = path.join(os.tmpdir(), `.usc-standalone-${process.pid}.ts`);
-  fs.writeFileSync(tempFile, standaloneJs);
+  await fs.writeFile(tempFile, standaloneJs);
 
   try {
     // Compile with bun
-    const proc = Bun.spawnSync(['bun', 'build', '--compile', tempFile, '--outfile', outputPath], {
-      stdio: ['inherit', 'inherit', 'inherit'],
-    });
+    const proc = Bun.spawnSync(
+      ["bun", "build", "--compile", tempFile, "--outfile", outputPath],
+      {
+        stdio: ["inherit", "inherit", "inherit"],
+      }
+    );
 
     if (proc.exitCode !== 0) {
-      throw new Error(`bun build --compile failed with exit code ${proc.exitCode}`);
+      throw new Error(
+        `bun build --compile failed with exit code ${proc.exitCode}`
+      );
     }
   } finally {
     // Clean up temp file and extracted sources
-    fs.unlinkSync(tempFile);
+    await fs.unlink(tempFile);
     cleanupExtractedSources();
   }
+}
+
+async function readInput(opts: Options): Promise<string> {
+  // Optionally read from stdin.
+  if (!opts.input || opts.input === "-") {
+    const chunks: Buffer[] = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString("utf-8");
+  }
+
+  // Otherwise we should have a filename.
+  return fs.readFile(opts.input, "utf-8");
 }
 
 // === Main ===
@@ -326,171 +340,163 @@ async function main() {
   const args = process.argv.slice(2);
   const opts = parseArgs(args);
 
+  // Set verbose early.
+  setVerbose(opts.verbose);
+
+  // Help.
   if (opts.help) {
     printHelp();
     process.exit(0);
   }
 
-  // Read input
-  let source: string;
-  if (!opts.input || opts.input === '-') {
-    // Read from stdin
-    const chunks: Buffer[] = [];
-    for await (const chunk of process.stdin) {
-      chunks.push(chunk);
-    }
-    source = Buffer.concat(chunks).toString('utf-8');
-  } else {
-    source = fs.readFileSync(opts.input, 'utf-8');
-  }
+  // Read input.
+  const input = await readInput(opts);
 
-  // Parse directive from source to get file defaults
-  const directive = parseUscDirective(source);
+  // Parse directive from source to get file defaults.
+  const directive = parseUscDirective(input);
 
-  // Merge options: CLI explicit > directive > hardcoded defaults
+  // Merge options: CLI explicit > directive > defaults.
   // For extensions: CLI -x flags override directive (not additive)
-  const extNames = opts.extensions.length > 0
-    ? opts.extensions
-    : directive.extensions;
+  const extNames =
+    opts.extensions.length > 0 ? opts.extensions : directive.extensions;
   const noCore = opts.noCore || directive.noCore;
-  const compile = opts.compile !== 'compile' ? opts.compile : (directive.compile ?? 'compile');
-  const interpret = opts.interpret !== 'interpret' ? opts.interpret : (directive.interpret ?? 'interpret');
-  const emit = opts.emit !== 'emit' ? opts.emit : (directive.emit ?? 'emit');
-
-  // Build language incrementally
-  let lang = createLanguage([]);
-
-  const log = opts.verbose ? (msg: string) => console.error(`usc: ${msg}`) : () => { };
-  if (opts.verbose) {
-    process.env.USC_VERBOSE = '1';
-  }
+  const compile =
+    opts.compile !== "compile" ? opts.compile : directive.compile ?? "compile";
+  const interpret =
+    opts.interpret !== "interpret"
+      ? opts.interpret
+      : directive.interpret ?? "interpret";
+  const emit = opts.emit !== "emit" ? opts.emit : directive.emit ?? "emit";
 
   // Get extension search paths (includes extracted sources when bundled)
-  // Pass source file path so we can find project-local extensions
-  const sourceFile = opts.input && opts.input !== '-' ? path.resolve(opts.input) : undefined;
-  const searchPaths = await getExtensionSearchPaths(sourceFile);
+  // Pass source file path so we can find project-local extensions.
+  const sourceFile =
+    opts.input && opts.input !== "-" ? path.resolve(opts.input) : undefined;
+  const searchPaths = await getBundledSearchPaths(sourceFile);
 
-  // Load core extension first (unless --no-core)
+  // Build language.
   if (!noCore) {
-    log('loading extension core');
-    await loadExt('core', lang, searchPaths);
+    extNames.unshift("core");
   }
-
-  log(`extensions to load: ${extNames.join(', ')}`);
-
-  // Load extensions using search paths
-  for (const extName of extNames) {
-    try {
-      log(`loading extension ${extName}`);
-      await loadExt(extName, lang, searchPaths);
-      log(`loaded extension ${extName}`);
-    } catch (e) {
-      console.error(`Failed to load extension ${extName}:`, e);
-      process.exit(1);
-    }
-  }
+  logger.debug("loading extensions:", extNames);
+  let lang = await createLanguage(extNames, searchPaths);
 
   // Check that the requested interpreter exists
-  const interpKey = `$${interpret}`;
-  if (opts.mode === 'run' && !(lang as any)[interpKey]) {
-    console.error(`No interpreter '${interpret}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$') && !['$parse', '$compile', '$emit'].includes(k)).map(k => k.slice(1)).join(', ')
-      }`);
+  const interpretKey: PhaseKey = `$${interpret}`;
+  const interpreter = lang[interpretKey];
+  if (opts.mode === "run" && !interpreter) {
+    console.error(
+      `No interpreter '${interpret}' found. Available: ${Object.keys(lang)
+        .filter((k) => k.startsWith("$") && !BUILT_IN_PHASES.includes(k as any))
+        .map((k) => k.slice(1))
+        .join(", ")}`
+    );
     process.exit(1);
   }
 
-  // Inject env into the selected interpreter
-  const selectedInterp = (lang as any)[interpKey];
-  if (selectedInterp?.env) {
-    for (const [key, value] of Object.entries(opts.env)) {
-      selectedInterp.env.bind(key, value);
-    }
-  }
-
   // Parse
-  const parseResult = lang.$parse.program()(source, 0);
+  const parseResult = lang.$parse.program()(input, 0);
   if (!parseResult.ok) {
-    console.error(formatParseError(source, parseResult.pos, parseResult.expected));
+    console.error(
+      formatParseError(input, parseResult.pos, parseResult.expected)
+    );
     process.exit(1);
   }
 
   // Show AST if requested
-  if (opts.show.includes('ast')) {
-    console.error('=== AST ===');
+  if (opts.show.includes("ast")) {
+    console.error("=== AST ===");
     console.error(JSON.stringify(parseResult.value, null, 2));
   }
 
   // Compile (using specified compile phase)
-  const compileKey = `$${compile}`;
-  const compiler = (lang as any)[compileKey];
-
+  const compileKey: PhaseKey = `$${compile}`;
+  const compiler = lang[compileKey];
   if (!compiler) {
-    console.error(`No compiler '${compile}' found. Available: ${Object.keys(lang).filter(k => k.startsWith('$')).map(k => k.slice(1)).join(', ')
-      }`);
+    console.error(
+      `No compiler '${compile}' found. Available: ${Object.keys(lang)
+        .filter((k) => k.startsWith("$"))
+        .map((k) => k.slice(1))
+        .join(", ")}`
+    );
     process.exit(1);
   }
 
   // For non-standard compile phases, output result directly
-  if (compile !== 'compile') {
+  if (compile !== "compile") {
     // Call the appropriate entry point (analyzeProgram for analyze, etc.)
-    const entryPoint = compile === 'analyze' ? 'analyzeProgram' : 'compileProgram';
-    if (typeof compiler[entryPoint] !== 'function') {
+    const entryPoint =
+      compile === "analyze" ? "analyzeProgram" : "compileProgram";
+    if (typeof compiler[entryPoint] !== "function") {
       console.error(`Compiler '${compile}' has no ${entryPoint} method`);
       process.exit(1);
     }
 
     const result = compiler[entryPoint](parseResult.value);
-    console.log(prettyPrint(result, 'auto'));
+    console.log(prettyPrint(result, "auto"));
     process.exit(0);
   }
 
-  // Standard compile path
   const ir = lang.$compile.compileProgram(parseResult.value);
 
   // Show IR if requested
-  if (opts.show.includes('ir')) {
-    console.error('=== IR ===');
+  if (opts.show.includes("ir")) {
+    console.error("=== IR ===");
     console.error(JSON.stringify(ir, null, 2));
   }
 
   // Show JS if requested
-  if (opts.show.includes('js')) {
-    console.error('=== JS ===');
-    console.error(emitString(ir));
+  if (opts.show.includes("js")) {
+    console.error("=== JS ===");
+    console.error(emitString(ir as IR));
   }
 
   // Generate output based on mode
-  let output: string | undefined;
+  let output: string = "";
   let result: unknown;
 
   switch (opts.mode) {
-    case 'module':
-      output = generateModule(lang, source);
+    case "module":
+      output = lang.$emit.program(ir);
       break;
 
-    case 'standalone':
-      output = await generateStandalone(source, extNames, opts.noCore, false, sourceFile);
+    case "standalone":
+      output = await generateStandalone(
+        lang,
+        input,
+        extNames,
+        opts.noCore,
+        false,
+        sourceFile
+      );
       break;
 
-    case 'binary':
+    case "binary":
       if (!opts.output) {
-        console.error('Binary mode requires -o/--output to specify the output file');
+        console.error(
+          "Binary mode requires -o/--output to specify the output file"
+        );
         process.exit(1);
       }
-      await generateBinary(source, extNames, opts.noCore, opts.output, sourceFile);
+      await generateBinary(
+        lang,
+        input,
+        extNames,
+        opts.noCore,
+        opts.output,
+        sourceFile
+      );
       break;
 
-    case 'run':
+    case "run":
       try {
-        result = await run(lang, source, interpret);
+        const closure = lang.$emit.programClosure(ir)(opts.env);
+        const result = await closure(interpreter);
         if (result !== undefined) {
           console.log(result);
         }
       } catch (e) {
-        if (e instanceof ParseError) {
-          console.error(e.format(source));
-        } else {
-          console.error('Runtime error:', e);
-        }
+        logger.error("interpreter error:", e);
         process.exit(1);
       }
       break;
@@ -499,14 +505,14 @@ async function main() {
   // Write output
   if (output) {
     if (opts.output) {
-      fs.writeFileSync(opts.output, output);
+      await fs.writeFile(opts.output, output);
     } else {
       console.log(output);
     }
   }
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error(e);
   process.exit(1);
 });

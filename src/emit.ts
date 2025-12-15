@@ -2,14 +2,15 @@
  * Core emitter.
  */
 import { type IR } from "./ir.ts";
+import { EmitOps } from "./types.ts";
 
 export type Env = Record<string, unknown>;
 export type Closure = (env: Env) => unknown;
 export type ProgramClosure = (env: Env) => ($: unknown) => Promise<unknown>;
 
-export interface EmitOps {
+export interface CoreEmitOps extends EmitOps<IR> {
   string: (ir: IR) => string;
-  programString: (ir: IR) => string;
+  program: (ir: IR) => string;
   programClosure: (ir: IR) => ProgramClosure;
 }
 
@@ -221,8 +222,10 @@ export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Prom
   };
 }
 
-export function build$emit($: EmitOps): void {
+export function build$emit(in$: EmitOps): void {
+  const $ = in$ as CoreEmitOps;
+
   $.string = emitString;
-  $.programString = emitProgramString;
+  $.program = emitProgramString;
   $.programClosure = emitProgramClosure;
 };

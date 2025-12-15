@@ -12,7 +12,7 @@ Then reload VS Code (Cmd+Shift+P > "Developer: Reload Window").
 
 ## Features
 
-- **Syntax highlighting** - TextMate grammar for `.us` files
+- **Syntax highlighting** - TextMate grammar for generic `.us` files
 - **Diagnostics** - Parse errors and undefined variable warnings
 - **Go to Definition** - Jump to where a symbol is defined (F12)
 - **Hover** - See symbol information on hover

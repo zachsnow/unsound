@@ -17,7 +17,7 @@ export interface Env {
 
 // Interpreter operations - what $ provides at runtime
 // Operations that need $env take it as first parameter
-export interface InterpretOps {
+export interface CoreInterpretOps {
   // Environment factory
   env: () => Env;
 
@@ -138,7 +138,9 @@ function primitiveMember(obj: unknown, ops: Record<string, unknown>, field: stri
 
 // Base interpreter builder - mutation style
 // Extensions mutate $ to override methods
-export function build$interpret($: InterpretOps, globals: Record<string, unknown> = {}): void {
+export function build$interpret(in$: InterpretOps, globals: Record<string, unknown> = {}): void {
+  const $ = in$ as CoreInterpretOps;
+
   // Environment factory - creates initial env with globals
   $.env = () => createEnv(globals);
 

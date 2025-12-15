@@ -29,22 +29,22 @@ function expectFail(input: string) {
 
 console.log('Testing literals...');
 
-expectParse('42', { type: 'Literal', value: 42 });
-expectParse('  42  ', { type: 'Literal', value: 42 });
-expectParse('"hello"', { type: 'Literal', value: 'hello' });
-expectParse('"hello\\nworld"', { type: 'Literal', value: 'hello\nworld' });
-expectParse('true', { type: 'Literal', value: true });
-expectParse('false', { type: 'Literal', value: false });
+expectParse('42', { type: 'LiteralExpr', value: 42 });
+expectParse('  42  ', { type: 'LiteralExpr', value: 42 });
+expectParse('"hello"', { type: 'LiteralExpr', value: 'hello' });
+expectParse('"hello\\nworld"', { type: 'LiteralExpr', value: 'hello\nworld' });
+expectParse('true', { type: 'LiteralExpr', value: true });
+expectParse('false', { type: 'LiteralExpr', value: false });
 
 // === Identifier tests ===
 
 console.log('Testing identifiers...');
 
-expectParse('x', { type: 'Ident', name: 'x' });
-expectParse('foo', { type: 'Ident', name: 'foo' });
-expectParse('_bar', { type: 'Ident', name: '_bar' });
-expectParse('$baz', { type: 'Ident', name: '$baz' });
-expectParse('foo123', { type: 'Ident', name: 'foo123' });
+expectParse('x', { type: 'IdentifierExpr', name: 'x' });
+expectParse('foo', { type: 'IdentifierExpr', name: 'foo' });
+expectParse('_bar', { type: 'IdentifierExpr', name: '_bar' });
+expectParse('$baz', { type: 'IdentifierExpr', name: '$baz' });
+expectParse('foo123', { type: 'IdentifierExpr', name: 'foo123' });
 
 // Keywords should not parse as identifiers
 expectFail('let');
@@ -56,21 +56,21 @@ expectFail('if');
 console.log('Testing lambdas...');
 
 expectParse('() => 1', {
-  type: 'Lambda',
+  type: 'LambdaExpr',
   params: [],
-  body: { type: 'Literal', value: 1 }
+  body: { type: 'LiteralExpr', value: 1 }
 });
 
 expectParse('(x) => x', {
-  type: 'Lambda',
+  type: 'LambdaExpr',
   params: ['x'],
-  body: { type: 'Ident', name: 'x' }
+  body: { type: 'IdentifierExpr', name: 'x' }
 });
 
 expectParse('(x, y) => x', {
-  type: 'Lambda',
+  type: 'LambdaExpr',
   params: ['x', 'y'],
-  body: { type: 'Ident', name: 'x' }
+  body: { type: 'IdentifierExpr', name: 'x' }
 });
 
 // === Let tests ===
@@ -80,19 +80,19 @@ console.log('Testing let expressions...');
 expectParse('let x = 1 in x', {
   type: 'LetExpr',
   name: 'x',
-  value: { type: 'Literal', value: 1 },
-  body: { type: 'Ident', name: 'x' }
+  value: { type: 'LiteralExpr', value: 1 },
+  body: { type: 'IdentifierExpr', name: 'x' }
 });
 
 expectParse('let x = 1 in let y = 2 in x', {
   type: 'LetExpr',
   name: 'x',
-  value: { type: 'Literal', value: 1 },
+  value: { type: 'LiteralExpr', value: 1 },
   body: {
     type: 'LetExpr',
     name: 'y',
-    value: { type: 'Literal', value: 2 },
-    body: { type: 'Ident', name: 'x' }
+    value: { type: 'LiteralExpr', value: 2 },
+    body: { type: 'IdentifierExpr', name: 'x' }
   }
 });
 
@@ -102,9 +102,9 @@ console.log('Testing if expressions...');
 
 expectParse('if true then 1 else 2', {
   type: 'IfExpr',
-  cond: { type: 'Literal', value: true },
-  then: { type: 'Literal', value: 1 },
-  else: { type: 'Literal', value: 2 }
+  cond: { type: 'LiteralExpr', value: true },
+  then: { type: 'LiteralExpr', value: 1 },
+  else: { type: 'LiteralExpr', value: 2 }
 });
 
 // === Application tests ===
@@ -112,35 +112,35 @@ expectParse('if true then 1 else 2', {
 console.log('Testing function application...');
 
 expectParse('f()', {
-  type: 'App',
-  fn: { type: 'Ident', name: 'f' },
+  type: 'AppExpr',
+  fn: { type: 'IdentifierExpr', name: 'f' },
   args: []
 });
 
 expectParse('f(1)', {
-  type: 'App',
-  fn: { type: 'Ident', name: 'f' },
-  args: [{ type: 'Literal', value: 1 }]
+  type: 'AppExpr',
+  fn: { type: 'IdentifierExpr', name: 'f' },
+  args: [{ type: 'LiteralExpr', value: 1 }]
 });
 
 expectParse('f(1, 2)', {
-  type: 'App',
-  fn: { type: 'Ident', name: 'f' },
+  type: 'AppExpr',
+  fn: { type: 'IdentifierExpr', name: 'f' },
   args: [
-    { type: 'Literal', value: 1 },
-    { type: 'Literal', value: 2 }
+    { type: 'LiteralExpr', value: 1 },
+    { type: 'LiteralExpr', value: 2 }
   ]
 });
 
 // Chained application
 expectParse('f(1)(2)', {
-  type: 'App',
+  type: 'AppExpr',
   fn: {
-    type: 'App',
-    fn: { type: 'Ident', name: 'f' },
-    args: [{ type: 'Literal', value: 1 }]
+    type: 'AppExpr',
+    fn: { type: 'IdentifierExpr', name: 'f' },
+    args: [{ type: 'LiteralExpr', value: 1 }]
   },
-  args: [{ type: 'Literal', value: 2 }]
+  args: [{ type: 'LiteralExpr', value: 2 }]
 });
 
 // === Member access tests (now unified as Index with Literal key) ===
@@ -148,30 +148,30 @@ expectParse('f(1)(2)', {
 console.log('Testing member access...');
 
 expectParse('x.y', {
-  type: 'Index',
-  object: { type: 'Ident', name: 'x' },
-  key: { type: 'Literal', value: 'y' }
+  type: 'IndexExpr',
+  object: { type: 'IdentifierExpr', name: 'x' },
+  key: { type: 'LiteralExpr', value: 'y' }
 });
 
 expectParse('x.y.z', {
-  type: 'Index',
+  type: 'IndexExpr',
   object: {
-    type: 'Index',
-    object: { type: 'Ident', name: 'x' },
-    key: { type: 'Literal', value: 'y' }
+    type: 'IndexExpr',
+    object: { type: 'IdentifierExpr', name: 'x' },
+    key: { type: 'LiteralExpr', value: 'y' }
   },
-  key: { type: 'Literal', value: 'z' }
+  key: { type: 'LiteralExpr', value: 'z' }
 });
 
 // Mixed application and member access
 expectParse('x.f(1)', {
-  type: 'App',
+  type: 'AppExpr',
   fn: {
-    type: 'Index',
-    object: { type: 'Ident', name: 'x' },
-    key: { type: 'Literal', value: 'f' }
+    type: 'IndexExpr',
+    object: { type: 'IdentifierExpr', name: 'x' },
+    key: { type: 'LiteralExpr', value: 'f' }
   },
-  args: [{ type: 'Literal', value: 1 }]
+  args: [{ type: 'LiteralExpr', value: 1 }]
 });
 
 // === Object tests ===
@@ -185,21 +185,21 @@ expectParse('{}', {
 
 expectParse('{ x: 1 }', {
   type: 'ObjectExpr',
-  properties: [{ key: 'x', value: { type: 'Literal', value: 1 } }]
+  properties: [{ key: 'x', value: { type: 'LiteralExpr', value: 1 } }]
 });
 
 expectParse('{ x: 1, y: 2 }', {
   type: 'ObjectExpr',
   properties: [
-    { key: 'x', value: { type: 'Literal', value: 1 } },
-    { key: 'y', value: { type: 'Literal', value: 2 } }
+    { key: 'x', value: { type: 'LiteralExpr', value: 1 } },
+    { key: 'y', value: { type: 'LiteralExpr', value: 2 } }
   ]
 });
 
 // Shorthand property
 expectParse('{ x }', {
   type: 'ObjectExpr',
-  properties: [{ key: 'x', value: { type: 'Ident', name: 'x' } }]
+  properties: [{ key: 'x', value: { type: 'IdentifierExpr', name: 'x' } }]
 });
 
 // === Extension test ===

@@ -1,38 +1,63 @@
 // AST analyzer - walks AST to collect definitions, references, diagnostics
 // Used by $analyze phase as an alternative "compiler" that produces AnalysisResult
 
-import type { Expr, Span } from './ast.ts';
+import type { AppExpr, AssignIndexExpr, Expr, IdentifierExpr, IfExpr, IndexExpr, LambdaExpr, LetExpr, LiteralExpr, ObjectExpr, Span } from './ast.ts';
+
+/**
+ * A definition of a name in the program.
+ *
+ * Extensions may create additional kinds, in which case they should always
+ * include `name` and `loc` (if available).
+ */
 export interface Definition {
   name: string;
   kind: 'let' | 'param' | 'const';
   loc?: Span;
 }
 
+/**
+ * A reference to a definition, if resolved.
+ */
 export interface Reference {
   name: string;
   loc?: Span;
   definition?: Definition;  // Resolved reference, if found
 }
 
+/**
+ * A compiler diagnostic, that the IDE can show to the user.
+ */
 export interface Diagnostic {
   message: string;
   severity: 'error' | 'warning' | 'info';
   loc?: Span;
 }
 
-// Semantic token types for LSP highlighting
-export type TokenType =
+/**
+ * A semantic tokens for syntax highlighting; these types can be extended by
+ * language extensions.
+ */
+type TokenType =
   | 'keyword' | 'variable' | 'parameter' | 'function'
   | 'number' | 'string' | 'operator' | 'property' | 'type';
 
-export type TokenModifier = 'declaration' | 'definition' | 'readonly';
+/**
+ * In Unsound everything is a declaration for now.
+ */
+type TokenModifier = 'declaration' | 'definition' | 'readonly';
 
+/**
+ * Semantic information for tokens, used when highlighting.
+ */
 export interface SemanticToken {
   loc: Span;
   type: TokenType;
   modifiers?: TokenModifier[];
 }
 
+/**
+ * The result of analyzing a program; this is what `$analyze` produces.
+ */
 export interface AnalysisResult {
   definitions: Definition[];
   references: Reference[];
@@ -40,20 +65,58 @@ export interface AnalysisResult {
   tokens: SemanticToken[];
 }
 
-// Scope for tracking definitions
-type Scope = Map<string, Definition>;
+/**
+ * A stack-based environment for name resolution.
+ *
+ * When compiling a program we model the environment as a stack of scopes,
+ * pushing scopes as we enter nested lambdas.
+ */
+class Environment {
+  private scopes: Record<string, Definition>[] = [];
 
-// Analyze operations - what $ provides for analysis
+  public push() {
+    this.scopes.push({});
+  }
+  public pop() {
+    this.scopes.pop();
+  }
+
+  public define(name: string, def: Definition) {
+    if (this.scopes.length === 0) {
+      throw new Error('No scope to define in');
+    }
+    this.scopes[this.scopes.length - 1][name] = def;
+  }
+
+  public resolve(name: string): Definition | undefined {
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      const def = this.scopes[i][name];
+      if (def) return def;
+    }
+    return undefined;
+  }
+};
+
+/**
+ * Operations for analyzing a program; while the
+ */
 export interface AnalyzeOps {
+  environment: Environment;
+
   // Main entry point - like compileProgram but produces AnalysisResult
   analyzeProgram: (expr: Expr) => AnalysisResult;
 
   // Walk an expression (extensions override to handle new node types)
   analyzeExpr: (expr: Expr) => void;
-
-  // Scope management
-  pushScope: () => void;
-  popScope: () => void;
+  analyzeLiteral: (expr: LiteralExpr) => void;
+  analyzeIdentifier: (expr: IdentifierExpr) => void;
+  analyzeLet: (expr: LetExpr) => void;
+  analyzeLambda: (expr: LambdaExpr) => void;
+  analyzeApp: (expr: AppExpr) => void;
+  analyzeIf: (expr: IfExpr) => void;
+  analyzeObject: (expr: ObjectExpr) => void;
+  analyzeIndex: (expr: IndexExpr) => void;
+  analyzeAssignIndex: (expr: AssignIndexExpr) => void;
 
   // Recording
   define: (name: string, kind: Definition['kind'], loc?: Span) => Definition;
@@ -73,9 +136,18 @@ export interface AnalyzeOps {
   builtins: Set<string>;
 }
 
-// Build analyzer ops - mutation style like other phases
-export function build$analyze($: AnalyzeOps): void {
+/**
+ * Build an analyzer.
+ *
+ * We don't have an assumptions about the input analyzer `in$`, so it is typed
+ * as `unknown`. We pull out each sub-expression into its own method so that
+ * extensions can easily override them as needed.
+ */
+export function build$analyze(in$: unknown): void {
+  const $ = in$ as AnalyzeOps;
+
   // State
+  $.environment = new Environment();
   $.definitions = [];
   $.references = [];
   $.diagnostics = [];
@@ -86,36 +158,15 @@ export function build$analyze($: AnalyzeOps): void {
     $.tokens.push({ loc, type, modifiers });
   };
 
-  // Scope stack
-  const scopes: Scope[] = [new Map()];
-
-  $.pushScope = () => {
-    scopes.push(new Map());
-  };
-
-  $.popScope = () => {
-    scopes.pop();
-  };
-
   $.define = (name, kind, loc) => {
     const def: Definition = { name, kind, loc };
     $.definitions.push(def);
-    // Add to current scope
-    scopes[scopes.length - 1].set(name, def);
+    $.environment.define(name, def);
     return def;
   };
 
-  // Resolve a name through scope chain
-  const resolve = (name: string): Definition | undefined => {
-    for (let i = scopes.length - 1; i >= 0; i--) {
-      const def = scopes[i].get(name);
-      if (def) return def;
-    }
-    return undefined;
-  };
-
   $.reference = (name, loc) => {
-    const definition = resolve(name);
+    const definition = $.environment.resolve(name);
     $.references.push({ name, loc, definition });
 
     // Warn about undefined references (unless builtin)
@@ -131,12 +182,11 @@ export function build$analyze($: AnalyzeOps): void {
   // Main entry point
   $.analyzeProgram = (expr) => {
     // Reset state
+    $.environment = new Environment();
     $.definitions = [];
     $.references = [];
     $.diagnostics = [];
     $.tokens = [];
-    scopes.length = 1;
-    scopes[0].clear();
 
     // Walk the AST
     $.analyzeExpr(expr);
@@ -152,107 +202,149 @@ export function build$analyze($: AnalyzeOps): void {
   // Walk expressions - extensions can override for new node types
   $.analyzeExpr = (expr) => {
     switch (expr.type) {
-      case 'Literal':
-        // Record token for literal
-        if (expr.loc) {
-          const v = expr.value;
-          if (typeof v === 'number') {
-            $.token(expr.loc, 'number');
-          } else if (typeof v === 'string') {
-            $.token(expr.loc, 'string');
-          } else if (typeof v === 'boolean' || v === null) {
-            $.token(expr.loc, 'keyword');
-          }
-        }
+      case 'LiteralExpr':
+        $.analyzeLiteral(expr);
         break;
 
-      case 'Ident': {
-        $.reference(expr.name, expr.loc);
-        // Record token - type depends on what it resolves to
-        if (expr.loc) {
-          const resolved = $.references[$.references.length - 1]?.definition;
-          if (resolved?.kind === 'param') {
-            $.token(expr.loc, 'parameter');
-          } else {
-            $.token(expr.loc, 'variable');
-          }
-        }
+      case 'IdentifierExpr': {
+        $.analyzeIdentifier(expr);
         break;
       }
 
       case 'LetExpr': {
-        // Analyze value first (before name is in scope for non-recursive)
-        // Actually, for letrec semantics, define first
-        const def = $.define(expr.name, 'let', expr.nameLoc ?? expr.loc);
-        // Record token for binding name
-        if (expr.nameLoc) {
-          $.token(expr.nameLoc, 'variable', ['declaration']);
-        }
-        $.analyzeExpr(expr.value);
-        $.analyzeExpr(expr.body);
+        $.analyzeLet(expr);
         break;
       }
 
-      case 'Lambda':
-        $.pushScope();
-        // Define parameters
-        for (let i = 0; i < expr.params.length; i++) {
-          const paramLoc = expr.paramsLoc?.[i];
-          $.define(expr.params[i], 'param', paramLoc);
-          // Record token for parameter
-          if (paramLoc) {
-            $.token(paramLoc, 'parameter', ['declaration']);
-          }
-        }
-        $.analyzeExpr(expr.body);
-        $.popScope();
+      case 'LambdaExpr':
+        $.analyzeLambda(expr);
         break;
 
-      case 'App':
-        $.analyzeExpr(expr.fn);
-        for (const arg of expr.args) {
-          $.analyzeExpr(arg);
-        }
+      case 'AppExpr':
+        $.analyzeApp(expr);
         break;
 
       case 'IfExpr':
-        $.analyzeExpr(expr.cond);
-        $.analyzeExpr(expr.then);
-        $.analyzeExpr(expr.else);
+        $.analyzeIf(expr);
         break;
 
       case 'ObjectExpr':
-        for (const prop of expr.properties) {
-          // Record token for property key
-          if (prop.keyLoc) {
-            $.token(prop.keyLoc, 'property');
-          }
-          $.analyzeExpr(prop.value);
-        }
+        $.analyzeObject(expr);
         break;
 
-      case 'Index':
-        $.analyzeExpr(expr.object);
-        $.analyzeExpr(expr.key);
+      case 'IndexExpr':
+        $.analyzeIndex(expr);
         break;
 
-      case 'SetIndex':
-        $.analyzeExpr(expr.object);
-        $.analyzeExpr(expr.key);
-        $.analyzeExpr(expr.value);
+      case 'AssignIndexExpr':
+        $.analyzeAssignIndex(expr)
         break;
 
       default:
-        // Unknown node type - extensions may have added it
-        // They should override analyzeExpr to handle it
+        // Unknown node type - extensions may have added it.
+        // They should override analyzeExpr to handle it, but they may not.
         break;
     }
   };
-}
 
-// Convenience: create analyzer
-export function createAnalyzer(): AnalyzeOps {
-  const $ = {} as AnalyzeOps;
-  build$analyze($);
-  return $;
-}
+  $.analyzeLiteral = (expr: LiteralExpr) => {
+    // Record token for literal
+    if (expr.loc) {
+      const v = expr.value;
+      if (typeof v === 'number') {
+        $.token(expr.loc, 'number');
+      } else if (typeof v === 'string') {
+        $.token(expr.loc, 'string');
+      } else if (typeof v === 'boolean' || v === null) {
+        // Treat true/false/null as keywords.
+        $.token(expr.loc, 'keyword');
+      }
+      else {
+        // Allow overrides to have created other literal types,
+        // but not created an analyze for them.
+      }
+    }
+  };
+
+  $.analyzeIdentifier = (expr: IdentifierExpr) => {
+    $.reference(expr.name, expr.loc);
+
+    // Record token - type depends on what it resolves to
+    if (expr.loc) {
+      const resolved = $.references[$.references.length - 1]?.definition;
+      if (resolved?.kind === 'param') {
+        $.token(expr.loc, 'parameter');
+      } else {
+        $.token(expr.loc, 'variable');
+      }
+    }
+  };
+
+  $.analyzeLet = (expr: LetExpr) => {
+    // Define the name before analyzing the value and body; this allows the value
+    // to refer to the name, for recursive functions. This also means that
+    // (incorrectly) recursive values will not trigger undefined warnings, but cest la vie.
+    $.define(expr.name, 'let', expr.nameLoc ?? expr.loc);
+
+    // Record token for binding name
+    if (expr.nameLoc) {
+      $.token(expr.nameLoc, 'variable', ['declaration']);
+    }
+
+    $.analyzeExpr(expr.value);
+    $.analyzeExpr(expr.body);
+  };
+
+  $.analyzeLambda = (expr: LambdaExpr) => {
+    $.environment.push();
+
+    // Define parameters in the scope; add tokens for them too.
+    expr.params.forEach((param, i) => {
+      $.define(param.name, 'param', param.loc);
+
+      // Record token for parameter
+      if (param.loc) {
+        $.token(param.loc, 'parameter', ['declaration']);
+      }
+    });
+
+    // Analyze lambda body with the parameters in the environment.
+    $.analyzeExpr(expr.body);
+
+    $.environment.pop();
+  };
+
+  $.analyzeApp = (expr: AppExpr) => {
+    $.analyzeExpr(expr.fn);
+    for (const arg of expr.args) {
+      $.analyzeExpr(arg);
+    }
+  };
+
+  $.analyzeIf = (expr: IfExpr) => {
+    $.analyzeExpr(expr.cond);
+    $.analyzeExpr(expr.then);
+    $.analyzeExpr(expr.else);
+  };
+
+  $.analyzeObject = (expr: ObjectExpr) => {
+    for (const prop of expr.properties) {
+      // Record token for property key
+      if (prop.keyLoc) {
+        $.token(prop.keyLoc, 'property');
+      }
+      $.analyzeExpr(prop.value);
+    }
+  };
+
+  $.analyzeIndex = (expr: IndexExpr) => {
+    $.analyzeExpr(expr.object);
+    $.analyzeExpr(expr.key);
+  };
+
+  $.analyzeAssignIndex = (expr: AssignIndexExpr) => {
+    $.analyzeExpr(expr.object);
+    $.analyzeExpr(expr.key);
+    $.analyzeExpr(expr.value);
+  };
+};

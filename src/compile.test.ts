@@ -208,8 +208,8 @@ const $compileWithDyn = fix(($: CompilerOps) => {
 const dynAst = {
   type: 'DynExpr',
   name: 'x',
-  value: { type: 'Literal', value: 42 },
-  body: { type: 'Ident', name: 'x' }
+  value: { type: 'LiteralExpr', value: 42 },
+  body: { type: 'IdentifierExpr', name: 'x' }
 };
 
 const dynIR = $compileWithDyn.compileExpr(dynAst as any);

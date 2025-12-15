@@ -8,8 +8,8 @@
   },
   "scripts": {
     "usc": "bun src/cli.ts",
-    "test": "bun src/test.ts",
-    "types": "tsc --noEmit",
+    "test": "bun src/test.ts && ./test.sh",
+    "types": "tsc --noEmit && cd editors/vscode && bun run types",
     "build": "./build.sh",
     "clean": "./clean.sh",
     "install": "./install.sh"

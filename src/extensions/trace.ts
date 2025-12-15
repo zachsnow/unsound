@@ -1,18 +1,9 @@
 // trace.ts - Tracing extension for debugging
-// Wraps all phases to log what's happening:
-//   $pre: logs file reads with timing
-//   $post: logs file writes with timing
 //   $interpret: logs every operation being evaluated
 
-import type { Extension } from '../extension.ts';
-import type { PreOps } from '../pre.ts';
-import type { PostOps } from '../post.ts';
-import type { InterpretOps, Env } from '../interpret.ts';
+import { CoreInterpretOps } from '../interpret.ts';
 import { prettyPrint } from '../pretty.ts';
-
-// Colors for terminal output
-const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
-const cyan = (s: string): string => `\x1b[36m${s}\x1b[0m`;
+import { Extension } from '../types.ts';
 
 let depth = 0;
 const indent = () => '  '.repeat(depth);
@@ -31,30 +22,7 @@ export const traceExtension: Extension = {
   description: 'Tracing extension that logs file I/O and interpreter operations',
   version: '1.0.0',
 
-  $pre: ($: PreOps) => {
-    const baseRead = $.read;
-    $.read = (path) => {
-      const start = performance.now();
-      console.log(cyan(`[pre] reading ${path}...`));
-      const content = baseRead(path);
-      const elapsed = (performance.now() - start).toFixed(2);
-      console.log(dim(`[pre] read ${path} (${content.length} bytes, ${elapsed}ms)`));
-      return content;
-    };
-  },
-
-  $post: ($: PostOps) => {
-    const baseWrite = $.write;
-    $.write = (path, content) => {
-      const start = performance.now();
-      console.log(cyan(`[post] writing ${path}...`));
-      baseWrite(path, content);
-      const elapsed = (performance.now() - start).toFixed(2);
-      console.log(dim(`[post] wrote ${path} (${content.length} bytes, ${elapsed}ms)`));
-    };
-  },
-
-  $interpret: ($: InterpretOps) => {
+  $interpret: ($: CoreInterpretOps) => {
     const base = {
       number: $.number,
       string: $.string,

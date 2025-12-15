@@ -1,21 +1,22 @@
 /**
  * Core parser.
  */
-import {
-  type Expr,
-  type LetExpr,
-  type LambdaExpr,
-  type IfExpr,
-  type ObjectExpr,
-  type ArrayExpr,
-  type IndexExpr,
-  type AssignIndex,
-  type LiteralExpr,
-  type IdentExpr,
-  type Span,
-  posToLineCol,
+import type {
+  Expr,
+  LetExpr,
+  LambdaExpr,
+  IfExpr,
+  ObjectExpr,
+  ArrayExpr,
+  IndexExpr,
+  AssignIndexExpr,
+  LiteralExpr,
+  IdentifierExpr,
+  Span,
+  Param,
 } from "./ast.ts";
-import { fix } from "./util.ts";
+import { Builder, ParseOps } from "./types.ts";
+import { fix, posToLineCol } from "./util.ts";
 
 export type ParseResult<T> =
   | { ok: true; value: T; pos: number }
@@ -23,7 +24,7 @@ export type ParseResult<T> =
 
 export type Parser<T> = (input: string, pos: number) => ParseResult<T>;
 
-export interface ParserOps {
+export interface CoreParseOps extends ParseOps<string, Expr> {
   // === Primitive combinators ===
   char: (c: string) => Parser<string>;
   satisfy: (pred: (c: string) => boolean, name: string) => Parser<string>;
@@ -78,8 +79,8 @@ export interface ParserOps {
 
   // Lambda expressions - broken into pieces
   lambda: () => Parser<LambdaExpr>;
-  lambdaParams: () => Parser<{ value: string; loc: Span }[]>;  // (x, y, z)
-  lambdaParam: () => Parser<{ value: string; loc: Span }>;     // single param
+  lambdaParams: () => Parser<Param[]>;  // (x, y, z)
+  lambdaParam: () => Parser<Param>;     // single param
   lambdaArrow: () => Parser<string>;             // "=>"
   lambdaBody: () => Parser<Expr>;                // body expression
 
@@ -107,7 +108,7 @@ export interface ParserOps {
   objectExpr: () => Parser<ObjectExpr>;
   arrayExpr: () => Parser<ArrayExpr>;
   literal: () => Parser<LiteralExpr>;
-  identExpr: () => Parser<IdentExpr>;
+  identifierExpr: () => Parser<IdentifierExpr>;
 
   // Object properties
   property: () => Parser<{ key: string; keyLoc?: Span; value: Expr }>;
@@ -186,7 +187,9 @@ export function formatParseError(
 
 // Base parser builder - mutates $ to add all parser operations
 // All recursive calls go through $ for open recursion
-export function build$parse($: ParserOps): void {
+export function build$parse(in$: ParseOps): void {
+  const $ = in$ as CoreParseOps;
+
   // === Primitive combinators ===
 
   $.char = (c) => (input, pos) => {
@@ -552,18 +555,18 @@ export function build$parse($: ParserOps): void {
 
     // Check for = but not == (to avoid conflict with equality operator)
     const ws = $.ws()(input, left.pos);
-    if (input[ws.pos] === '=' && input[ws.pos + 1] !== '=' && left.value.type === 'Index') {
+    if (input[ws.pos] === '=' && input[ws.pos + 1] !== '=' && left.value.type === 'IndexExpr') {
       const value = $.expr()(input, ws.pos + 1);
       if (!value.ok) return value;
       return {
         ok: true,
         value: {
-          type: 'SetIndex',
+          type: 'AssignIndexExpr',
           object: (left.value as IndexExpr).object,
           key: (left.value as IndexExpr).key,
           value: value.value,
           loc: { start, end: value.pos },
-        } as AssignIndex,
+        } satisfies AssignIndexExpr,
         pos: value.pos,
       };
     }
@@ -626,7 +629,18 @@ export function build$parse($: ParserOps): void {
   };
 
   // === Lambda expression pieces ===
-  $.lambdaParam = () => $.withLoc($.ident());
+  $.lambdaParam = () => (input, pos) => {
+    const ident = $.withLoc($.ident())(input, pos);
+    if (!ident.ok) return ident as ParseResult<Param>;
+    return {
+      ok: true,
+      value: {
+        name: ident.value.value,
+        loc: ident.value.loc,
+      } satisfies Param,
+      pos: ident.pos,
+    };
+  };
 
   $.lambdaParams = () => $.between(
     $.token("("),
@@ -654,12 +668,11 @@ export function build$parse($: ParserOps): void {
     return {
       ok: true,
       value: {
-        type: "Lambda",
-        params: params.value.map(p => p.value),
-        paramsLoc: params.value.map(p => p.loc),
+        type: "LambdaExpr",
+        params: params.value,
         body: body.value,
         loc: { start, end: body.pos },
-      },
+      } satisfies LambdaExpr,
       pos: body.pos,
     };
   };
@@ -719,6 +732,12 @@ export function build$parse($: ParserOps): void {
     $.token(")")
   );
 
+  $.args = () =>
+    $.sepBy(
+      $.lazy(() => $.expr()),
+      $.token(",")
+    );
+
   // Member name allows identifiers OR keywords (e.g., obj.if is valid)
   $.memberName = () => (input, pos) => {
     const ws = $.ws()(input, pos);
@@ -733,7 +752,7 @@ export function build$parse($: ParserOps): void {
         if (kwResult.pos < input.length) {
           const next = input[kwResult.pos];
           if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') ||
-              (next >= '0' && next <= '9') || next === '_' || next === '$') {
+            (next >= '0' && next <= '9') || next === '_' || next === '$') {
             continue; // Not a full keyword, try next
           }
         }
@@ -774,7 +793,7 @@ export function build$parse($: ParserOps): void {
         current = {
           ok: true,
           value: {
-            type: "App",
+            type: "AppExpr",
             fn: current.value,
             args: argsResult.value,
             loc: { start, end: argsResult.pos },
@@ -792,11 +811,11 @@ export function build$parse($: ParserOps): void {
         current = {
           ok: true,
           value: {
-            type: "Index",
+            type: "IndexExpr",
             object: current.value,
-            key: { type: "Literal", value: fieldWithLoc.value, loc: fieldWithLoc.loc } satisfies LiteralExpr,
+            key: { type: "LiteralExpr", value: fieldWithLoc.value, loc: fieldWithLoc.loc } satisfies LiteralExpr,
             loc: { start, end: memberResult.pos },
-          } as IndexExpr,
+          } satisfies IndexExpr,
           pos: memberResult.pos,
         };
         continue;
@@ -809,11 +828,11 @@ export function build$parse($: ParserOps): void {
         current = {
           ok: true,
           value: {
-            type: "Index",
+            type: "IndexExpr",
             object: current.value,
             key: indexResult.value,
             loc: { start, end: indexResult.pos },
-          } as IndexExpr,
+          } satisfies IndexExpr,
           pos: indexResult.pos,
         };
         continue;
@@ -830,7 +849,7 @@ export function build$parse($: ParserOps): void {
       $.lazy(() => $.objectExpr()),
       $.lazy(() => $.arrayExpr()),
       $.lazy(() => $.literal()),
-      $.lazy(() => $.identExpr()),
+      $.lazy(() => $.identifierExpr()),
       $.between(
         $.token("("),
         $.lazy(() => $.expr()),
@@ -874,32 +893,23 @@ export function build$parse($: ParserOps): void {
 
   $.literal = () =>
     $.alt<LiteralExpr>(
-      $.map($.numberLit(), (value, loc): LiteralExpr => ({ type: "Literal", value, loc })),
-      $.map($.stringLit(), (value, loc): LiteralExpr => ({ type: "Literal", value, loc })),
+      $.map($.numberLit(), (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })),
+      $.map($.stringLit(), (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })),
       $.map(
         $.keyword("true"),
-        (_, loc): LiteralExpr => ({ type: "Literal", value: true, loc })
+        (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: true, loc })
       ),
       $.map(
         $.keyword("false"),
-        (_, loc): LiteralExpr => ({ type: "Literal", value: false, loc })
+        (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: false, loc })
       ),
       $.map(
         $.keyword("null"),
-        (_, loc): LiteralExpr => ({ type: "Literal", value: null, loc })
+        (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: null, loc })
       )
     );
 
-  $.identExpr = () => $.map($.ident(), (name, loc): IdentExpr => ({ type: "Ident", name, loc }));
-
-  // Legacy params - delegates to lambdaParam for consistency
-  $.params = () => $.sepBy($.lazy(() => $.lambdaParam()), $.token(","));
-
-  $.args = () =>
-    $.sepBy(
-      $.lazy(() => $.expr()),
-      $.token(",")
-    );
+  $.identifierExpr = () => $.map($.ident(), (name, loc): IdentifierExpr => ({ type: "IdentifierExpr", name, loc }));
 
   // === Object property pieces ===
   $.propertyKey = () => $.withLoc($.alt($.ident(), $.stringLit()));
@@ -922,13 +932,13 @@ export function build$parse($: ParserOps): void {
       $.map($.ident(), (key, loc) => ({
         key,
         keyLoc: loc,
-        value: { type: "Ident", name: key, loc } as IdentExpr,
+        value: { type: "IdentifierExpr", name: key, loc } as IdentifierExpr,
       }))
     );
 }
 
 // Create the base parser
-export const $parse = fix(build$parse);
+export const $parse = fix<CoreParseOps>(build$parse as Builder<CoreParseOps>);
 
 // Convenience function
 export function parse(input: string): Expr {

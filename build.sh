@@ -9,7 +9,7 @@ bun run types
 
 # Generate embedded sources for binary mode
 echo "Generating embedded sources..."
-bun src/generate-embedded.ts
+bun src/embed.ts
 
 # Build binaries
 echo "Building binaries..."

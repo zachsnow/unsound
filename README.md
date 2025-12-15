@@ -7,7 +7,7 @@ for information about the motivation and design of the framework.
 
 ## Building and installing
 
-Bun and Typescript are the only dependencies. Once `bun` is available:
+Bun and Typescript are the only dependencies for the core compiler. Once `bun` is available:
 
 ```bash
 bun install
@@ -57,7 +57,16 @@ When developing locally you can run the Typescript directly instead of recompili
 bun run usc
 ```
 
-## Language server
+## Language server + VS Code Extension
+
+Building `usc` also builds the language server, `usc-language-server. You can use the language server
+with VS Code by installing the extension:
+
+```bash
+cd editors/vscode
+bun install
+bun run install
+```
 
 ## Testing
 

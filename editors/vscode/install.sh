@@ -9,8 +9,8 @@ DEST="$HOME/.vscode/extensions/unsound"
 # Check if usc-language-server is installed
 if ! command -v usc-language-server &> /dev/null; then
   if [ ! -f "$HOME/.local/bin/usc-language-server" ]; then
-    echo "usc-language-server not found. Running root install.sh first..."
-    "$PROJECT_ROOT/install.sh"
+    echo "error: usc-language-server not installed."
+    exit 1
   fi
 fi
 

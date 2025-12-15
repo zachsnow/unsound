@@ -5,16 +5,12 @@
  * Running a file with --no-core produces undefined.
  */
 
-import type { Extension } from './extension.ts';
+import type { Extension } from './types.ts';
 import { ir } from './ir.ts';
 
 export const emptyExtension: Extension = {
   name: 'empty',
   description: 'Empty language - does nothing',
-
-  $pre: ($) => {
-    $.read = () => '';
-  },
 
   $parse: ($) => {
     $.program = () => (_input, pos) => ({ ok: true, value: undefined as any, pos });
@@ -22,17 +18,13 @@ export const emptyExtension: Extension = {
 
   $compile: ($) => {
     $.compileProgram = () => ir.lit(undefined);
-    $.ir = ir;
   },
 
   $emit: ($) => {
-    $.programString = () => 'export default async ($) => undefined;';
+    $.program = () => 'export default async ($) => undefined;';
     $.programClosure = () => () => async () => undefined;
   },
 
-  $post: ($) => {
-    $.write = () => {};
-  },
 };
 
 export default emptyExtension;

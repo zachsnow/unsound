@@ -12,21 +12,6 @@ export interface Span {
   end: number;    // byte offset after last character
 }
 
-// Convert byte offset to line/column (1-indexed, for display)
-export function posToLineCol(source: string, pos: number): { line: number; col: number } {
-  let line = 1;
-  let col = 1;
-  for (let i = 0; i < pos && i < source.length; i++) {
-    if (source[i] === '\n') {
-      line++;
-      col = 1;
-    } else {
-      col++;
-    }
-  }
-  return { line, col };
-}
-
 /**
  * All nodes have an optional source location (Span).
  */
@@ -45,9 +30,9 @@ export type Expr =
   | ObjectExpr
   | ArrayExpr
   | IndexExpr
-  | AssignIndex
+  | AssignIndexExpr
   | LiteralExpr
-  | IdentExpr;
+  | IdentifierExpr
 
 /**
  * Represents `let name = value in body`.
@@ -64,17 +49,20 @@ export interface LetExpr extends SpanExpr {
  * Represents `(param, ...) => body`.
  */
 export interface LambdaExpr extends SpanExpr {
-  type: 'Lambda';
-  params: string[];
-  paramsLoc?: Span[];  // Location of each parameter
+  type: 'LambdaExpr';
+  params: Param[];
   body: Expr;
+}
+
+export interface Param extends SpanExpr {
+  name: string;
 }
 
 /**
  * Represents `fn(arg, ...)`.
  */
 export interface AppExpr extends SpanExpr {
-  type: 'App';
+  type: 'AppExpr';
   fn: Expr;
   args: Expr[];
 }
@@ -109,7 +97,7 @@ export interface ArrayExpr extends SpanExpr {
  * Represents `object[key]`.
  */
 export interface IndexExpr extends SpanExpr {
-  type: 'Index';
+  type: 'IndexExpr';
   object: Expr;
   key: Expr;
 }
@@ -117,8 +105,8 @@ export interface IndexExpr extends SpanExpr {
 /**
  * Represents `object[key] = value`.
  */
-export interface AssignIndex extends SpanExpr {
-  type: 'SetIndex';
+export interface AssignIndexExpr extends SpanExpr {
+  type: 'AssignIndexExpr';
   object: Expr;
   key: Expr;
   value: Expr;
@@ -128,14 +116,14 @@ export interface AssignIndex extends SpanExpr {
  * Represents e.g. `42`, `"hello"`, `true`, `null`.
  */
 export interface LiteralExpr extends SpanExpr {
-  type: 'Literal';
+  type: 'LiteralExpr';
   value: number | string | boolean | null;
 }
 
 /**
  * Represents an identifier, e.g. `foo`.
  */
-export interface IdentExpr extends SpanExpr {
-  type: 'Ident';
+export interface IdentifierExpr extends SpanExpr {
+  type: 'IdentifierExpr';
   name: string;
 }
