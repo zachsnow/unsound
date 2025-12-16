@@ -129,6 +129,7 @@ export function extensionNameFromPath(filePath: string): string {
 export interface UscOptions {
   extensions: string[];
   noCore: boolean;
+  parse?: string; // Which parser to use (e.g., "parse", "customParse")
   compile?: string; // Which compiler to use (e.g., "compile", "analyze")
   interpret?: string; // Which interpreter to use (e.g., "interpret", "type")
   emit?: string; // Which emitter to use
@@ -160,7 +161,16 @@ export function parseUscArgs(args: string[]): UscOptions {
       opts.emit = args[++i];
     }
   }
+
   return opts;
+}
+
+export function getExtensions(options: UscOptions): string[] {
+  const extensions = [...options.extensions];
+  if (!options.noCore && !extensions.includes("core")) {
+    extensions.unshift("core");
+  }
+  return options.extensions;
 }
 
 // Parse the full //usc directive including all options
