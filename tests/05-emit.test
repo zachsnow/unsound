@@ -1,3 +1,4 @@
+# usc -x core
 # Tests for emit phase directly (input is IR JSON)
 
 --- emit literal number

@@ -1,5 +1,6 @@
+# usc -x meso
+
 # Tests for meso.us extension (operators)
-#usc -x meso
 
 --- addition
 1 + 2

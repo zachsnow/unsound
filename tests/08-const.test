@@ -1,5 +1,5 @@
+# usc -x meso -x thermo -x const
 # Tests for const.us extension (constant bindings)
-#usc -x meso -x thermo -x const
 
 --- basic const
 const x = 42; x

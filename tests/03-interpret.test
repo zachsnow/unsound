@@ -1,3 +1,5 @@
+# usc -x core
+
 # Interpretation tests ($interpret is one interpretation; could also use $type, etc.)
 
 --- multiple interpretations

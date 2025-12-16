@@ -236,7 +236,7 @@ interface TestFile {
 // Parse #usc directive to get extension names
 // Format: #usc -x meso -x const
 function parseUscDirective(line: string): string[] {
-  const match = line.match(/^#usc\s+(.+)$/);
+  const match = line.match(/^#\s+usc\s+(.+)$/);
   if (!match) return [];
 
   const args = match[1].trim();

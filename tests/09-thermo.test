@@ -1,5 +1,5 @@
+# usc -x meso -x thermo
 # Tests for thermo.us extension (JS-like imperative features)
-#usc -x meso -x thermo
 
 # let...in syntax is removed in thermo
 

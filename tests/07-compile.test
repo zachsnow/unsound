@@ -1,3 +1,4 @@
+# usc -x core
 # Tests for compile phase directly (input is AST JSON)
 
 --- compile literal number
