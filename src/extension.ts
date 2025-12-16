@@ -125,59 +125,67 @@ export function extensionNameFromPath(filePath: string): string {
   return base.replace(/\.(us|ts|js)$/, "");
 }
 
-// Shared usc options - used by both CLI and //usc directive
-export interface UscOptions {
+/**
+ * Options for the usc CLI and //usc directives.
+ */
+export interface DirectiveOptions {
   extensions: string[];
-  noCore: boolean;
-  parse?: string; // Which parser to use (e.g., "parse", "customParse")
-  compile?: string; // Which compiler to use (e.g., "compile", "analyze")
-  interpret?: string; // Which interpreter to use (e.g., "interpret", "type")
-  emit?: string; // Which emitter to use
+  parse: string; // Which parser to use (e.g., "parse", "customParse")
+  compile: string; // Which compiler to use (e.g., "compile", "analyze")
+  interpret: string; // Which interpreter to use (e.g., "interpret", "type")
+  emit: string; // Which emitter to use
 }
 
-// Parse usc-style arguments from an array of strings
-// Shared between CLI args and //usc directive parsing
-export function parseUscArgs(args: string[]): UscOptions {
-  const opts: UscOptions = { extensions: [], noCore: false };
+const defaultDirectiveOptions = (): DirectiveOptions => ({
+  extensions: [],
+  parse: "parse",
+  compile: "compile",
+  emit: "emit",
+  interpret: "interpret",
+});
+
+/**
+ * Parse usc-style arguments from an array of strings; shared
+ * between CLI args and //usc directive parsing.
+ *
+ * The CLI adds additional options that don't make a ton of sense
+ * in the //usc directive (like input/output files), so those are
+ * not included here.
+ */
+export function parseUscArgs(args: string[]): DirectiveOptions {
+  const opts = defaultDirectiveOptions();
+
   for (let i = 0; i < args.length; i++) {
     if (
       (args[i] === "-x" || args[i] === "--extension") &&
       i + 1 < args.length
     ) {
       opts.extensions.push(args[++i]);
-    } else if (args[i] === "--no-core") {
-      opts.noCore = true;
     } else if (
       (args[i] === "-c" || args[i] === "--compile") &&
       i + 1 < args.length
     ) {
       opts.compile = args[++i];
+    } else if (args[i] === "-e" || args[i] === "--emit" && i + 1 < args.length) {
+      opts.emit = args[++i];
     } else if (
       (args[i] === "-i" || args[i] === "--interpret") &&
       i + 1 < args.length
     ) {
       opts.interpret = args[++i];
-    } else if (args[i] === "--emit" && i + 1 < args.length) {
-      opts.emit = args[++i];
     }
   }
-
   return opts;
 }
 
-export function getExtensions(options: UscOptions): string[] {
-  const extensions = [...options.extensions];
-  if (!options.noCore && !extensions.includes("core")) {
-    extensions.unshift("core");
-  }
-  return options.extensions;
-}
-
-// Parse the full //usc directive including all options
-// Format: //usc --no-core -x meso -x const
-export function parseUscDirective(source: string): UscOptions {
+/**
+ * Parse a complete usc directive (`//usc ...`) from JS/TS source code.
+ */
+export function parseUscDirective(source: string): DirectiveOptions {
   const match = source.match(/^\/\/\s+usc\s+(.+)$/m);
-  if (!match) return { extensions: [], noCore: false };
+  if (!match) {
+    return defaultDirectiveOptions();
+  }
   return parseUscArgs(match[1].trim().split(/\s+/));
 }
 
@@ -446,7 +454,7 @@ export async function loadExtensions(
 export async function run(
   lang: Language,
   source: string,
-  interpretKey: string = "interpret",
+  interpretKey: string = "interpret"
 ): Promise<unknown> {
   const parseResult = lang.$parse.program()(source, 0);
   if (!parseResult.ok) {

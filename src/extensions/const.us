@@ -1,4 +1,5 @@
-//usc -x meso -x thermo
+//usc -x core -x meso -x thermo
+//
 // const.us - Constant bindings extension
 // Adds: const x = v; (scopes to end of block like let)
 // Assignment to const variables is detected at compile time

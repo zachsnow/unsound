@@ -7,7 +7,7 @@ Most of the tests for Unsound amount to testing the result of parsing, compiling
 Each file is comprised of a `usc`-directive indicating how to invoke `usc`, usually specifying the extensions needed to run the tests.
 
 ```
-# usc -x meso -x thermo
+# usc -x core -x meso -x thermo
 ```
 
 Then there are several tests, each consisting of a title, input, and multiple expected outputs. For each output we define which phases of the framework should be executed, using the extensions defined in the `usc`-comment.
@@ -47,7 +47,7 @@ An empty `===` runs the default pipeline (`parse, compile, emit, interpret`):
 You can define multiple `===` blocks, each with their own pipeline:
 
 ```
-# usc -x meso.ts
+# usc -x core -x meso
 
 --- parse test
 let x = 1 in x

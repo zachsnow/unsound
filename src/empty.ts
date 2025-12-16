@@ -1,10 +1,9 @@
 /**
  * Empty language - the minimal foundation for extensions.
  *
- * Does nothing useful, but doesn't error either.
- * Running a file with --no-core produces undefined.
+ * Does nothing useful, but doesn't error either. Running a program
+ * with no extensions specified uses this language.
  */
-
 import type { CompileOps, EmitOps, Extension, ParseOps } from './types.ts';
 import { ir } from './ir.ts';
 

@@ -3,7 +3,7 @@
 //
 // File format:
 //   # Comment
-//   #usc -x meso -x const    # Load extensions (like //usc in .us files)
+//   #usc -x core -x meso -x const    # Load extensions (like //usc in .us files)
 //
 //   --- test name
 //   input (source code, AST JSON, or IR JSON based on first phase)

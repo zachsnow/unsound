@@ -1,4 +1,4 @@
-//usc -x meso -x thermo
+//usc -x core -x meso -x thermo
 // exo.us - Type annotations and type checking
 //
 // Adds:

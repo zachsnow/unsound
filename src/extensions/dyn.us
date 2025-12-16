@@ -1,4 +1,4 @@
-//usc -x meso
+//usc -x core -x meso
 // dyn.us - Dynamic variable binding
 //
 // Syntax: dyn x = value in body

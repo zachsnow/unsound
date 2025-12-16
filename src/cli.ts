@@ -9,8 +9,7 @@ import {
   parseUscArgs,
   parseUscDirective,
   getSearchPaths,
-  type UscOptions,
-  BUILT_IN_PHASES,
+  type DirectiveOptions,
 } from "./extension.ts";
 import type { EmitOps, Language, PhaseKey } from "./types.ts";
 import { formatParseError } from "./parse.ts";
@@ -82,32 +81,29 @@ async function getBundledSearchPaths(filename?: string): Promise<string[]> {
 // === Argument Parsing ===
 
 const validModes = ["run", "module", "standalone", "binary"] as const;
+const isValidMode = (mode: string): mode is (typeof validModes)[number] => {
+  return validModes.includes(mode as (typeof validModes)[number]);
+};
 
 // CLI-specific options extend shared UscOptions
 // compile/interpret/emit are required here (have defaults)
-type Options = UscOptions & {
+type CLIOptions = DirectiveOptions & {
   input?: string;
   output?: string;
 
-  parse: string; // Which parser key to use (default: "parse")
-  compile: string; // Which compiler key to use (default: "compile")
-  emit: string; // Which emit key to use (default: "emit")
-  interpret: string; // Which interpreter key to use (default: "interpret")
-
-  mode: typeof validModes[number];
+  mode: (typeof validModes)[number];
   show: ("ast" | "ir" | "js")[];
 
-  env: Record<string, unknown>;
+  global: Record<string, unknown>;
 
   help: boolean;
   verbose: boolean;
 };
 
-function parseArgs(args: string[]): Options {
-  // Start with shared options parsed by parseUscArgs
+function parseArgs(args: string[]): CLIOptions {
+  // Start with shared options parsed by parseUscArgs.
   const shared = parseUscArgs(args);
   const alreadyParsed = [
-    "--no-core",
     "-x",
     "--extension",
     "-p",
@@ -116,17 +112,20 @@ function parseArgs(args: string[]): Options {
     "--compile",
     "-i",
     "--interpret",
+    "-e",
     "--emit",
   ];
 
-  const opts: Options = {
+  // Default to shared options or defaults.
+  const opts: CLIOptions = {
     extensions: shared.extensions,
+    parse: shared.parse ?? "parse", // Default to $parse
     compile: shared.compile ?? "compile", // Default to $compile
     emit: shared.emit ?? "emit", // Default to $emit
     interpret: shared.interpret ?? "interpret", // Default to $interpret
     mode: "run",
     show: [],
-    env: {},
+    global: {},
     help: false,
     verbose: false,
   };
@@ -136,55 +135,55 @@ function parseArgs(args: string[]): Options {
   while (i < args.length) {
     const arg = args[i];
 
-    if (arg === "-h" || arg === "--help") {
+    if (alreadyParsed.includes(arg)) {
+      // Already handled by parseUscArgs, skip the value for options with args (all of them).
+      i++;
+    } else if (arg === "-h" || arg === "--help") {
       opts.help = true;
-      i++;
-    } else if (alreadyParsed.includes(arg)) {
-      // Already handled by parseUscArgs, skip the value for options with args (all but --no-core), too.
-      if (arg !== "--no-core") i++;
-      i++;
     } else if (arg === "-o" || arg === "--output") {
-      opts.output = args[++i];
-      i++;
+      // Output filename.
+      const output = args[++i];
+      opts.output = output;
     } else if (arg === "-m" || arg === "--mode") {
+      // Validate mode.
       const mode = args[++i];
-      if (validModes.includes(mode)) {
+      if (isValidMode(mode)) {
         opts.mode = mode;
       } else {
         console.error(`Unknown mode: ${mode}`);
         process.exit(1);
       }
-      i++;
     } else if (arg === "--ast") {
       opts.show.push("ast");
-      i++;
     } else if (arg === "--ir") {
       opts.show.push("ir");
-      i++;
     } else if (arg === "--js") {
       opts.show.push("js");
-      i++;
-    } else if (arg === "-e" || arg === "--env") {
-      const [key, value] = args[++i].split("=");
+    } else if (arg === "-g" || arg === "--global") {
+      // Parse key=value pair; wow JS String.split() is dumb.
+      const [key, ...rest] = args[++i].split("=");
+      const value = rest.join("=");
       try {
-        opts.env[key] = JSON.parse(value);
+        opts.global[key] = JSON.parse(value);
       } catch {
-        opts.env[key] = value;
+        opts.global[key] = value;
       }
-      i++;
     } else if (arg === "-v" || arg === "--verbose") {
       opts.verbose = true;
-      i++;
     } else if (arg === "-") {
+      // Handle reading from stdin.
       opts.input = "-";
-      i++;
     } else if (!arg.startsWith("-")) {
+      // TODO: positional argument is input file, it would be nice to allow multiple.
+      // Also, if the filename starts with "-" I guess you're out of luck?
       opts.input = arg;
-      i++;
     } else {
       console.error(`Unknown option: ${arg}`);
       process.exit(1);
     }
+
+    // Consume parsed.
+    i++;
   }
 
   return opts;
@@ -196,54 +195,43 @@ function printHelp() {
 Usage: usc [options] <input>
 
 Input:
-  <input>              Source file to compile (use - for stdin)
+  <input>                             Source file to compile (use - for stdin)
 
 Output:
-  -o, --output <file>  Write output to file (default: stdout for js, none for run)
-  -m, --mode <mode>    Output mode:
-                          run        - Execute directly (default)
-                          module     - JS exporting async ($) => result
-                          standalone - Self-contained JS with interpreter
-                          binary     - Standalone compiled with bun
+  -o, --output <file>                 Write output to file (default: stdout for js, none for run)
+  -m, --mode <mode>                   Output mode:
+                                          run        - Execute directly (default)
+                                          module     - JS exporting async ($) => result
+                                          standalone - Self-contained JS with interpreter
+                                          binary     - Standalone compiled with bun
 
 Extensions:
-  -x, --extension <name>  Load extension by name or path
-                          Can be used multiple times, applied in order
-                          Searches: extensions/, then current directory
-                          Supports .ts/.js and .us files
-  --no-core               Skip loading core extension (for testing)
-
-  Default extensions can be set in source file:
-    //usc -x meso -x const
-
-  CLI -x flags override file defaults (not additive).
+  -x, --extension <name>              Load extension by name or path
+                                      Can be used multiple times, applied in order
 
 Phases:
-  -c, --compile <key>     Which compiler to use (default: compile)
-                          Extensions can provide alternative compilers:
-                            compile  - standard compilation to IR ($compile)
-                            analyze  - static analysis ($analyze)
-                          If not 'compile', outputs result directly.
-  --emit <key>            Which emitter to use (default: emit)
-  -i, --interpret <key>   Which interpreter to use (default: interpret)
-                          Extensions can provide multiple interpreters:
-                            interpret - standard evaluation ($interpret)
-                            type      - type checking ($type)
-                            etc.
+  -p, --parse <key>                   Which parser to use (default: parse)
+  -c, --compile <key>                 Which compiler to use (default: compile)
+                                      If not 'compile', outputs result directly.
+  -e, --emit <key>                    Which emitter to use (default: emit)
+  -i, --interpret <key>               Which interpreter to use (default: interpret)
+                                      Extensions can provide multiple interpreters:
+                                        interpret - standard evaluation ($interpret)
+                                        type      - type checking ($type)
+                                        etc.
 
 Environment (for run mode):
-  -e, --env <key=value>   Add value to environment (JSON parsed if valid)
+  -g, --global <key=value>            Add value to environment (JSON parsed if valid)
 
 Debug:
-  --ast                Show parsed AST
-  --ir                 Show compiled IR
-  --js                 Show emitted JavaScript
+  --ast                               Show parsed AST
+  --ir                                Show compiled IR
+  --js                                Show emitted JavaScript
 
 Examples:
   usc program.us                      Run with core + file's //usc defaults
-  usc -x meso program.us              Run with core + meso (overrides file)
-  usc --no-core -x meso program.us    Run with meso only (no core)
-  usc -m module -o out.js program.us  Compile to module
+  usc -x core -x meso program.us      Run with core + meso (overrides file)
+  usc -m module -o out.js program.us  Compile to module out.js
 `);
 }
 
@@ -253,7 +241,7 @@ async function generateStandalone(
   lang: Language,
   program: string,
   interpretKey: PhaseKey,
-  printResult: boolean = false,
+  printResult: boolean = false
 ): Promise<string> {
   // TODO: is this the correct source directory for resolution?
   const sourceDir = await getSourceDir();
@@ -283,7 +271,7 @@ async function generateBinary(
     lang,
     program,
     interpretKey,
-    true,
+    true
   );
 
   // Write to a temp file in system temp directory
@@ -311,7 +299,7 @@ async function generateBinary(
   }
 }
 
-async function readInput(opts: Options): Promise<string> {
+async function readInput(opts: CLIOptions): Promise<string> {
   // Optionally read from stdin.
   if (!opts.input || opts.input === "-") {
     const chunks: Buffer[] = [];
@@ -325,8 +313,15 @@ async function readInput(opts: Options): Promise<string> {
   return fs.readFile(opts.input, "utf-8");
 }
 
-function invalidPhase(phaseType: string, phaseName: string, language: Language, exit: boolean = true) {
-  const message = `No ${phaseType} phase '${phaseName}' found. Available: ${Object.keys(language)
+function invalidPhase(
+  phaseType: string,
+  phaseName: string,
+  language: Language,
+  exit: boolean = true
+) {
+  const message = `No ${phaseType} phase '${phaseName}' found. Available: ${Object.keys(
+    language
+  )
     .filter((k) => k.startsWith("$"))
     .map((k) => k.slice(1))
     .join(", ")}`;
@@ -337,7 +332,6 @@ function invalidPhase(phaseType: string, phaseName: string, language: Language, 
     logger.warn(message);
   }
 }
-
 
 // === Main ===
 
@@ -362,20 +356,19 @@ async function main() {
 
   // Merge options: CLI explicit > directive > defaults.
   // For extensions: CLI -x flags override directive (not additive)
-  // Note that --no-core is treated as specifying extensions.
   const extensions =
     opts.extensions.length > 0 ? opts.extensions : directive.extensions;
 
-
   // Pick phase implementation keys; again prefer CLI, then directive, then default.
-  const parse = opts.parse !== "parse" ? opts.parse : directive.parse ?? "parse";
+  const parse =
+    opts.parse !== "parse" ? opts.parse : directive.parse ?? "parse";
   const compile =
     opts.compile !== "compile" ? opts.compile : directive.compile ?? "compile";
+  const emit = opts.emit !== "emit" ? opts.emit : directive.emit ?? "emit";
   const interpret =
     opts.interpret !== "interpret"
       ? opts.interpret
       : directive.interpret ?? "interpret";
-  const emit = opts.emit !== "emit" ? opts.emit : directive.emit ?? "emit";
 
   // Get extension search paths (includes extracted sources when bundled)
   // Pass source file path so we can find project-local extensions.
@@ -472,12 +465,7 @@ async function main() {
 
     case "standalone":
       // Generate standalone JS from the program module.
-      output = await generateStandalone(
-        language,
-        input,
-        interpretKey,
-        false,
-      );
+      output = await generateStandalone(language, input, interpretKey, false);
       break;
 
     case "binary":
@@ -489,12 +477,7 @@ async function main() {
       }
 
       // We rely on bun to compile, so we don't need to write output.
-      await generateBinary(
-        language,
-        input,
-        interpretKey,
-        opts.output,
-      );
+      await generateBinary(language, input, interpretKey, opts.output);
       break;
 
     case "run":
@@ -503,7 +486,7 @@ async function main() {
         // a closure and run it directly instead of dynamically loading
         // the module; we have already loaded all the extensions and built
         // the interpreter.
-        const closure = emitter.programClosure(ir)(opts.env);
+        const closure = emitter.programClosure(ir)(opts.global);
         const result = await closure(interpreter);
         if (result !== undefined) {
           console.log(result);

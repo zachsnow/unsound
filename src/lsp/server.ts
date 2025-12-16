@@ -1,5 +1,4 @@
 // Unsound Language Server - using extension system with //usc directive support
-
 import {
   createConnection,
   TextDocuments,
@@ -31,6 +30,7 @@ import type {
 } from "../analyze.ts";
 import { Language } from "../types.ts";
 import { posToLineCol } from "../util.ts";
+import { dirname } from "path";
 
 // Create connection
 const connection = createConnection(ProposedFeatures.all);
@@ -63,11 +63,12 @@ const tokenModifiers = ["declaration", "definition", "readonly"];
 async function getLanguageForSource(uri: string, source: string): Promise<Language> {
   const fileScheme = "file://";
   const filename = uri.startsWith(fileScheme) ? uri.slice(fileScheme.length) : uri;
+  const directory = filename ? dirname(filename) : ".";
   const directive = parseUscDirective(source);
 
-  // Cache key includes noCore flag and extensions
-  const cacheKey = `${directive.noCore ? "no-core" : "core"
-    }:${directive.extensions.join(",")}`;
+  // Cache based on loaded extensions *and* directory, in case the search path means
+  // that e.g. "foo" is a different extension for different files.
+  const cacheKey = `${directory}:${directive.extensions.join(",")}`;
 
   // Check the cache and built the language if we don't find a composed language.
   if (!languageCache.has(cacheKey)) {

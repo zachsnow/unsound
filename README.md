@@ -45,8 +45,8 @@ usc -m standalone -o app.js program.us  # Self-contained
 # Debug
 usc --ast --ir --js program.us
 
-# Environment variables
-usc -e 'x=42' program.us
+# Global variables
+usc --global 'x=42' program.us
 ```
 
 ## Development
@@ -78,7 +78,7 @@ Each file is comprised of a `usc`-directive indicating how to invoke `usc`, usua
 needed to run the tests.
 
 ```
-# usc -x meso -x thermo
+# usc -x core -x meso -x thermo
 ```
 
 Then there are several tests, each consisting of a title, input, and multiple expected outputs.
@@ -96,7 +96,7 @@ You can define multiple `===` blocks, each with their own pipeline. To refer the
 pipeline, use `...`
 
 ```
-# usc -x meso.ts
+# usc -x core -x meso
 
 --- test name
 input (source, AST JSON, or IR JSON based on first phase)

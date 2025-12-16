@@ -1,4 +1,4 @@
-//usc -x meso
+//usc -x core -x meso
 // thermo.us - The hot layer
 // Builds on meso to make Unsound more JS-like
 //
