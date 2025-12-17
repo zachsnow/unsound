@@ -28,11 +28,8 @@
 //   interpret → IR (JSON object)
 
 import { readdirSync, readFileSync, existsSync, mkdirSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-import {
-  ProgramClosure
-} from "./emit.ts";
+import { join, parse } from "path";
+import { ProgramClosure } from "./emit.ts";
 import { createLanguage, getSearchPaths } from "./extension.ts";
 import { prettyPrint } from "./pretty.ts";
 import type { Expr } from "./ast.ts";
@@ -44,15 +41,11 @@ import {
   Language,
   ParseOps,
 } from "./types.ts";
-import { logger } from "./logger.ts";
+import { Logger } from "./logger.ts";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TESTS_DIR = join(__dirname, "..", "tests");
+const TESTS_DIR = join(import.meta.dir, "..", "tests");
 
-// Colors for terminal output
-const green = (s: string): string => `\x1b[32m${s}\x1b[0m`;
-const red = (s: string): string => `\x1b[31m${s}\x1b[0m`;
-const dim = (s: string): string => `\x1b[2m${s}\x1b[0m`;
+const logger = new Logger("test runner");
 
 // Test result tracking
 let passed = 0;
@@ -409,25 +402,38 @@ async function runTest(
   // Report result
   if (errors.length === 0) {
     passed++;
-    logger.info(`${green("✓")} ${testId}`);
+    logger.info(`${logger.green("✓")} ${testId}`);
   } else {
     failed++;
     failures.push({ testId, errors });
-    logger.info(`${red("✗")} ${testId}`);
+    logger.info(`${logger.red("✗")} ${testId}`);
     for (const err of errors) {
-      logger.info(`  ${dim(err)}`);
+      logger.info(`  ${logger.dim(err)}`);
     }
   }
 }
 
-// Main test runner
-async function runTests(): Promise<void> {
-  logger.info("Running next-gen Unsound tests...\n");
+const parseArgs = (args: string[]): void => {
+  if (args.includes("--help") || args.includes("-h")) {
+    logger.info("Usage: test.ts");
+    logger.info("Runs all tests in the tests/ directory.");
+    process.exit(0);
+  }
+
+  if (args.includes("--verbose") || args.includes("-v")) {
+    logger.setVerbose(true);
+  }
+}
+
+async function main(): Promise<void> {
+  parseArgs(process.argv.slice(2));
+
+  logger.info("running tests...");
 
   // Create tests directory if it doesn't exist
   if (!existsSync(TESTS_DIR)) {
     mkdirSync(TESTS_DIR);
-    logger.info(dim("Created tests directory"));
+    logger.debug("created tests directory");
   }
 
   let files: string[];
@@ -438,37 +444,44 @@ async function runTests(): Promise<void> {
   }
 
   if (files.length === 0) {
-    console.error(red("No test files found in tests/"));
-    logger.info(dim("Create .test files with the format:"));
-    logger.info(dim("  #usc -x meso           # Optional extensions"));
-    logger.info(dim("  --- test name"));
-    logger.info(dim("  source code"));
-    logger.info(dim("  === parse: $parse"));
-    logger.info(dim('  { "type": "Literal", ... }'));
+    logger.error("no test files found in tests/");
     process.exit(1);
   }
 
   for (const file of files.sort()) {
     // Parse test.
+    logger.debug(`loading test file: ${file}...`);
     const filePath = join(TESTS_DIR, file);
     const content = readFileSync(filePath, "utf-8");
+
+    logger.debug(`parsing test file: ${file}...`);
     const testFile = parseTestFile(content, TESTS_DIR);
 
     // Build language.
+    logger.debug(`creating language for test file: ${file}...`);
     const searchPaths = getSearchPaths(filePath);
     const language = await createLanguage(testFile.extensions, searchPaths);
 
     // Run tests.
+    logger.debug(`running ${testFile.tests.length} tests in file: ${file}...`);
     for (const test of testFile.tests) {
       await runTest(test, file, language);
     }
   }
 
-  logger.info(`\n${passed} passed, ${failed} failed`);
+  if (failed) {
+    logger.error(`\n${passed} passed, ${failed} failed`);
+  }
+  else {
+    logger.success(`\n${passed} passed`);
+  }
 
   if (failed > 0) {
     process.exit(1);
   }
 }
 
-runTests();
+main().catch((e) => {
+  logger.error(e);
+  process.exit(1);
+});

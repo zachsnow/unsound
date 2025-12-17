@@ -178,7 +178,7 @@ function parseArgs(args: string[]): CLIOptions {
       // Also, if the filename starts with "-" I guess you're out of luck?
       opts.input = arg;
     } else {
-      logger.error(`Unknown option: ${arg}`);
+      logger.error(`unknown option: ${arg}`);
       process.exit(1);
     }
 
@@ -190,7 +190,7 @@ function parseArgs(args: string[]): CLIOptions {
 }
 
 function printHelp() {
-  logger.info(`usc - Unsound compiler
+  logger.info(`Unsound compiler
 
 Usage: usc [options] <input>
 
@@ -319,18 +319,19 @@ function invalidPhase(
   language: Language,
   exit: boolean = true
 ) {
-  const message = `No ${phaseType} phase '${phaseName}' found. Available: ${Object.keys(
-    language
-  )
+  const available = Object.keys(language)
     .filter((k) => k.startsWith("$"))
     .map((k) => k.slice(1))
-    .join(", ")}`;
+    .join(", ");
+  const message = `No ${phaseType} phase '${phaseName}' found. Available: ${available}`;
+
+  // Usually it's a fatal error, but for interpreter we may want to continue.
   if (exit) {
     logger.error(message);
     process.exit(1);
-  } else {
-    logger.warn(message);
   }
+
+  logger.warn(message);
 }
 
 // === Main ===
@@ -379,9 +380,27 @@ async function main() {
   // Build language.
   logger.debug("loading extensions:", extensions);
   const language = await createLanguage(extensions, searchPaths);
+  logger.debug("created language with extensions:", language.extensions);
 
-  // Check that the requested interpreter exists; we only *really* need it
-  // if we are running the program directly, but warn anyway.
+  // Check that the requested phases exist on the language.
+  const parseKey: PhaseKey = `$${parse}`;
+  const parser = language[parseKey];
+  if (!parser) {
+    invalidPhase(`parser`, parse, language);
+  }
+
+  const compileKey: PhaseKey = `$${compile}`;
+  const compiler = language[compileKey];
+  if (!compiler) {
+    invalidPhase(`compiler`, compile, language);
+  }
+
+  const emitKey: PhaseKey = `$${emit}`;
+  const emitter: EmitOps = language[emitKey];
+  if (!emitter) {
+    invalidPhase(`emitter`, emit, language);
+  }
+
   const interpretKey: PhaseKey = `$${interpret}`;
   const interpreter = language[interpretKey];
   if (!interpreter) {
@@ -389,12 +408,7 @@ async function main() {
   }
 
   // Parse.
-  const parseKey: PhaseKey = `$${parse}`;
-  const parser = language[parseKey];
-  if (!parser) {
-    invalidPhase(`parser`, parse, language, true);
-  }
-
+  logger.debug(`parse phase: ${parse}...`);
   const parseResult = parser.program()(input, 0);
   if (!parseResult.ok) {
     logger.error(
@@ -405,53 +419,51 @@ async function main() {
 
   // Show AST if requested
   if (opts.show.includes("ast")) {
-    logger.error("=== AST ===");
-    logger.error(JSON.stringify(parseResult.value, null, 2));
+    logger.info("=== AST ===");
+    logger.info(JSON.stringify(parseResult.value, null, 2));
   }
 
-  // Compile (using specified compile phase)
-  const compileKey: PhaseKey = `$${compile}`;
-  const compiler = language[compileKey];
-  if (!compiler) {
-    invalidPhase(`compiler`, compile, language, true);
-  }
-
-  // For non-standard compile phases, output result directly
+  // Compile (using specified compile phase); for non-standard compile phases
+  // like `$analyze` just output result directly.
   if (compile !== "compile") {
     // Call the appropriate entry point (analyzeProgram for analyze, etc.)
+    //
+    // TODO: maybe either you should be able to specify the entry point,
+    // or analyze should just implement `compileProgram` but return the analysis result?
     const entryPoint =
       compile === "analyze" ? "analyzeProgram" : "compileProgram";
     if (typeof compiler[entryPoint] !== "function") {
-      logger.error(`Compiler '${compile}' has no ${entryPoint} method`);
+      logger.error(`compiler '${compile}' has no ${entryPoint} method`);
       process.exit(1);
     }
-
+    logger.debug(`non-standard compile phase: ${compile}...`);
     const result = compiler[entryPoint](parseResult.value);
-    logger.log(prettyPrint(result, "auto"));
+
+    // Write it out *without* `usc` prefix in case a consumer wants to parse the JSON directly;
+    // also don't use pretty-printing since it doesn't quite produce valid JSON.
+    console.info(JSON.stringify(result, null, 2));
+
     process.exit(0);
   }
 
   // Otherwise just compile to IR.
+  logger.debug(`compile phase: ${compile}...`);
   const ir = compiler.compileProgram(parseResult.value);
 
   // Show IR if requested
   if (opts.show.includes("ir")) {
-    logger.error("=== IR ===");
-    logger.error(JSON.stringify(ir, null, 2));
+    logger.info("=== IR ===");
+    logger.info(prettyPrint(ir, "auto"));
   }
 
   // Emit JS.
-  const emitKey: PhaseKey = `$${emit}`;
-  const emitter: EmitOps = language[emitKey];
-  if (!emitter) {
-    invalidPhase(`emitter`, emit, language);
-  }
+  logger.debug(`emit phase: ${emit}...`);
   const program = emitter.program(ir as IR);
 
   // Show JS if requested
   if (opts.show.includes("js")) {
-    logger.error("=== JS ===");
-    logger.error(program);
+    logger.info("=== JS ===");
+    logger.info(program);
   }
 
   // Generate output based on mode.
@@ -465,18 +477,20 @@ async function main() {
 
     case "standalone":
       // Generate standalone JS from the program module.
+      logger.debug(`generating standalone module to ${opts.output}...`);
       output = await generateStandalone(language, input, interpretKey, false);
       break;
 
     case "binary":
       if (!opts.output) {
         logger.error(
-          "Binary mode requires -o/--output to specify the output file"
+          "binary mode requires -o/--output to specify the output file"
         );
         process.exit(1);
       }
 
       // We rely on bun to compile, so we don't need to write output.
+      logger.debug(`generating binary to ${opts.output}...`);
       await generateBinary(language, input, interpretKey, opts.output);
       break;
 
@@ -486,10 +500,12 @@ async function main() {
         // a closure and run it directly instead of dynamically loading
         // the module; we have already loaded all the extensions and built
         // the interpreter.
+        logger.debug(`running...`);
         const closure = emitter.programClosure(ir)(opts.global);
         const result = await closure(interpreter);
         if (result !== undefined) {
-          logger.info(result);
+          // Print result to stdout as JSON.
+          console.info(JSON.stringify(result, null, 2));
         }
       } catch (e) {
         logger.error("interpreter error:", e);

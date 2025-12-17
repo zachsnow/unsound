@@ -48,8 +48,8 @@ const readSource = async (path: string) => {
 
 const parseArgs = (args: string[]) => {
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('Usage: embed-sources.ts');
-    console.log('Generates embedded-sources.json containing all source files for embedding.');
+    logger.info('Usage: embed-sources.ts');
+    logger.info('Generates embedded-sources.json containing all source files for embedding.');
     process.exit(0);
   }
 
@@ -94,7 +94,7 @@ const main = async () => {
   }
 
   // Write the map to embedded-sources.json.
-  await fs.writeFile('../embedded-sources.json', JSON.stringify(sources, null, 2));
+  await fs.writeFile('../embedded-sources.json', JSON.stringify(sourcesMap, null, 2));
   logger.info('Generated embedded-sources.json');
   process.exit(0);
 };
