@@ -32,7 +32,9 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   eof: () => Parser<null>;
 
   // === Higher-order combinators ===
-  seq: <T extends unknown[]>(...parsers: { [K in keyof T]: Parser<T[K]> }) => Parser<T>;
+  seq: <T extends unknown[]>(
+    ...parsers: { [K in keyof T]: Parser<T[K]> }
+  ) => Parser<T>;
   alt: <T>(...parsers: Parser<T>[]) => Parser<T>;
   many: <T>(p: Parser<T>) => Parser<T[]>;
   many1: <T>(p: Parser<T>) => Parser<T[]>;
@@ -41,18 +43,22 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   lazy: <T>(fn: () => Parser<T>) => Parser<T>;
   sepBy: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
   sepBy1: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
-  between: <A, B, C>(open: Parser<A>, p: Parser<B>, close: Parser<C>) => Parser<B>;
+  between: <A, B, C>(
+    open: Parser<A>,
+    p: Parser<B>,
+    close: Parser<C>
+  ) => Parser<B>;
 
   // Location tracking: wrap parser to return { value, loc }
   withLoc: <T>(p: Parser<T>) => Parser<{ value: T; loc: Span }>;
 
   // === Whitespace and tokens ===
   whitespace: () => Parser<string>;
-  ws: () => Parser<null>;  // Skip whitespace, return null
+  ws: () => Parser<null>; // Skip whitespace, return null
   token: (s: string) => Parser<string>;
 
-  keywords: string[];  // List of keywords in the language; used with $.ident to stop matching keywords.
-  keyword: (s: string) => Parser<string>;  // keyword that's not part of identifier
+  keywords: string[]; // List of keywords in the language; used with $.ident to stop matching keywords.
+  keyword: (s: string) => Parser<string>; // keyword that's not part of identifier
 
   // === Lexemes ===
   digit: () => Parser<string>;
@@ -71,34 +77,34 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
 
   // Let expressions - broken into pieces
   letExpr: () => Parser<LetExpr>;
-  letKeyword: () => Parser<string>;              // "let"
-  letBinding: () => Parser<{ name: string; nameLoc: Span }>;  // the "x" in "let x = ..."
-  letInitializer: () => Parser<Expr>;            // "= expr"
-  letInKeyword: () => Parser<string>;            // "in"
-  letBody: () => Parser<Expr>;                   // body expression
+  letKeyword: () => Parser<string>; // "let"
+  letBinding: () => Parser<{ name: string; nameLoc: Span }>; // the "x" in "let x = ..."
+  letInitializer: () => Parser<Expr>; // "= expr"
+  letInKeyword: () => Parser<string>; // "in"
+  letBody: () => Parser<Expr>; // body expression
 
   // Lambda expressions - broken into pieces
   lambda: () => Parser<LambdaExpr>;
-  lambdaParams: () => Parser<Param[]>;  // (x, y, z)
-  lambdaParam: () => Parser<Param>;     // single param
-  lambdaArrow: () => Parser<string>;             // "=>"
-  lambdaBody: () => Parser<Expr>;                // body expression
+  lambdaParams: () => Parser<Param[]>; // (x, y, z)
+  lambdaParam: () => Parser<Param>; // single param
+  lambdaArrow: () => Parser<string>; // "=>"
+  lambdaBody: () => Parser<Expr>; // body expression
 
   // If expressions - broken into pieces
   ifExpr: () => Parser<IfExpr>;
-  ifKeyword: () => Parser<string>;               // "if"
-  ifCondition: () => Parser<Expr>;               // condition expression
-  thenKeyword: () => Parser<string>;             // "then"
-  thenBranch: () => Parser<Expr>;                // then expression
-  elseKeyword: () => Parser<string>;             // "else"
-  elseBranch: () => Parser<Expr>;                // else expression
+  ifKeyword: () => Parser<string>; // "if"
+  ifCondition: () => Parser<Expr>; // condition expression
+  thenKeyword: () => Parser<string>; // "then"
+  thenBranch: () => Parser<Expr>; // then expression
+  elseKeyword: () => Parser<string>; // "else"
+  elseBranch: () => Parser<Expr>; // else expression
 
   // Application and access - broken into pieces
   appExpr: () => Parser<Expr>;
-  callSuffix: () => Parser<Expr[]>;              // (args) - returns args
-  memberName: () => Parser<string>;              // field name (allows keywords after .)
-  memberSuffix: () => Parser<{ value: string; loc: Span }>;  // .field
-  indexSuffix: () => Parser<Expr>;               // [key]
+  callSuffix: () => Parser<Expr[]>; // (args) - returns args
+  memberName: () => Parser<string>; // field name (allows keywords after .)
+  memberSuffix: () => Parser<{ value: string; loc: Span }>; // .field
+  indexSuffix: () => Parser<Expr>; // [key]
 
   // Assignment (SetIndex)
   assignExpr: () => Parser<Expr>;
@@ -125,7 +131,7 @@ export class ParseError extends Error {
 
   constructor(pos: number, expected: string) {
     super(`Parse error at position ${pos}: expected ${expected}`);
-    this.name = 'ParseError';
+    this.name = "ParseError";
     this.pos = pos;
     this.expected = expected;
   }
@@ -143,14 +149,16 @@ export function formatParseError(
   expected: string
 ): string {
   const { line, col } = posToLineCol(source, pos);
-  const lines = source.split('\n');
+  const lines = source.split("\n");
 
   // What did we actually find at this position?
-  const found = pos >= source.length
-    ? 'end of input'
-    : source[pos] === '\n'
-      ? 'newline'
-      : `'${source.slice(pos, pos + 20).split('\n')[0]}${source.length - pos > 20 ? '...' : ''}'`;
+  const found =
+    pos >= source.length
+      ? "end of input"
+      : source[pos] === "\n"
+        ? "newline"
+        : `'${source.slice(pos, pos + 20).split("\n")[0]}${source.length - pos > 20 ? "..." : ""
+        }'`;
 
   // Show context: 3 lines before and 2 lines after
   const contextBefore = 3;
@@ -164,14 +172,14 @@ export function formatParseError(
 
   const contextLines: string[] = [];
   for (let i = startLine; i <= endLine; i++) {
-    const lineNum = String(i + 1).padStart(lineNumWidth, ' ');
-    const marker = i === line - 1 ? '>' : ' ';
+    const lineNum = String(i + 1).padStart(lineNumWidth, " ");
+    const marker = i === line - 1 ? ">" : " ";
     contextLines.push(`${marker} ${lineNum} | ${lines[i]}`);
 
     // Add caret line for the error line
     if (i === line - 1) {
-      const padding = ' '.repeat(lineNumWidth + 4); // "  NN | "
-      const caret = ' '.repeat(col - 1) + '^';
+      const padding = " ".repeat(lineNumWidth + 4); // "  NN | "
+      const caret = " ".repeat(col - 1) + "^";
       contextLines.push(`${padding}${caret}`);
     }
   }
@@ -180,9 +188,9 @@ export function formatParseError(
     `Parse error at line ${line}, column ${col}`,
     `  expected: ${expected}`,
     `  found: ${found}`,
-    '',
-    ...contextLines
-  ].join('\n');
+    "",
+    ...contextLines,
+  ].join("\n");
 }
 
 // Base parser builder - mutates $ to add all parser operations
@@ -222,38 +230,46 @@ export function build$parse(in$: ParseOps): void {
 
   // === Higher-order combinators ===
 
-  $.seq = (...parsers) => (input, pos) => {
-    const results: unknown[] = [];
-    let p = pos;
-    for (const parser of parsers) {
-      const r = parser(input, p);
-      if (!r.ok) return r as ParseResult<any>;
-      results.push(r.value);
-      p = r.pos;
-    }
-    return { ok: true, value: results as any, pos: p };
-  };
+  $.seq =
+    (...parsers) =>
+      (input, pos) => {
+        const results: unknown[] = [];
+        let p = pos;
+        for (const parser of parsers) {
+          const r = parser(input, p);
+          if (!r.ok) {
+            return r;
+          }
+          results.push(r.value);
+          p = r.pos;
+        }
+        return { ok: true, value: results as any, pos: p };
+      };
 
-  $.alt = (...parsers) => (input, pos) => {
-    let furthest: ParseResult<any> = {
-      ok: false,
-      expected: "alternative",
-      pos,
-    };
-    for (const parser of parsers) {
-      const r = parser(input, pos);
-      if (r.ok) return r;
-      if (r.pos > furthest.pos) furthest = r;
-    }
-    return furthest;
-  };
+  $.alt =
+    (...parsers) =>
+      (input, pos) => {
+        let furthest: ParseResult<any> = {
+          ok: false,
+          expected: "alternative",
+          pos,
+        };
+        for (const parser of parsers) {
+          const r = parser(input, pos);
+          if (r.ok) return r;
+          if (r.pos > furthest.pos) furthest = r;
+        }
+        return furthest;
+      };
 
   $.many = (p) => (input, pos) => {
     const results: any[] = [];
     let current = pos;
     while (true) {
       const r = p(input, current);
-      if (!r.ok) break;
+      if (!r.ok) {
+        break;
+      }
       results.push(r.value);
       current = r.pos;
     }
@@ -262,7 +278,7 @@ export function build$parse(in$: ParseOps): void {
 
   $.many1 = (p) => (input, pos) => {
     const first = p(input, pos);
-    if (!first.ok) return first as ParseResult<any[]>;
+    if (!first.ok) return first;
     const rest = $.many(p)(input, first.pos);
     if (!rest.ok) return rest;
     return { ok: true, value: [first.value, ...rest.value], pos: rest.pos };
@@ -273,7 +289,9 @@ export function build$parse(in$: ParseOps): void {
     const ws = $.ws()(input, pos);
     const start = ws.pos;
     const r = p(input, pos);
-    if (!r.ok) return r as ParseResult<any>;
+    if (!r.ok) {
+      return r;
+    }
     return { ok: true, value: fn(r.value, { start, end: r.pos }), pos: r.pos };
   };
 
@@ -287,7 +305,9 @@ export function build$parse(in$: ParseOps): void {
 
   $.sepBy = (p, sep) => (input, pos) => {
     const first = p(input, pos);
-    if (!first.ok) return { ok: true, value: [], pos };
+    if (!first.ok) {
+      return { ok: true, value: [], pos };
+    }
 
     const results = [first.value];
     let current = first.pos;
@@ -306,7 +326,9 @@ export function build$parse(in$: ParseOps): void {
 
   $.sepBy1 = (p, sep) => (input, pos) => {
     const result = $.sepBy(p, sep)(input, pos);
-    if (!result.ok) return result;
+    if (!result.ok) {
+      return result;
+    }
     if (result.value.length === 0) {
       return { ok: false, expected: "at least one element", pos };
     }
@@ -315,11 +337,17 @@ export function build$parse(in$: ParseOps): void {
 
   $.between = (open, p, close) => (input, pos) => {
     const o = open(input, pos);
-    if (!o.ok) return o as ParseResult<any>;
+    if (!o.ok) {
+      return o;
+    }
     const content = p(input, o.pos);
-    if (!content.ok) return content;
+    if (!content.ok) {
+      return content;
+    }
     const c = close(input, content.pos);
-    if (!c.ok) return c as ParseResult<any>;
+    if (!c.ok) {
+      return c;
+    }
     return { ok: true, value: content.value, pos: c.pos };
   };
 
@@ -328,8 +356,14 @@ export function build$parse(in$: ParseOps): void {
     const ws = $.ws()(input, pos);
     const start = ws.pos;
     const r = p(input, pos);
-    if (!r.ok) return r as ParseResult<any>;
-    return { ok: true, value: { value: r.value, loc: { start, end: r.pos } }, pos: r.pos };
+    if (!r.ok) {
+      return r;
+    }
+    return {
+      ok: true,
+      value: { value: r.value, loc: { start, end: r.pos } },
+      pos: r.pos,
+    };
   };
 
   // === Whitespace and tokens ===
@@ -342,11 +376,11 @@ export function build$parse(in$: ParseOps): void {
 
   // Line comment: // ... until end of line
   const lineComment = () => (input: string, pos: number) => {
-    if (input.slice(pos, pos + 2) !== '//') {
+    if (input.slice(pos, pos + 2) !== "//") {
       return { ok: false, expected: "comment", pos };
     }
     let end = pos + 2;
-    while (end < input.length && input[end] !== '\n') {
+    while (end < input.length && input[end] !== "\n") {
       end++;
     }
     return { ok: true, value: "", pos: end };
@@ -354,12 +388,12 @@ export function build$parse(in$: ParseOps): void {
 
   // Block comment: /* ... */
   const blockComment = () => (input: string, pos: number) => {
-    if (input.slice(pos, pos + 2) !== '/*') {
+    if (input.slice(pos, pos + 2) !== "/*") {
       return { ok: false, expected: "comment", pos };
     }
     let end = pos + 2;
     while (end < input.length - 1) {
-      if (input.slice(end, end + 2) === '*/') {
+      if (input.slice(end, end + 2) === "*/") {
         return { ok: true, value: "", pos: end + 2 };
       }
       end++;
@@ -502,37 +536,43 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value, pos: current + 1 }; // Skip closing "
   };
 
-  $.ident = () => (input, pos): ParseResult<string> => {
-    const ws = $.ws()(input, pos);
-    const first = $.alt($.letter(), $.char("_"), $.char("$"))(input, ws.pos);
-    if (!first.ok) return { ok: false, expected: "identifier", pos: ws.pos };
+  $.ident =
+    () =>
+      (input, pos): ParseResult<string> => {
+        const ws = $.ws()(input, pos);
+        const first = $.alt($.letter(), $.char("_"), $.char("$"))(input, ws.pos);
+        if (!first.ok) return { ok: false, expected: "identifier", pos: ws.pos };
 
-    const rest = $.many($.identChar())(input, first.pos);
+        const rest = $.many($.identChar())(input, first.pos);
 
-    // many() always succeeds, so we can safely access value
-    const name =
-      first.value +
-      (rest as { ok: true; value: string[]; pos: number }).value.join("");
-    const endPos = rest.pos;
+        // many() always succeeds, so we can safely access value
+        const name =
+          first.value +
+          (rest as { ok: true; value: string[]; pos: number }).value.join("");
+        const endPos = rest.pos;
 
-    if ($.keywords.indexOf(name) !== -1) {
-      return {
-        ok: false,
-        expected: "identifier (not a keyword)",
-        pos: ws.pos,
+        if ($.keywords.indexOf(name) !== -1) {
+          return {
+            ok: false,
+            expected: "identifier (not a keyword)",
+            pos: ws.pos,
+          };
+        }
+
+        return { ok: true, value: name, pos: endPos };
       };
-    }
-
-    return { ok: true, value: name, pos: endPos };
-  };
 
   // === Grammar rules ===
 
   $.program = () => (input, pos) => {
     const e = $.expr()(input, pos);
-    if (!e.ok) return e;
+    if (!e.ok) {
+      return e;
+    }
     const end = $.seq($.ws(), $.eof())(input, e.pos);
-    if (!end.ok) return end as ParseResult<any>;
+    if (!end.ok) {
+      return end;
+    }
     return e;
   };
 
@@ -555,13 +595,17 @@ export function build$parse(in$: ParseOps): void {
 
     // Check for = but not == (to avoid conflict with equality operator)
     const ws = $.ws()(input, left.pos);
-    if (input[ws.pos] === '=' && input[ws.pos + 1] !== '=' && left.value.type === 'IndexExpr') {
+    if (
+      input[ws.pos] === "=" &&
+      input[ws.pos + 1] !== "=" &&
+      left.value.type === "IndexExpr"
+    ) {
       const value = $.expr()(input, ws.pos + 1);
       if (!value.ok) return value;
       return {
         ok: true,
         value: {
-          type: 'AssignIndexExpr',
+          type: "AssignIndexExpr",
           object: (left.value as IndexExpr).object,
           key: (left.value as IndexExpr).key,
           value: value.value,
@@ -577,17 +621,17 @@ export function build$parse(in$: ParseOps): void {
   // === Let expression pieces ===
   $.letKeyword = () => $.keyword("let");
 
-  $.letBinding = () => $.map(
-    $.withLoc($.ident()),
-    (withLoc): { name: string; nameLoc: Span } => ({
+  $.letBinding = () =>
+    $.map($.withLoc($.ident()), (withLoc): { name: string; nameLoc: Span } => ({
       name: withLoc.value,
       nameLoc: withLoc.loc,
-    })
-  );
+    }));
 
   $.letInitializer = () => (input, pos) => {
     const eq = $.token("=")(input, pos);
-    if (!eq.ok) return eq as ParseResult<Expr>;
+    if (!eq.ok) {
+      return eq;
+    }
     return $.expr()(input, eq.pos);
   };
 
@@ -600,19 +644,29 @@ export function build$parse(in$: ParseOps): void {
     const start = ws.pos;
 
     const kw = $.letKeyword()(input, pos);
-    if (!kw.ok) return kw as ParseResult<LetExpr>;
+    if (!kw.ok) {
+      return kw;
+    }
 
     const binding = $.letBinding()(input, kw.pos);
-    if (!binding.ok) return binding as ParseResult<LetExpr>;
+    if (!binding.ok) {
+      return binding;
+    }
 
     const value = $.letInitializer()(input, binding.pos);
-    if (!value.ok) return value as ParseResult<LetExpr>;
+    if (!value.ok) {
+      return value;
+    }
 
     const inKw = $.letInKeyword()(input, value.pos);
-    if (!inKw.ok) return inKw as ParseResult<LetExpr>;
+    if (!inKw.ok) {
+      return inKw;
+    }
 
     const body = $.letBody()(input, inKw.pos);
-    if (!body.ok) return body as ParseResult<LetExpr>;
+    if (!body.ok) {
+      return body;
+    }
 
     return {
       ok: true,
@@ -631,7 +685,9 @@ export function build$parse(in$: ParseOps): void {
   // === Lambda expression pieces ===
   $.lambdaParam = () => (input, pos) => {
     const ident = $.withLoc($.ident())(input, pos);
-    if (!ident.ok) return ident as ParseResult<Param>;
+    if (!ident.ok) {
+      return ident;
+    }
     return {
       ok: true,
       value: {
@@ -642,11 +698,15 @@ export function build$parse(in$: ParseOps): void {
     };
   };
 
-  $.lambdaParams = () => $.between(
-    $.token("("),
-    $.sepBy($.lazy(() => $.lambdaParam()), $.token(",")),
-    $.token(")")
-  );
+  $.lambdaParams = () =>
+    $.between(
+      $.token("("),
+      $.sepBy(
+        $.lazy(() => $.lambdaParam()),
+        $.token(",")
+      ),
+      $.token(")")
+    );
 
   $.lambdaArrow = () => $.token("=>");
 
@@ -657,13 +717,19 @@ export function build$parse(in$: ParseOps): void {
     const start = ws.pos;
 
     const params = $.lambdaParams()(input, pos);
-    if (!params.ok) return params as ParseResult<LambdaExpr>;
+    if (!params.ok) {
+      return params;
+    }
 
     const arrow = $.lambdaArrow()(input, params.pos);
-    if (!arrow.ok) return arrow as ParseResult<LambdaExpr>;
+    if (!arrow.ok) {
+      return arrow;
+    }
 
     const body = $.lambdaBody()(input, arrow.pos);
-    if (!body.ok) return body as ParseResult<LambdaExpr>;
+    if (!body.ok) {
+      return body;
+    }
 
     return {
       ok: true,
@@ -695,22 +761,34 @@ export function build$parse(in$: ParseOps): void {
     const start = ws.pos;
 
     const ifKw = $.ifKeyword()(input, pos);
-    if (!ifKw.ok) return ifKw as ParseResult<IfExpr>;
+    if (!ifKw.ok) {
+      return ifKw;
+    }
 
     const cond = $.ifCondition()(input, ifKw.pos);
-    if (!cond.ok) return cond as ParseResult<IfExpr>;
+    if (!cond.ok) {
+      return cond;
+    }
 
     const thenKw = $.thenKeyword()(input, cond.pos);
-    if (!thenKw.ok) return thenKw as ParseResult<IfExpr>;
+    if (!thenKw.ok) {
+      return thenKw;
+    }
 
     const thenExpr = $.thenBranch()(input, thenKw.pos);
-    if (!thenExpr.ok) return thenExpr as ParseResult<IfExpr>;
+    if (!thenExpr.ok) {
+      return thenExpr;
+    }
 
     const elseKw = $.elseKeyword()(input, thenExpr.pos);
-    if (!elseKw.ok) return elseKw as ParseResult<IfExpr>;
+    if (!elseKw.ok) {
+      return elseKw;
+    }
 
     const elseExpr = $.elseBranch()(input, elseKw.pos);
-    if (!elseExpr.ok) return elseExpr as ParseResult<IfExpr>;
+    if (!elseExpr.ok) {
+      return elseExpr;
+    }
 
     return {
       ok: true,
@@ -726,11 +804,12 @@ export function build$parse(in$: ParseOps): void {
   };
 
   // === Application and access pieces ===
-  $.callSuffix = () => $.between(
-    $.token("("),
-    $.lazy(() => $.args()),
-    $.token(")")
-  );
+  $.callSuffix = () =>
+    $.between(
+      $.token("("),
+      $.lazy(() => $.args()),
+      $.token(")")
+    );
 
   $.args = () =>
     $.sepBy(
@@ -751,8 +830,13 @@ export function build$parse(in$: ParseOps): void {
         // Make sure it's not followed by identifier char (full keyword match)
         if (kwResult.pos < input.length) {
           const next = input[kwResult.pos];
-          if ((next >= 'a' && next <= 'z') || (next >= 'A' && next <= 'Z') ||
-            (next >= '0' && next <= '9') || next === '_' || next === '$') {
+          if (
+            (next >= "a" && next <= "z") ||
+            (next >= "A" && next <= "Z") ||
+            (next >= "0" && next <= "9") ||
+            next === "_" ||
+            next === "$"
+          ) {
             continue; // Not a full keyword, try next
           }
         }
@@ -764,15 +848,18 @@ export function build$parse(in$: ParseOps): void {
 
   $.memberSuffix = () => (input, pos) => {
     const dot = $.token(".")(input, pos);
-    if (!dot.ok) return dot as ParseResult<{ value: string; loc: Span }>;
+    if (!dot.ok) {
+      return dot;
+    }
     return $.withLoc($.memberName())(input, dot.pos);
   };
 
-  $.indexSuffix = () => $.between(
-    $.token("["),
-    $.lazy(() => $.expr()),
-    $.token("]")
-  );
+  $.indexSuffix = () =>
+    $.between(
+      $.token("["),
+      $.lazy(() => $.expr()),
+      $.token("]")
+    );
 
   // Application and index access - handles left recursion
   $.appExpr = () => (input, pos) => {
@@ -781,7 +868,9 @@ export function build$parse(in$: ParseOps): void {
     const start = ws.pos;
 
     const atomResult = $.atom()(input, pos);
-    if (!atomResult.ok) return atomResult;
+    if (!atomResult.ok) {
+      return atomResult;
+    }
 
     let current: ParseResult<Expr> = atomResult;
 
@@ -813,7 +902,11 @@ export function build$parse(in$: ParseOps): void {
           value: {
             type: "IndexExpr",
             object: current.value,
-            key: { type: "LiteralExpr", value: fieldWithLoc.value, loc: fieldWithLoc.loc } satisfies LiteralExpr,
+            key: {
+              type: "LiteralExpr",
+              value: fieldWithLoc.value,
+              loc: fieldWithLoc.loc,
+            } satisfies LiteralExpr,
             loc: { start, end: memberResult.pos },
           } satisfies IndexExpr,
           pos: memberResult.pos,
@@ -893,8 +986,14 @@ export function build$parse(in$: ParseOps): void {
 
   $.literal = () =>
     $.alt<LiteralExpr>(
-      $.map($.numberLit(), (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })),
-      $.map($.stringLit(), (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })),
+      $.map(
+        $.numberLit(),
+        (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })
+      ),
+      $.map(
+        $.stringLit(),
+        (value, loc): LiteralExpr => ({ type: "LiteralExpr", value, loc })
+      ),
       $.map(
         $.keyword("true"),
         (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: true, loc })
@@ -909,7 +1008,11 @@ export function build$parse(in$: ParseOps): void {
       )
     );
 
-  $.identifierExpr = () => $.map($.ident(), (name, loc): IdentifierExpr => ({ type: "IdentifierExpr", name, loc }));
+  $.identifierExpr = () =>
+    $.map(
+      $.ident(),
+      (name, loc): IdentifierExpr => ({ type: "IdentifierExpr", name, loc })
+    );
 
   // === Object property pieces ===
   $.propertyKey = () => $.withLoc($.alt($.ident(), $.stringLit()));

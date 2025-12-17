@@ -21,3 +21,9 @@ export function posToLineCol(source: string, pos: number): { line: number; col: 
   }
   return { line, col };
 }
+
+export class UnhandledCaseError extends Error {
+  constructor(message: string, value: never) {
+    super(`${message}: unhandled case: ${JSON.stringify(value)}`);
+  }
+}

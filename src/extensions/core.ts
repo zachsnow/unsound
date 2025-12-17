@@ -7,11 +7,11 @@
 //   $interpret: base interpreter
 //
 // Without this extension, the language is empty (can't even parse "").
-import type { Extension, ParseOps } from '../types.ts';
+import type { Extension } from '../types.ts';
 import { build$parse } from '../parse.ts';
 import { build$compile } from '../compile.ts';
 import { build$emit } from '../emit.ts';
-import { build$interpret, defaultEnv } from '../interpret.ts';
+import { build$interpret } from '../interpret.ts';
 import { build$analyze } from '../analyze.ts';
 
 export const coreExtension: Extension = {

@@ -3,6 +3,7 @@
  */
 import { type IR } from "./ir.ts";
 import { EmitOps } from "./types.ts";
+import { UnhandledCaseError } from "./util.ts";
 
 export type Env = Record<string, unknown>;
 export type Closure = (env: Env) => unknown;
@@ -18,6 +19,9 @@ export interface CoreEmitOps extends EmitOps<IR> {
 
 export function emitString(node: IR): string {
   switch (node.tag) {
+    case 'assign':
+      return `${node.name} = ${emitString(node.value)}`;
+
     case 'literal':
       return JSON.stringify(node.value);
 
@@ -73,7 +77,11 @@ export function emitString(node: IR): string {
       return `(${emitString(node.cond)} ? ${emitString(node.then)} : ${emitString(node.else)})`;
 
     case 'seq':
-      return `(${emitString(node.first)}, ${emitString(node.rest)})`;
+      const parts = node.elements.map(emitString).join(', ');
+      return `(${parts})`;
+
+    default:
+      throw new UnhandledCaseError("IR tag", node);
   }
 }
 
@@ -81,6 +89,13 @@ export function emitString(node: IR): string {
 
 export function emitClosure(node: IR): Closure {
   switch (node.tag) {
+    case 'assign': {
+      const valueClosure = emitClosure(node.value);
+      return (env) => {
+        return (env[node.name] = valueClosure(env));
+      };
+    }
+
     case 'literal':
       return (_env) => node.value;
 
@@ -194,13 +209,18 @@ export function emitClosure(node: IR): Closure {
     }
 
     case 'seq': {
-      const firstClosure = emitClosure(node.first);
-      const restClosure = emitClosure(node.rest);
+      const closures = node.elements.map(emitClosure);
       return (env) => {
-        firstClosure(env);
-        return restClosure(env);
+        let last;
+        for (const closure of closures) {
+          last = closure(env);
+        }
+        return last;
       };
     }
+
+    default:
+      throw new UnhandledCaseError("IR tag", node);
   }
 }
 

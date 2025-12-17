@@ -10,6 +10,7 @@
 export type IR =
   | { tag: 'literal'; value: number | string | boolean | null | undefined }
   | { tag: 'var'; name: string }
+  | { tag: 'assign'; name: string; value: IR }
   | { tag: 'call'; fn: IR; args: IR[] }
   | { tag: 'member'; obj: IR; field: string }
   | { tag: 'index'; obj: IR; key: IR }
@@ -19,7 +20,7 @@ export type IR =
   | { tag: 'array'; elements: IR[] }
   | { tag: 'spread'; value: IR }
   | { tag: 'ternary'; cond: IR; then: IR; else: IR }
-  | { tag: 'seq'; first: IR; rest: IR };
+  | { tag: 'seq'; elements: IR[] };
 
 /**
  * IR constructors and helpers.
@@ -34,6 +35,8 @@ export const ir = {
 
   var: (name: string): IR =>
     ({ tag: 'var', name }),
+
+  assign: (name: string, value: IR): IR => ({ tag: 'assign', name, value }),
 
   // Variadic call - works from Unsound without needing JS arrays
   call: (fn: IR, ...args: IR[]): IR =>
@@ -61,19 +64,35 @@ export const ir = {
   prop: (key: string, value: IR): { key: string; value: IR } =>
     ({ key, value }),
 
-  // Variadic array - works from Unsound without needing JS arrays
+  /**
+   * An array literal.
+   */
   array: (...elements: IR[]): IR =>
     ({ tag: 'array', elements }),
 
+  /**
+   * A spread expression (e.g., ...value); should be in an array / object literal, function call,
+   * or function definition.
+   */
   spread: (value: IR): IR =>
     ({ tag: 'spread', value }),
 
+  /**
+   * A ternary expression (cond ? then : else).
+   */
   ternary: (cond: IR, then_: IR, else_: IR): IR =>
     ({ tag: 'ternary', cond, then: then_, else: else_ }),
 
-  // Sequence: evaluate first, then rest, return rest (compiles to comma operator)
-  seq: (first: IR, rest: IR): IR =>
-    ({ tag: 'seq', first, rest }),
+  /**
+   * A sequence of expressions, where the value of the sequence is the value
+   * of the last expression; compiled to JS using the comma operator.
+   */
+  seq: (...elements: IR[]): IR => {
+    return {
+      tag: 'seq',
+      elements,
+    };
+  },
 
   // Helper for $.method(...args) pattern
   $: (method: string, ...args: IR[]): IR =>
