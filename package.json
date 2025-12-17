@@ -12,6 +12,7 @@
     "types": "tsc --noEmit && cd editors/vscode && bun run types",
     "build": "./build.sh",
     "clean": "./clean.sh",
+    "embed": "bun src/embed.ts",
     "install": "./install.sh"
   },
   "devDependencies": {

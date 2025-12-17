@@ -1,20 +1,12 @@
-let verbose = false;
-
-export const setVerbose = (v: boolean) => {
-  verbose = v;
-};
-
 let binary = "usc";
-
-export const setBinary = (b: string) => {
-  binary = b;
-}
 
 export class Logger {
   public readonly namespace: string;
+  public verbose: boolean = false;
 
-  public constructor(namespace: string = "") {
+  public constructor(namespace: string = "", verbose: boolean = false) {
     this.namespace = namespace;
+    this.verbose = verbose;
   }
 
   private addNamespace(args: unknown[]): void {
@@ -26,8 +18,12 @@ export class Logger {
     }
   }
 
+  public setVerbose(v: boolean): void {
+    this.verbose = v;
+  }
+
   public debug(...args: unknown[]): void {
-    if (verbose) {
+    if (this.verbose) {
       this.addNamespace(args);
       console.debug(...args);
     }
@@ -49,4 +45,7 @@ export class Logger {
   }
 }
 
+/**
+ * Global logger instance; generally use this unless you need a namespaced logger.
+ */
 export const logger = new Logger();

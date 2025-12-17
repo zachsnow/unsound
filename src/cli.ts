@@ -14,7 +14,7 @@ import {
 import type { EmitOps, Language, PhaseKey } from "./types.ts";
 import { formatParseError } from "./parse.ts";
 import { prettyPrint } from "./pretty.ts";
-import { logger, setVerbose } from "./logger.ts";
+import { logger } from "./logger.ts";
 import { IR } from "./ir.ts";
 
 // Detect if running from a compiled binary (bun embeds in /$bunfs/)
@@ -150,7 +150,7 @@ function parseArgs(args: string[]): CLIOptions {
       if (isValidMode(mode)) {
         opts.mode = mode;
       } else {
-        console.error(`Unknown mode: ${mode}`);
+        logger.error(`Unknown mode: ${mode}`);
         process.exit(1);
       }
     } else if (arg === "--ast") {
@@ -178,7 +178,7 @@ function parseArgs(args: string[]): CLIOptions {
       // Also, if the filename starts with "-" I guess you're out of luck?
       opts.input = arg;
     } else {
-      console.error(`Unknown option: ${arg}`);
+      logger.error(`Unknown option: ${arg}`);
       process.exit(1);
     }
 
@@ -190,7 +190,7 @@ function parseArgs(args: string[]): CLIOptions {
 }
 
 function printHelp() {
-  console.log(`usc - Unsound compiler
+  logger.info(`usc - Unsound compiler
 
 Usage: usc [options] <input>
 
@@ -254,7 +254,7 @@ const lang = createLanguage([${lang.extensions
 const $ = lang.${interpretKey};
 const output = ${program.replace("export default ", "").replace(/;$/, "")};
 const result = await output($);
-${printResult ? "if (result !== undefined) console.log(result);" : ""}
+${printResult ? "if (result !== undefined) logger.log(result);" : ""}
 export default result;
 `;
 }
@@ -340,7 +340,7 @@ async function main() {
   const opts = parseArgs(args);
 
   // Set verbose early.
-  setVerbose(opts.verbose);
+  logger.setVerbose(opts.verbose);
 
   // Help.
   if (opts.help) {
@@ -397,7 +397,7 @@ async function main() {
 
   const parseResult = parser.program()(input, 0);
   if (!parseResult.ok) {
-    console.error(
+    logger.error(
       formatParseError(input, parseResult.pos, parseResult.expected)
     );
     process.exit(1);
@@ -405,8 +405,8 @@ async function main() {
 
   // Show AST if requested
   if (opts.show.includes("ast")) {
-    console.error("=== AST ===");
-    console.error(JSON.stringify(parseResult.value, null, 2));
+    logger.error("=== AST ===");
+    logger.error(JSON.stringify(parseResult.value, null, 2));
   }
 
   // Compile (using specified compile phase)
@@ -422,12 +422,12 @@ async function main() {
     const entryPoint =
       compile === "analyze" ? "analyzeProgram" : "compileProgram";
     if (typeof compiler[entryPoint] !== "function") {
-      console.error(`Compiler '${compile}' has no ${entryPoint} method`);
+      logger.error(`Compiler '${compile}' has no ${entryPoint} method`);
       process.exit(1);
     }
 
     const result = compiler[entryPoint](parseResult.value);
-    console.log(prettyPrint(result, "auto"));
+    logger.log(prettyPrint(result, "auto"));
     process.exit(0);
   }
 
@@ -436,8 +436,8 @@ async function main() {
 
   // Show IR if requested
   if (opts.show.includes("ir")) {
-    console.error("=== IR ===");
-    console.error(JSON.stringify(ir, null, 2));
+    logger.error("=== IR ===");
+    logger.error(JSON.stringify(ir, null, 2));
   }
 
   // Emit JS.
@@ -450,8 +450,8 @@ async function main() {
 
   // Show JS if requested
   if (opts.show.includes("js")) {
-    console.error("=== JS ===");
-    console.error(program);
+    logger.error("=== JS ===");
+    logger.error(program);
   }
 
   // Generate output based on mode.
@@ -470,7 +470,7 @@ async function main() {
 
     case "binary":
       if (!opts.output) {
-        console.error(
+        logger.error(
           "Binary mode requires -o/--output to specify the output file"
         );
         process.exit(1);
@@ -489,7 +489,7 @@ async function main() {
         const closure = emitter.programClosure(ir)(opts.global);
         const result = await closure(interpreter);
         if (result !== undefined) {
-          console.log(result);
+          logger.info(result);
         }
       } catch (e) {
         logger.error("interpreter error:", e);
@@ -503,12 +503,12 @@ async function main() {
     if (opts.output) {
       await fs.writeFile(opts.output, output);
     } else {
-      console.log(output);
+      logger.info(output);
     }
   }
 }
 
 main().catch((e) => {
-  console.error(e);
+  logger.error(e);
   process.exit(1);
 });

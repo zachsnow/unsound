@@ -1,18 +1,18 @@
 // Tests for the extension system
 
 import {
-  createLanguage, run,
+  run,
   compileToJS,
   createLanguageWithExtensions,
-  resolveExtension,
-  loadExtension
+  loadExtension,
 } from "./extension.ts";
 import { CoreInterpretOps } from "./interpret.ts";
-import type { Extension, InterpretOps } from "./types.ts";
+import type { Extension } from "./types.ts";
+import { logger } from "./logger.ts";
 
 // === Base language tests ===
 
-console.log("Testing core language...");
+logger.info("Testing core language...");
 const searchPaths: string[] = [];
 
 const core = await loadExtension("core", searchPaths);
@@ -33,18 +33,18 @@ if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
-console.log("Base language tests passed!");
+logger.info("Base language tests passed!");
 
 // === Extension: custom let (demonstrates overriding) ===
 
-console.log("Testing custom let extension...");
+logger.info("Testing custom let extension...");
 
 // This extension changes let to log when called
 const letLogExtension = {
   $interpret: ($: CoreInterpretOps) => {
     const baseLet = $.let;
     $.let = ($env, name, valueFn, bodyFn) => {
-      console.log(`  [let ${name}]`);
+      logger.info(`  [let ${name}]`);
       return baseLet($env, name, valueFn, bodyFn);
     };
   },
@@ -58,11 +58,11 @@ if (result !== 42) {
   throw new Error(`Expected 42, got: ${result}`);
 }
 
-console.log("Custom let extension tests passed!");
+logger.info("Custom let extension tests passed!");
 
 // === Extension: tracing interpreter ===
 
-console.log("Testing tracing extension...");
+logger.info("Testing tracing extension...");
 
 const trace: string[] = [];
 
@@ -90,7 +90,10 @@ const tracingExtension = {
   },
 } as Extension;
 
-const tracingLang = await createLanguageWithExtensions([core, tracingExtension]);
+const tracingLang = await createLanguageWithExtensions([
+  core,
+  tracingExtension,
+]);
 
 trace.length = 0;
 result = await run(tracingLang, "let x = 42 in x");
@@ -105,11 +108,11 @@ if (!trace.includes("lookup(x)")) {
   throw new Error(`Expected trace to include lookup(x), got: ${trace}`);
 }
 
-console.log("Tracing extension tests passed!");
+logger.info("Tracing extension tests passed!");
 
 // === Compile to JS string ===
 
-console.log("Testing compileToJS...");
+logger.info("Testing compileToJS...");
 
 const js = compileToJS(baseLang, "let x = 1 in x");
 if (!js.includes("$.let")) {
@@ -119,11 +122,11 @@ if (!js.includes("export default")) {
   throw new Error(`Expected export default in output, got: ${js}`);
 }
 
-console.log("compileToJS tests passed!");
+logger.info("compileToJS tests passed!");
 
 // === Multiple extensions ===
 
-console.log("Testing multiple extensions...");
+logger.info("Testing multiple extensions...");
 const countingExtension = {
   $interpret: ($: CoreInterpretOps) => {
     const baseCall = $.call;
@@ -139,7 +142,11 @@ const countingExtension = {
 } as Extension;
 
 // Compose tracing + counting
-const combinedLang = await createLanguageWithExtensions([core, tracingExtension, countingExtension]);
+const combinedLang = await createLanguageWithExtensions([
+  core,
+  tracingExtension,
+  countingExtension,
+]);
 
 trace.length = 0;
 result = await run(combinedLang, "let f = (x) => x in f(42)");
@@ -150,11 +157,11 @@ if (!trace.includes("let(f)")) {
   throw new Error(`Expected trace to include let(f)`);
 }
 
-console.log("Multiple extensions tests passed!");
+logger.info("Multiple extensions tests passed!");
 
 // === Simple wrapper extension (tests open recursion) ===
 
-console.log("Testing simple wrapper extension...");
+logger.info("Testing simple wrapper extension...");
 
 const simpleTrace: string[] = [];
 
@@ -169,7 +176,10 @@ const simpleTracingExtension = {
   },
 } as Extension;
 
-const simpleLang = await createLanguageWithExtensions([core, simpleTracingExtension]);
+const simpleLang = await createLanguageWithExtensions([
+  core,
+  simpleTracingExtension,
+]);
 
 simpleTrace.length = 0;
 result = await run(simpleLang, "let x = 42 in x");
@@ -184,6 +194,6 @@ if (!simpleTrace.includes("number(42)")) {
   );
 }
 
-console.log("Simple wrapper extension tests passed!");
+logger.info("Simple wrapper extension tests passed!");
 
-console.log("\nAll extension tests passed!");
+logger.info("\nAll extension tests passed!");

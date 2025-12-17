@@ -1,16 +1,16 @@
 // Tests for the combinator-based parser
-
 import { parse, build$parse, CoreParseOps } from './parse.ts';
 import { Expr } from './ast.ts';
 import { fix } from './util.ts';
+import { logger } from './logger.ts';
 
 // Helper to check parse results
 function expectParse(input: string, expected: Expr) {
   const result = parse(input);
   if (JSON.stringify(result) !== JSON.stringify(expected)) {
-    console.error('Input:', input);
-    console.error('Expected:', JSON.stringify(expected, null, 2));
-    console.error('Got:', JSON.stringify(result, null, 2));
+    logger.error('Input:', input);
+    logger.error('Expected:', JSON.stringify(expected, null, 2));
+    logger.error('Got:', JSON.stringify(result, null, 2));
     throw new Error('Parse mismatch');
   }
 }
@@ -27,7 +27,7 @@ function expectFail(input: string) {
 
 // === Literal tests ===
 
-console.log('Testing literals...');
+logger.info('Testing literals...');
 
 expectParse('42', { type: 'LiteralExpr', value: 42 });
 expectParse('  42  ', { type: 'LiteralExpr', value: 42 });
@@ -38,7 +38,7 @@ expectParse('false', { type: 'LiteralExpr', value: false });
 
 // === Identifier tests ===
 
-console.log('Testing identifiers...');
+logger.info('Testing identifiers...');
 
 expectParse('x', { type: 'IdentifierExpr', name: 'x' });
 expectParse('foo', { type: 'IdentifierExpr', name: 'foo' });
@@ -53,7 +53,7 @@ expectFail('if');
 
 // === Lambda tests ===
 
-console.log('Testing lambdas...');
+logger.info('Testing lambdas...');
 
 expectParse('() => 1', {
   type: 'LambdaExpr',
@@ -75,7 +75,7 @@ expectParse('(x, y) => x', {
 
 // === Let tests ===
 
-console.log('Testing let expressions...');
+logger.info('Testing let expressions...');
 
 expectParse('let x = 1 in x', {
   type: 'LetExpr',
@@ -98,7 +98,7 @@ expectParse('let x = 1 in let y = 2 in x', {
 
 // === If tests ===
 
-console.log('Testing if expressions...');
+logger.info('Testing if expressions...');
 
 expectParse('if true then 1 else 2', {
   type: 'IfExpr',
@@ -109,7 +109,7 @@ expectParse('if true then 1 else 2', {
 
 // === Application tests ===
 
-console.log('Testing function application...');
+logger.info('Testing function application...');
 
 expectParse('f()', {
   type: 'AppExpr',
@@ -145,7 +145,7 @@ expectParse('f(1)(2)', {
 
 // === Member access tests (now unified as Index with Literal key) ===
 
-console.log('Testing member access...');
+logger.info('Testing member access...');
 
 expectParse('x.y', {
   type: 'IndexExpr',
@@ -176,7 +176,7 @@ expectParse('x.f(1)', {
 
 // === Object tests ===
 
-console.log('Testing objects...');
+logger.info('Testing objects...');
 
 expectParse('{}', {
   type: 'ObjectExpr',
@@ -204,7 +204,7 @@ expectParse('{ x }', {
 
 // === Extension test ===
 
-console.log('Testing parser extension...');
+logger.info('Testing parser extension...');
 
 // Add a 'dyn' expression form (mutation style)
 function dynParserExtension($: CoreParseOps): void {
@@ -255,4 +255,4 @@ if (!letResult.ok || letResult.value.type !== 'LetExpr') {
   throw new Error('Extension broke regular let expressions');
 }
 
-console.log('All tests passed!');
+logger.info('All tests passed!');

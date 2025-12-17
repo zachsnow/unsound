@@ -44,6 +44,7 @@ import {
   Language,
   ParseOps,
 } from "./types.ts";
+import { logger } from "./logger.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TESTS_DIR = join(__dirname, "..", "tests");
@@ -408,25 +409,25 @@ async function runTest(
   // Report result
   if (errors.length === 0) {
     passed++;
-    console.log(`${green("✓")} ${testId}`);
+    logger.info(`${green("✓")} ${testId}`);
   } else {
     failed++;
     failures.push({ testId, errors });
-    console.log(`${red("✗")} ${testId}`);
+    logger.info(`${red("✗")} ${testId}`);
     for (const err of errors) {
-      console.log(`  ${dim(err)}`);
+      logger.info(`  ${dim(err)}`);
     }
   }
 }
 
 // Main test runner
 async function runTests(): Promise<void> {
-  console.log("Running next-gen Unsound tests...\n");
+  logger.info("Running next-gen Unsound tests...\n");
 
   // Create tests directory if it doesn't exist
   if (!existsSync(TESTS_DIR)) {
     mkdirSync(TESTS_DIR);
-    console.log(dim("Created tests directory"));
+    logger.info(dim("Created tests directory"));
   }
 
   let files: string[];
@@ -438,12 +439,12 @@ async function runTests(): Promise<void> {
 
   if (files.length === 0) {
     console.error(red("No test files found in tests/"));
-    console.log(dim("Create .test files with the format:"));
-    console.log(dim("  #usc -x meso           # Optional extensions"));
-    console.log(dim("  --- test name"));
-    console.log(dim("  source code"));
-    console.log(dim("  === parse: $parse"));
-    console.log(dim('  { "type": "Literal", ... }'));
+    logger.info(dim("Create .test files with the format:"));
+    logger.info(dim("  #usc -x meso           # Optional extensions"));
+    logger.info(dim("  --- test name"));
+    logger.info(dim("  source code"));
+    logger.info(dim("  === parse: $parse"));
+    logger.info(dim('  { "type": "Literal", ... }'));
     process.exit(1);
   }
 
@@ -463,7 +464,7 @@ async function runTests(): Promise<void> {
     }
   }
 
-  console.log(`\n${passed} passed, ${failed} failed`);
+  logger.info(`\n${passed} passed, ${failed} failed`);
 
   if (failed > 0) {
     process.exit(1);
