@@ -1,29 +1,29 @@
-# usc -x meso -x thermo -x const
+# usc -x core -x meso -x thermo -x const
 # Tests for const.us extension (constant bindings)
 
 --- basic const
 const x = 42; x
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 42
 
 --- const with expression
 const x = 1 + 2; x * 3
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 9
 
 --- nested const
 const x = 1; const y = 2; x + y
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 3
 
 --- const in lambda body
 const f = (x) => x + 1; f(10)
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 11
 
 --- const shadowing let
 let x = 1; const x = 2; x
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 2
 
 --- assign to const compile error
@@ -38,7 +38,7 @@ Cannot assign to const variable
 
 --- let shadowing const allows assign
 const x = 1; let x = 2; { x = 3; x }
-=== parse: $parse, compile: $compile, interpret: $interpret
+===
 3
 
 --- const compiles to let IR

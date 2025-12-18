@@ -117,7 +117,7 @@ let thermoParseExtension = ($) =>
             let close2 = $.token("}")(input, ws2.pos) in
             if close2.ok then
               // { ident } is object shorthand, not block
-              if first.value.type == "Ident" then { ok: false, pos: pos }
+              if first.value.type == "IdentifierExpr" then { ok: false, pos: pos }
               else { ok: true, value: first.value, pos: close2.pos }
             else
               // Not a valid block
@@ -135,7 +135,7 @@ let thermoParseExtension = ($) =>
   let _ = $.varAssign = () => (input, pos) =>
     let result = baseAppExpr()(input, pos) in
     if !(result.ok) then result
-    else if result.value.type == "Ident" then
+    else if result.value.type == "IdentifierExpr" then
       let ws = $.ws()(input, result.pos) in
       let ch1 = input.slice(ws.pos, ws.pos + 1) in
       let ch2 = input.slice(ws.pos + 1, ws.pos + 2) in

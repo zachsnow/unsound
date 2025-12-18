@@ -5,7 +5,7 @@
 42
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": 42
 }
 
@@ -13,7 +13,7 @@
 "hello"
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": "hello"
 }
 
@@ -22,7 +22,7 @@ foo
 === parse: $parse
 {
   "name": "foo",
-  "type": "Ident"
+  "type": "IdentifierExpr"
 }
 
 --- simple let
@@ -31,12 +31,12 @@ let x = 1 in x
 {
   "body": {
     "name": "x",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
   "name": "x",
   "type": "LetExpr",
   "value": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 1
   }
 }
@@ -46,11 +46,11 @@ let x = 1 in x
 === parse: $parse
 {
   "body": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 1
   },
   "params": [],
-  "type": "Lambda"
+  "type": "LambdaExpr"
 }
 
 --- lambda with params
@@ -59,10 +59,13 @@ let x = 1 in x
 {
   "body": {
     "name": "x",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
-  "params": ["x", "y"],
-  "type": "Lambda"
+  "params": [
+    { "name": "x" },
+    { "name": "y" }
+  ],
+  "type": "LambdaExpr"
 }
 
 --- if expression
@@ -70,15 +73,15 @@ if true then 1 else 2
 === parse: $parse
 {
   "cond": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": true
   },
   "else": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 2
   },
   "then": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 1
   },
   "type": "IfExpr"
@@ -90,19 +93,19 @@ f(1, 2)
 {
   "args": [
     {
-      "type": "Literal",
+      "type": "LiteralExpr",
       "value": 1
     },
     {
-      "type": "Literal",
+      "type": "LiteralExpr",
       "value": 2
     }
   ],
   "fn": {
     "name": "f",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
-  "type": "App"
+  "type": "AppExpr"
 }
 
 --- member access
@@ -110,14 +113,14 @@ x.y
 === parse: $parse
 {
   "key": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": "y"
   },
   "object": {
     "name": "x",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
-  "type": "Index"
+  "type": "IndexExpr"
 }
 
 --- empty object
@@ -136,14 +139,14 @@ x.y
     {
       "key": "x",
       "value": {
-        "type": "Literal",
+        "type": "LiteralExpr",
         "value": 1
       }
     },
     {
       "key": "y",
       "value": {
-        "type": "Literal",
+        "type": "LiteralExpr",
         "value": 2
       }
     }
@@ -156,14 +159,14 @@ x["y"]
 === parse: $parse
 {
   "key": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": "y"
   },
   "object": {
     "name": "x",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
-  "type": "Index"
+  "type": "IndexExpr"
 }
 
 --- setindex
@@ -171,16 +174,16 @@ x["y"] = 1
 === parse: $parse
 {
   "key": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": "y"
   },
   "object": {
     "name": "x",
-    "type": "Ident"
+    "type": "IdentifierExpr"
   },
-  "type": "SetIndex",
+  "type": "AssignIndexExpr",
   "value": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 1
   }
 }
@@ -192,19 +195,19 @@ let x = 1 in let y = 2 in x
   "body": {
     "body": {
       "name": "x",
-      "type": "Ident"
+      "type": "IdentifierExpr"
     },
     "name": "y",
     "type": "LetExpr",
     "value": {
-      "type": "Literal",
+      "type": "LiteralExpr",
       "value": 2
     }
   },
   "name": "x",
   "type": "LetExpr",
   "value": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": 1
   }
 }
@@ -214,21 +217,21 @@ a.b.c
 === parse: $parse
 {
   "key": {
-    "type": "Literal",
+    "type": "LiteralExpr",
     "value": "c"
   },
   "object": {
     "key": {
-      "type": "Literal",
+      "type": "LiteralExpr",
       "value": "b"
     },
     "object": {
       "name": "a",
-      "type": "Ident"
+      "type": "IdentifierExpr"
     },
-    "type": "Index"
+    "type": "IndexExpr"
   },
-  "type": "Index"
+  "type": "IndexExpr"
 }
 
 --- chained function calls
@@ -237,31 +240,31 @@ f(1)(2)
 {
   "args": [
     {
-      "type": "Literal",
+      "type": "LiteralExpr",
       "value": 2
     }
   ],
   "fn": {
     "args": [
       {
-        "type": "Literal",
+        "type": "LiteralExpr",
         "value": 1
       }
     ],
     "fn": {
       "name": "f",
-      "type": "Ident"
+      "type": "IdentifierExpr"
     },
-    "type": "App"
+    "type": "AppExpr"
   },
-  "type": "App"
+  "type": "AppExpr"
 }
 
 --- parenthesized expression
 (42)
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": 42
 }
 
@@ -269,7 +272,7 @@ f(1)(2)
 ((42))
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": 42
 }
 
@@ -278,7 +281,7 @@ f(1)(2)
 42
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": 42
 }
 
@@ -286,7 +289,7 @@ f(1)(2)
 "hello\nworld"
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": "hello\nworld"
 }
 
@@ -294,7 +297,7 @@ f(1)(2)
 true
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": true
 }
 
@@ -302,6 +305,6 @@ true
 false
 === parse: $parse
 {
-  "type": "Literal",
+  "type": "LiteralExpr",
   "value": false
 }

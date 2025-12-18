@@ -74,7 +74,7 @@ let dynCompileExtension = ($) =>
         valueIR,
         $.ir.arrow1("_", bodyIR)
       )
-    else if expr.type == "Ident" then
+    else if expr.type == "IdentifierExpr" then
       if dynNames[expr.name] then
         // $.dyn["name"]
         $.ir.index($.ir.member($.ir.var("$"), "dyn"), $.ir.lit(expr.name))

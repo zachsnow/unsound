@@ -53,9 +53,7 @@ if [[ -f "$TMPDIR/module.js" ]]; then
 import { createLanguage, loadExtension } from '$SCRIPT_DIR/src/extension.ts';
 import program from './module.js';
 
-const lang = createLanguage([]);
-await loadExtension('core', lang);
-await loadExtension('meso', lang);
+const lang = createLanguage(["core", "meso"]);
 const result = await program(lang.\$interpret);
 console.log(result);
 EOF

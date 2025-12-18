@@ -50,7 +50,9 @@ const letLogExtension = {
   },
 } as Extension;
 
-const logLang = await createLanguageWithExtensions([letLogExtension]);
+const logLang = await createLanguageWithExtensions([
+  letLogExtension,
+]);
 
 // Test that basic stuff still works
 result = await run(logLang, "let x = 42 in x");

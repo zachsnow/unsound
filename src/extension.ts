@@ -15,17 +15,17 @@ import fs from "fs/promises";
 import { join, basename, dirname, resolve } from "path";
 import { fileURLToPath } from "url";
 import { formatParseError } from "./parse.ts";
-import type {
-  PreOps,
-  CompileOps,
-  AnalyzeOps,
-  EmitOps,
-  PostOps,
-  Extension,
-  Language,
-  InterpretOps,
-  ParseOps,
-  PhaseKey,
+import {
+  type CompileOps,
+  type AnalyzeOps,
+  type EmitOps,
+  type Extension,
+  type Language,
+  type InterpretOps,
+  type ParseOps,
+  type PhaseKey,
+  type ResolvedExtension,
+  isPhaseKey,
 } from "./types.ts";
 import { emptyExtension } from "./empty.ts";
 
@@ -74,11 +74,10 @@ export function getSearchPaths(
 
 // Add cross-references: every phase can access every other phase via $.<phaseName>
 function attachCrossReferences(lang: Language): void {
-  const keys = Object.keys(lang).filter((k) => k.startsWith("$"));
+  const keys: PhaseKey[] = Object.keys(lang).filter(isPhaseKey);
   for (const phase of keys) {
     for (const other of keys) {
-      (lang[phase as keyof Language] as any)[other] =
-        lang[other as keyof Language];
+      lang[phase][other] = lang[other];
     }
   }
 }
@@ -104,7 +103,10 @@ export async function resolveExtension(
     }
   }
 
-  // Search in search paths
+  // Search in search paths.
+  logger.debug(
+    `resolving extension ${name} in paths: ${searchPaths.join(", ")}`
+  );
   for (const searchPath of searchPaths) {
     for (const ext of ["", ".us", ".ts", ".js"]) {
       const fullPath = join(searchPath, name + ext);
@@ -118,11 +120,10 @@ export async function resolveExtension(
   throw new Error("Could not resolve extension: " + name);
 }
 
-// Extract extension name from file path
+// Extract extension name from file path.
 export function extensionNameFromPath(filePath: string): string {
   const base = basename(filePath);
-  // Remove .us, .ts, or .js extension
-  return base.replace(/\.(us|ts|js)$/, "");
+  return base.replace(".us.js", "").replace(".ts", "").replace(".js", "");
 }
 
 /**
@@ -166,7 +167,10 @@ export function parseUscArgs(args: string[]): DirectiveOptions {
       i + 1 < args.length
     ) {
       opts.compile = args[++i];
-    } else if (args[i] === "-e" || args[i] === "--emit" && i + 1 < args.length) {
+    } else if (
+      args[i] === "-e" ||
+      (args[i] === "--emit" && i + 1 < args.length)
+    ) {
       opts.emit = args[++i];
     } else if (
       (args[i] === "-i" || args[i] === "--interpret") &&
@@ -182,7 +186,7 @@ export function parseUscArgs(args: string[]): DirectiveOptions {
  * Parse a complete usc directive (`//usc ...`) from JS/TS source code.
  */
 export function parseUscDirective(source: string): DirectiveOptions {
-  const match = source.match(/^\/\/\s+usc\s+(.+)$/m);
+  const match = source.match(/^\/\/\s*usc\s+(.+)$/m);
   if (!match) {
     return defaultDirectiveOptions();
   }
@@ -191,39 +195,50 @@ export function parseUscDirective(source: string): DirectiveOptions {
 
 // Check that an extension's requirements are satisfied
 // Accepts requires as string or string[] for flexibility
-function checkRequirements(
-  ext: Extension,
-  extensions: string[],
-  extPath: string
+function validateRequirements(
+  extension: ResolvedExtension,
+  extensions: ResolvedExtension[]
 ): void {
-  if (!ext.requires) return;
+  if (!extension.requires) {
+    return;
+  }
 
   // Normalize to array (accept single string for .us files without array syntax)
+  // This is just so that Unsound programs can specify `requires` without
+  // needing to support arrays well.
   const requires =
-    typeof ext.requires === "string" ? [ext.requires] : ext.requires;
-  if (requires.length === 0) return;
+    typeof extension.requires === "string"
+      ? [extension.requires]
+      : extension.requires;
+  if (requires.length === 0) {
+    return;
+  }
 
-  const missing = requires.filter((req) => !extensions.includes(req));
+  // Check that each required extension is loaded.
+  const extensionNames = extensions.map((extension) => extension.name);
+  const missing = requires.filter((req) => !extensionNames.includes(req));
   if (missing.length > 0) {
-    const extName = ext.name || extensionNameFromPath(extPath);
     throw new Error(
-      `Extension "${extName}" requires [${missing.join(
+      `Extension "${extension.name}" requires [${missing.join(
         ", "
       )}] but they are not loaded. ` +
-      `Loaded extensions: [${[...extensions].join(", ")}]`
+      `Loaded extensions: [${[...extensionNames].join(", ")}]`
     );
   }
 }
 
 // Validate extension name matches file basename
-function validateExtensionName(ext: Extension, filePath: string): void {
-  if (!ext.name) return; // No name specified, skip validation
+function validateExtensionName(extension: ResolvedExtension): void {
+  if (!extension.path) {
+    return;
+  }
 
-  const expectedName = extensionNameFromPath(filePath);
-  if (ext.name !== expectedName) {
+  const expectedName = extensionNameFromPath(extension.path);
+  const actualName = extension.name;
+  if (actualName !== expectedName) {
     throw new Error(
-      `Extension name "${ext.name}" does not match file basename "${expectedName}" ` +
-      `(from ${filePath})`
+      `Extension name "${actualName}" does not match file basename "${expectedName}" ` +
+      `(from ${extension.path})`
     );
   }
 }
@@ -231,56 +246,59 @@ function validateExtensionName(ext: Extension, filePath: string): void {
 // Apply a single extension to a language
 // All extensions mutate in place
 function applyExtension(
-  lang: Language,
-  ext: Extension,
-  filePath?: string
+  language: Language,
+  extension: ResolvedExtension,
+  track: boolean = true
 ): Language {
-  // Validate and check requirements
-  if (filePath) {
-    validateExtensionName(ext, filePath);
-  }
-  checkRequirements(ext, lang.extensions, filePath || "unknown");
+  // Validate and check requirements.
+  validateExtensionName(extension);
+  validateRequirements(extension, language.extensions);
 
-  // Apply phase extensions in pipeline order: pre, parse, compile, analyze, emit, post
+  // Apply phase extensions in pipeline order: pre, parse, compile, analyze, emit, post.
+  // Probably this doesn't matter but who knows.
   for (const phase of BUILT_IN_PHASES) {
-    const modifier = ext[phase];
-    const implementation = lang[phase];
+    const modifier = extension[phase];
+    const implementation = language[phase];
     if (modifier) {
       modifier(implementation as any);
     }
   }
 
   // Apply any other $-phases.
-  for (const key of Object.keys(ext) as PhaseKey[]) {
+  for (const key of Object.keys(extension) as PhaseKey[]) {
     if (
       key.startsWith("$") &&
       !BUILT_IN_PHASES.includes(key as (typeof BUILT_IN_PHASES)[number])
     ) {
-      const builder = ext[key];
+      const builder = extension[key];
       if (builder) {
-        // Create empty phase if it doesn't exist yet.
-        if (!lang[key]) {
-          lang[key] = {};
+        // Create empty phase if it doesn't exist yet; because this a custom phase
+        // the empty language doesn't have a stub for it.
+        if (!language[key]) {
+          language[key] = {};
         }
-        builder(lang[key]);
+        builder(language[key]);
       }
     }
   }
 
-  // Track loaded extension
-  lang.extensions.push(ext.name);
+  // Track loaded extension; we don't track the empty extension (which has no path and
+  // is not loadable).
+  if (track) {
+    language.extensions.push(extension);
+  }
 
   // Re-attach cross-references after any new phases are added
-  attachCrossReferences(lang);
+  attachCrossReferences(language);
 
-  return lang;
+  return language;
 }
 
 /**
  * Given a list of resolved extensions, creates a language with them.
  */
 export function createLanguageWithExtensions(
-  extensions: Extension[] = []
+  extensions: ResolvedExtension[] = []
 ): Language {
   // Start with empty ops; this is not type safe but we don't want to start
   // with the empty extension or we will referentially update it.
@@ -296,8 +314,14 @@ export function createLanguageWithExtensions(
   // Set up cross-references so every phase can access every other.
   attachCrossReferences(base);
 
-  // Apply empty extension to provide stub implementations.
-  applyExtension(base, emptyExtension);
+  // Apply empty extension to provide stub implementations; we don't
+  // include this in the list of resolved extensions.
+  //
+  // Because this is always automatically applied, we don't track it
+  // in the language's `extensions`.
+  //
+  // TODO: I suppose we could resolve this properly?
+  applyExtension(base, emptyExtension, false);
 
   // Apply each extension in order.
   return extensions.reduce(
@@ -314,12 +338,12 @@ export async function createLanguage(
   extensions: string[],
   searchPaths: string[]
 ): Promise<Language> {
-  const loadedExtensions: Extension[] = [];
+  const resolvedExtensions: ResolvedExtension[] = [];
   for (const extension of extensions) {
     const ext = await loadExtension(extension, searchPaths);
-    loadedExtensions.push(ext);
+    resolvedExtensions.push(ext);
   }
-  return createLanguageWithExtensions(loadedExtensions);
+  return createLanguageWithExtensions(resolvedExtensions);
 }
 
 // Load a TypeScript extension
@@ -366,7 +390,7 @@ async function loadUsExtension(extPath: string): Promise<Extension> {
 
   // Create a language and compile the source.
   const language = await createLanguage(uscExtensions, getSearchPaths(absPath));
-  const js = compileUsToJs(language, source, absPath, uscExtensions);
+  const js = compileUsToJs(language, source, absPath);
   logger.debug(`  compiled ${basename(absPath)}`);
 
   // Write compiled source to cache.
@@ -378,41 +402,58 @@ async function loadUsExtension(extPath: string): Promise<Extension> {
 
 // Compile a .us extension source to a JS module
 function compileUsToJs(
-  lang: Language,
+  language: Language,
   source: string,
-  absPath: string,
-  uscExtensions: string[]
+  sourceFile?: string,
+  interpretKey: string = "interpret"
 ): string {
   // Actually use the parser to compile the source.
-  const parseResult = lang.$parse.program()(source, 0);
+  const parseResult = language.$parse.program()(source, 0);
   if (!parseResult.ok) {
     const formatted = formatParseError(
       source,
       parseResult.pos,
       parseResult.expected
     );
-    throw new Error(`Parse error in ${basename(absPath)}:\n${formatted}`);
+    throw new Error(
+      `Parse error in ${sourceFile ? basename(sourceFile) : "input"
+      }: \n${formatted} `
+    );
   }
 
-  // Emit the compiled IR.
-  const ir = lang.$compile.compileProgram(parseResult.value);
-  const programJs = lang.$emit.program(ir);
+  // Compile.
+  const ir = language.$compile.compileProgram(parseResult.value);
 
+  // Emit.
+  const program = language.$emit.program(ir);
+
+  return getProgramModule(language, program, sourceFile, false, interpretKey);
+}
+
+export function getProgramModule(
+  language: Language,
+  program: string,
+  sourceFile?: string,
+  printResult: boolean = false,
+  interpretKey: string = "interpret"
+): string {
   // Generate extension loading code. We need to load the code
   // for each extension so that we can build an interpreter to
   // actually run the program.
-  return `// Compiled from ${basename(absPath)}
-import { createLanguage } from '${resolve(
+  return `// Compiled from ${basename(sourceFile ?? "input")}
+  import { createLanguage } from '${resolve(
     import.meta.dirname,
     "extension.ts"
   )}';
 
 const lang = await createLanguage([
-  ${uscExtensions.map((name) => `'${name}'`).join(", ")}
+  ${language.extensions
+      .map((extension) => `'${extension.path ?? extension.name}'`)
+      .join(", ")}
 ]);
-const program = ${programJs.replace("export default ", "").replace(/;$/, "")};
-const result = await program(lang.$interpret);
-
+const program = ${program.replace("export default ", "").replace(/;$/, "")};
+const result = await program(lang.$${interpretKey});
+${printResult ? "if (result !== undefined) console.info(result);" : ""}
 export default result;
 `;
 }
@@ -423,13 +464,15 @@ export default result;
 export async function loadExtension(
   name: string,
   searchPaths: string[]
-): Promise<Extension> {
+): Promise<ResolvedExtension> {
   const resolvedPath = await resolveExtension(name, searchPaths);
-  const ext = resolvedPath.endsWith(".us")
+  const isUs = resolvedPath.endsWith(".us");
+  const extension = isUs
     ? await loadUsExtension(resolvedPath)
     : await loadTsExtension(resolvedPath);
-
-  return ext;
+  const resolvedExtension: ResolvedExtension = extension;
+  resolvedExtension.path = isUs ? resolvedPath + ".js" : resolvedPath;
+  return resolvedExtension;
 }
 
 /**
@@ -438,8 +481,8 @@ export async function loadExtension(
 export async function loadExtensions(
   names: string[],
   searchPaths: string[]
-): Promise<Extension[]> {
-  const extensions: Extension[] = [];
+): Promise<ResolvedExtension[]> {
+  const extensions: ResolvedExtension[] = [];
   for (const name of names) {
     const extension = await loadExtension(name, searchPaths);
     extensions.push(extension);
@@ -463,15 +506,15 @@ export async function run(
       parseResult.pos,
       parseResult.expected
     );
-    throw new Error(`Parse error:\n${formatted}`);
+    throw new Error(`Parse error: \n${formatted} `);
   }
 
   const ir = lang.$compile.compileProgram(parseResult.value);
   const closure = lang.$emit.programClosure(ir)({});
 
-  const interpreter = lang[`$${interpretKey}`] as InterpretOps | undefined;
+  const interpreter = lang[`$${interpretKey} `] as InterpretOps | undefined;
   if (!interpreter) {
-    throw new Error(`No interpreter found for key: ${interpretKey}`);
+    throw new Error(`No interpreter found for key: ${interpretKey} `);
   }
 
   return await closure(interpreter);
@@ -491,7 +534,7 @@ export function compileToJS(lang: Language, source: string): string {
       parseResult.pos,
       parseResult.expected
     );
-    throw new Error(`Parse error:\n${formatted}`);
+    throw new Error(`Parse error: \n${formatted} `);
   }
 
   const ir = lang.$compile.compileProgram(parseResult.value);

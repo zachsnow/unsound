@@ -1,3 +1,5 @@
+// usc -x core
+
 // meso.us - The middle layer
 // Adds operators with precedence to Unsound: binary, prefix, postfix
 //
@@ -247,6 +249,7 @@ in
   name: "meso",
   description: "Operators with precedence: binary, prefix, postfix",
   version: "1.0.0",
+  required: "core",
   $parse: mesoParseExtension,
   $compile: mesoCompileExtension,
   $analyze: mesoAnalyzeExtension

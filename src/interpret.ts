@@ -13,14 +13,12 @@ export interface Env {
   extend(bindings: Record<string, unknown>): Env;  // Create child env
   bind(name: string, value: unknown): void;        // Mutate current frame (for letrec)
   mutate(name: string, value: unknown): void;      // Mutate existing binding (for assignment)
-  markConst(name: string): void;                   // Mark binding as const (for const.us)
-  isConst(name: string): boolean;                  // Check if binding is const
 }
 
 // Interpreter operations - what $ provides at runtime
 // Operations that need $env take it as first parameter
 export interface CoreInterpretOps {
-  // Environment factory
+  // Create default environment.
   env: () => Env;
 
   // Literals (no $env needed)
@@ -54,13 +52,11 @@ export interface CoreInterpretOps {
 // Tracks const bindings in a separate set that inherits via prototype
 export function createEnv(initial: Record<string, unknown> = {}): Env {
   const frame = { ...initial };
-  const consts: Record<string, boolean> = {};
-
-  return createEnvFromFrame(frame, consts);
+  return createEnvFromFrame(frame);
 }
 
 // Helper to create env from existing frame (for extend)
-function createEnvFromFrame(frame: Record<string, unknown>, consts: Record<string, boolean>): Env {
+function createEnvFromFrame(frame: Record<string, unknown>): Env {
   return {
     lookup(name: string): unknown {
       return frame[name];
@@ -69,14 +65,13 @@ function createEnvFromFrame(frame: Record<string, unknown>, consts: Record<strin
       // Child inherits from this frame and consts via prototype
       const childFrame = Object.create(frame);
       Object.assign(childFrame, bindings);
-      const childConsts = Object.create(consts);
-      return createEnvFromFrame(childFrame, childConsts);
+      return createEnvFromFrame(childFrame);
     },
     bind(name: string, value: unknown): void {
       frame[name] = value;
     },
     mutate(name: string, value: unknown): void {
-      // Walk prototype chain to find and update existing binding
+      // Walk prototype chain to find and update existing binding.
       let obj: Record<string, unknown> | null = frame;
       while (obj !== null) {
         if (Object.hasOwn(obj, name)) {
@@ -87,14 +82,31 @@ function createEnvFromFrame(frame: Record<string, unknown>, consts: Record<strin
       }
       throw new Error(`Cannot assign to undefined variable: ${name}`);
     },
-    markConst(name: string): void {
-      consts[name] = true;
-    },
-    isConst(name: string): boolean {
-      return consts[name] === true;
-    },
   };
 }
+
+
+
+// $operators object - provides operator functions for use in Unsound code
+const $operators: Record<string, (...args: unknown[]) => unknown> = {
+  'op===': (a, b) => a === b,
+  'op!==': (a, b) => a !== b,
+  'op==': (a, b) => a == b,
+  'op!=': (a, b) => a != b,
+  'op<': (a, b) => (a as number) < (b as number),
+  'op>': (a, b) => (a as number) > (b as number),
+  'op<=': (a, b) => (a as number) <= (b as number),
+  'op>=': (a, b) => (a as number) >= (b as number),
+  'op+': (a, b) => (a as number) + (b as number),
+  'op-': (a, b) => (a as number) - (b as number),
+  'op*': (a, b) => (a as number) * (b as number),
+  'op/': (a, b) => (a as number) / (b as number),
+  'op%': (a, b) => (a as number) % (b as number),
+  'op&&': (a, b) => a && b,
+  'op||': (a, b) => a || b,
+  'op!': (a) => !a,
+  'opNeg': (a) => -(a as number),
+};
 
 // Primitive operator methods
 const numberOps = (n: number): Record<string, unknown> => ({
@@ -140,11 +152,11 @@ function primitiveMember(obj: unknown, ops: Record<string, unknown>, field: stri
 
 // Base interpreter builder - mutation style
 // Extensions mutate $ to override methods
-export function build$interpret(in$: InterpretOps, globals: Record<string, unknown> = {}): void {
+export function build$interpret(in$: InterpretOps): void {
   const $ = in$ as CoreInterpretOps;
 
   // Environment factory - creates initial env with globals
-  $.env = () => createEnv(globals);
+  $.env = () => createEnv({ $operators });
 
   $.number = (n) => n;
   $.string = (s) => s;
@@ -193,58 +205,33 @@ export function build$interpret(in$: InterpretOps, globals: Record<string, unkno
 
   $.index = (obj, key) => {
     const k = key as string;
-    if (typeof obj === 'number') {
-      return primitiveMember(obj, numberOps(obj), k);
+    switch (typeof obj) {
+      case "bigint":
+      case "number":
+        // HACK: treat bigint as number because all the number ops should work.
+        return primitiveMember(obj, numberOps(obj as any as number), k);
+      case "string":
+        return primitiveMember(obj, stringOps(obj), k);
+      case "boolean":
+        return primitiveMember(obj, booleanOps(obj), k);
+      case "undefined": // This will raise, that's ok.
+        debugger;
+      case "symbol":
+      case "object":
+      case "function":
+        // Objects and arrays: bind methods to preserve 'this'
+        const value = (obj as Record<string, unknown>)[k];
+        if (typeof value === 'function') {
+          return (value as Function).bind(obj);
+        }
+        return value;
+      default:
+        return undefined;
     }
-    if (typeof obj === 'string') {
-      return primitiveMember(obj, stringOps(obj), k);
-    }
-    if (typeof obj === 'boolean') {
-      return primitiveMember(obj, booleanOps(obj), k);
-    }
-    // Objects and arrays: bind methods to preserve 'this'
-    const value = (obj as Record<string, unknown>)[k];
-    if (typeof value === 'function') {
-      return (value as Function).bind(obj);
-    }
-    return value;
   };
 
   $.setIndex = (obj, key, value) => {
     (obj as Record<string, unknown>)[key as string] = value;
     return value;
   };
-}
-
-// $operators object - provides operator functions for use in Unsound code
-export const $operators: Record<string, (...args: unknown[]) => unknown> = {
-  'op===': (a, b) => a === b,
-  'op!==': (a, b) => a !== b,
-  'op==': (a, b) => a == b,
-  'op!=': (a, b) => a != b,
-  'op<': (a, b) => (a as number) < (b as number),
-  'op>': (a, b) => (a as number) > (b as number),
-  'op<=': (a, b) => (a as number) <= (b as number),
-  'op>=': (a, b) => (a as number) >= (b as number),
-  'op+': (a, b) => (a as number) + (b as number),
-  'op-': (a, b) => (a as number) - (b as number),
-  'op*': (a, b) => (a as number) * (b as number),
-  'op/': (a, b) => (a as number) / (b as number),
-  'op%': (a, b) => (a as number) % (b as number),
-  'op&&': (a, b) => a && b,
-  'op||': (a, b) => a || b,
-  'op!': (a) => !a,
-  'opNeg': (a) => -(a as number),
-};
-
-// Default global environment
-export const defaultEnv: Record<string, unknown> = {
-  $operators,
-};
-
-// Convenience: create interpreter with default globals
-export function createInterpret(globals: Record<string, unknown> = {}): CoreInterpretOps {
-  const $ = {} as CoreInterpretOps;
-  build$interpret($, { ...defaultEnv, ...globals });
-  return $;
 }

@@ -35,6 +35,7 @@ export interface CompileOps<In = unknown, Out = unknown> {
  * Expected operations for emit phase.
  */
 export interface EmitOps<In = unknown> {
+  string: (node: In) => string;
   program: (program: In) => string;
   programClosure: (program: In) => ProgramClosure;
 }
@@ -72,7 +73,11 @@ export type Builder<T = any> = ($: T) => void;
 
 export type PhaseKey = `$${string}`;
 
-// Extension type - each key is optional
+export function isPhaseKey(key: string): key is PhaseKey {
+  return key.startsWith("$");
+}
+
+// Extension
 //
 // All phases use mutation style (mutate the ops object, return void); this
 // essentially allows composition of extensions (as if each extension were
@@ -90,6 +95,14 @@ export interface Extension extends ExtensionMeta {
   [key: PhaseKey]: Builder<any> | undefined;
 }
 
+/**
+ * Resolved extensions represent an extension that has been loaded via a `name` (or `path`).
+ * It tracks the actual, loaded extension, along with the full path of where it was loaded from.
+ */
+export type ResolvedExtension = Extension & {
+  path?: string;
+}
+
 // A Language is the result of composing extensions
 // Supports multiple interpreters via dynamic keys
 export interface Language<
@@ -104,7 +117,7 @@ export interface Language<
   $interpret: InterpretOps;
 
   // Loaded extensions.
-  extensions: string[];
+  extensions: ResolvedExtension[];
 
   // Additional interpreters/phases
   [key: PhaseKey]: any

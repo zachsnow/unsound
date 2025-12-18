@@ -51,12 +51,31 @@ const logger = new Logger("test runner");
 let passed = 0;
 let failed = 0;
 
+// Easier to track down test runner issues.
+let debug = false;
+let failFast = false;
+let testMatch: string | null = null;
+
 interface TestFailure {
   testId: string;
   errors: string[];
 }
 
 const failures: TestFailure[] = [];
+
+type EmitResult = {
+  type: "EmitResult";
+  string: string;
+  closure: ProgramClosure;
+};
+const isEmitResult = (value: unknown): value is EmitResult => {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as any).type === "EmitResult"
+  );
+};
+
 
 // Strip location fields from AST for test comparison
 // Tests check AST structure, not locations
@@ -97,9 +116,9 @@ const DEFAULT_PIPELINE_PHASES = ["parse", "compile", "emit", "interpret"];
 const DEFAULT_PIPELINE = DEFAULT_PIPELINE_PHASES.join(", ");
 
 // Parse a pipeline specification like "parse: parser, compile: compiler"
-// Supports "..." to reuse previous pipeline prefix (all but last phase)
+// Supports "..." to reuse previous pipeline.
 // Supports "error" as terminal to indicate error is expected
-function parsePipeline(spec: string, previousPrefix: Phase[] = []): Pipeline {
+function parsePipeline(spec: string, previousPipeline: Phase[] = []): Pipeline {
   const phases: Phase[] = [];
   const parts = spec.split(",").map((s) => s.trim());
   let expectError = false;
@@ -107,7 +126,7 @@ function parsePipeline(spec: string, previousPrefix: Phase[] = []): Pipeline {
   for (const part of parts) {
     // Handle ... to reuse previous prefix
     if (part === "...") {
-      phases.push(...previousPrefix);
+      phases.push(...previousPipeline);
       continue;
     }
 
@@ -146,6 +165,11 @@ async function runPhase(
   switch (name) {
     case "parse": {
       const parser = lang[implementation as keyof Language] as ParseOps;
+      if (!parser) {
+        throw new Error(`parse implementation not found: ${implementation}`);
+      }
+
+      logger.debug(`running parse phase with ${implementation}...`);
       const source = input as string;
       const result = parser.program()(source, 0);
       if (!result.ok) {
@@ -159,14 +183,26 @@ async function runPhase(
 
     case "compile": {
       const compiler = lang[implementation as keyof Language] as CompileOps;
+      if (!compiler) {
+        throw new Error(`compile implementation not found: ${implementation}`);
+      }
+      logger.debug(`running compile phase with ${implementation}...`);
       const ast = input as Expr;
       return compiler.compileProgram(ast);
     }
 
     case "emit": {
       const emit = lang[implementation as keyof Language] as EmitOps;
+      if (!emit) {
+        throw new Error(`emit implementation not found: ${implementation}`);
+      }
+      logger.debug(`running emit phase with ${implementation}...`);
       const ir = input as IR;
-      return { program: emit.program(ir), closure: emit.programClosure(ir) };
+      return {
+        type: "EmitResult",
+        string: emit.string(ir),
+        closure: emit.programClosure(ir),
+      } satisfies EmitResult;
     }
 
     case "interpret": {
@@ -175,7 +211,18 @@ async function runPhase(
       const interpreter = lang[
         implementation as keyof Language
       ] as InterpretOps;
-      const closure = (input as { closure: ProgramClosure }).closure;
+      if (!interpreter) {
+        throw new Error(
+          `interpret implementation not found: ${implementation}; available: ${Object.keys(lang).join(
+            ", "
+          )}`
+        );
+      }
+      if (!isEmitResult(input)) {
+        throw new Error(`interpret phase ${implementation} expected emit as previous phase; actual: ${prettyPrint(input)}`);
+      }
+      logger.debug(`running interpret phase with ${implementation}...`);
+      const closure = input.closure;
       return await closure({})(interpreter);
     }
 
@@ -187,8 +234,8 @@ async function runPhase(
 // Format output for comparison
 function formatOutput(value: unknown): string {
   // Emit phase: we want the program string part.
-  if ("program" in (value as any)) {
-    return (value as any).program as string;
+  if (isEmitResult(value)) {
+    return value.string;
   }
 
   // Use prettyPrint for deterministic output (sorted keys, cycle-safe)
@@ -219,7 +266,12 @@ function normalizeExpected(expected: string): string {
 interface TestCase {
   name: string;
   input: string;
-  expectations: Record<string, string>;
+  expectations: Expectation[];
+}
+
+interface Expectation {
+  pipeline: string; // Pipeline specification
+  output: string; // Expected output
 }
 
 interface TestFile {
@@ -230,7 +282,7 @@ interface TestFile {
 // Parse #usc directive to get extension names
 // Format: #usc -x meso -x const
 function parseUscDirective(line: string): string[] {
-  const match = line.match(/^#\s+usc\s+(.+)$/);
+  const match = line.match(/^#\s*usc\s+(.+)$/);
   if (!match) return [];
 
   const args = match[1].trim();
@@ -258,18 +310,18 @@ function parseTestFile(content: string, _testDir: string): TestFile {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (line.startsWith("#usc ")) {
-      // Parse #usc -x ext1 -x ext2 format
+    if (line.startsWith("#")) {
+      // Try to parse as #usc directives; otherwise just skip comment.
       extensions.push(...parseUscDirective(line));
       contentStart = i + 1;
-    } else if (line.startsWith("#") || line === "") {
+    } else if (line === "") {
+      // Skip empty lines.
       contentStart = i + 1;
     } else {
       break;
     }
   }
 
-  // Parse test cases from remaining content
   const testContent = lines.slice(contentStart).join("\n");
   const blocks = testContent.split(/^---\s*/m).slice(1);
 
@@ -278,14 +330,21 @@ function parseTestFile(content: string, _testDir: string): TestFile {
     const name = blockLines[0].trim();
     const rest = blockLines.slice(1).join("\n");
 
-    // Split into input and expectations
-    const parts = rest.split(/^===\s*/m);
+    // Split into input and expectations; we capture the separator so it is interleaved
+    // in the parts.
+    const parts = rest.split(/^(===.*)$/m);
     const input = parts[0].trim();
-    const expectations: Record<string, string> = {};
+    const expectations: Expectation[] = [];
 
     for (let i = 1; i < parts.length; i++) {
+      // We should have the first line being the === line because we captured it.
+      // Empty pipeline means default.
+      const pipelineSpec = parts[i].slice(3).trim() || DEFAULT_PIPELINE;
+      i++;
+
+      // Advance to the actual expected output.
       const expLines = parts[i].split("\n");
-      const pipelineSpec = expLines[0].trim();
+
       // Stop at comment lines (starting with #) as they start new sections
       const valueLines: string[] = [];
       for (let j = 1; j < expLines.length; j++) {
@@ -294,9 +353,10 @@ function parseTestFile(content: string, _testDir: string): TestFile {
         valueLines.push(line);
       }
       const value = valueLines.join("\n").trim();
-      // Empty pipeline spec means default pipeline
-      const key = pipelineSpec || DEFAULT_PIPELINE;
-      expectations[key] = value;
+      expectations.push({
+        pipeline: pipelineSpec,
+        output: value,
+      });
     }
 
     if (input || Object.keys(expectations).length > 0) {
@@ -335,13 +395,37 @@ async function runTest(
   const testId = `${filename}::${name}`;
   const errors: string[] = [];
 
-  let previousPrefix: Phase[] = [];
+  if (testMatch && !testId.includes(testMatch)) {
+    logger.debug(`skipping test ${testId} due to --match filter`);
+    return;
+  }
 
-  for (const [pipelineSpec, expectedValue] of Object.entries(expectations)) {
+  let previousPipeline: Phase[] = [];
+
+  if (!expectations.length) {
+    logger.error(`No expectations found for test ${testId}`);
+    failed++;
+    return;
+  }
+
+  logger.debug(
+    `running test ${testId} with ${Object.keys(expectations).length
+    } expectations...`
+  );
+
+  for (const expectation of expectations) {
+    const pipelineSpec = expectation.pipeline;
+    const expectedValue = expectation.output;
+
+    // If we've already had an error, bail.
+    if (errors.length && failFast) {
+      break;
+    }
+
     try {
       const { phases, expectError } = parsePipeline(
         pipelineSpec,
-        previousPrefix
+        previousPipeline
       );
 
       if (phases.length === 0) {
@@ -349,10 +433,10 @@ async function runTest(
         continue;
       }
 
-      // Save prefix (all but last) for next iteration
-      previousPrefix = phases.slice(0, -1);
+      // Save pipeline for next iteration (in case ... was used).
+      previousPipeline = [...phases];
 
-      // Prepare input based on first phase
+      // Prepare input based on first phase.
       const firstPhase = phases[0].name;
       let result: unknown = prepareInput(input, firstPhase);
 
@@ -382,7 +466,7 @@ async function runTest(
       }
     } catch (e) {
       const errMsg = (e as Error).message;
-      const { expectError } = parsePipeline(pipelineSpec, previousPrefix);
+      const { expectError } = parsePipeline(pipelineSpec, previousPipeline);
 
       // Check if error was expected
       if (expectError) {
@@ -395,6 +479,14 @@ async function runTest(
         );
       } else {
         errors.push(`${pipelineSpec}: error: ${errMsg}`);
+      }
+
+      if (debug) {
+        logger.error(
+          `Error running test ${testId} with pipeline ${pipelineSpec}:`,
+          e
+        );
+        throw e;
       }
     }
   }
@@ -423,7 +515,23 @@ const parseArgs = (args: string[]): void => {
   if (args.includes("--verbose") || args.includes("-v")) {
     logger.setVerbose(true);
   }
-}
+
+  if (args.includes("--debug")) {
+    logger.debug("enabling debug mode...");
+    debug = true;
+  }
+
+  if (args.includes("--fail-fast")) {
+    logger.debug("enabling fail-fast mode...");
+    failFast = true;
+  }
+
+  const matchIndex = args.indexOf("--match");
+  if (matchIndex !== -1 && matchIndex + 1 < args.length) {
+    testMatch = args[matchIndex + 1];
+    logger.debug(`filtering tests with glob pattern: ${testMatch}`);
+  }
+};
 
 async function main(): Promise<void> {
   parseArgs(process.argv.slice(2));
@@ -461,18 +569,23 @@ async function main(): Promise<void> {
     logger.debug(`creating language for test file: ${file}...`);
     const searchPaths = getSearchPaths(filePath);
     const language = await createLanguage(testFile.extensions, searchPaths);
+    logger.debug(
+      `language created with extensions: ${language.extensions.join(", ")}`
+    );
 
     // Run tests.
     logger.debug(`running ${testFile.tests.length} tests in file: ${file}...`);
     for (const test of testFile.tests) {
       await runTest(test, file, language);
+      if (failFast && failed > 0) {
+        break;
+      }
     }
   }
 
   if (failed) {
     logger.error(`\n${passed} passed, ${failed} failed`);
-  }
-  else {
+  } else {
     logger.success(`\n${passed} passed`);
   }
 
