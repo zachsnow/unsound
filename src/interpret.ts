@@ -41,7 +41,7 @@ export interface CoreInterpretOps {
   // Objects (no $env needed)
   object: (properties: Record<string, unknown>) => unknown;
   index: (obj: unknown, key: unknown) => unknown;
-  setIndex: (obj: unknown, key: unknown, value: unknown) => unknown;
+  assignIndex: (obj: unknown, key: unknown, value: unknown) => unknown;
 
   // Extensions can add more operations
   [key: string]: unknown;
@@ -230,7 +230,7 @@ export function build$interpret(in$: InterpretOps): void {
     }
   };
 
-  $.setIndex = (obj, key, value) => {
+  $.assignIndex = (obj, key, value) => {
     (obj as Record<string, unknown>)[key as string] = value;
     return value;
   };

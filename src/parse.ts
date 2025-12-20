@@ -41,8 +41,15 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   map: <A, B>(p: Parser<A>, fn: (a: A, loc: Span) => B) => Parser<B>;
   opt: <T>(p: Parser<T>) => Parser<T | null>;
   lazy: <T>(fn: () => Parser<T>) => Parser<T>;
+  /**
+   * Parse
+   */
   sepBy: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
   sepBy1: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
+
+  /**
+   * Parse something that should appear between two delimiters.
+   */
   between: <A, B, C>(
     open: Parser<A>,
     p: Parser<B>,
@@ -106,7 +113,7 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   memberSuffix: () => Parser<{ value: string; loc: Span }>; // .field
   indexSuffix: () => Parser<Expr>; // [key]
 
-  // Assignment (SetIndex)
+  // Assignment (AssignIndexExpr)
   assignExpr: () => Parser<Expr>;
 
   // Atoms

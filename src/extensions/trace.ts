@@ -38,7 +38,7 @@ export const traceExtension: Extension = {
       if: $.if,
       object: $.object,
       index: $.index,
-      setIndex: $.setIndex,
+      assignIndex: $.assignIndex,
     };
 
     $.number = (n) => {
@@ -117,10 +117,10 @@ export const traceExtension: Extension = {
       return r;
     };
 
-    $.setIndex = (obj, key, value) => {
-      log("setIndex", key, value);
-      const r = base.setIndex(obj, key, value);
-      logReturn("setIndex", r);
+    $.assignIndex = (obj, key, value) => {
+      log("assignIndex", key, value);
+      const r = base.assignIndex(obj, key, value);
+      logReturn("assignIndex", r);
       return r;
     };
   },

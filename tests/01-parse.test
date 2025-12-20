@@ -169,7 +169,7 @@ x["y"]
   "type": "IndexExpr"
 }
 
---- setindex
+--- assign index
 x["y"] = 1
 === parse: $parse
 {

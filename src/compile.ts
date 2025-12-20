@@ -32,7 +32,7 @@ export interface CoreCompileOps extends CompileOps<Expr, IR> {
   compileObject: (expr: ObjectExpr) => IR;
   compileArray: (expr: ArrayExpr) => IR;
   compileIndex: (expr: IndexExpr) => IR;
-  compileSetIndex: (expr: AssignIndexExpr) => IR;
+  compileAssignIndex: (expr: AssignIndexExpr) => IR;
   compileLiteral: (expr: LiteralExpr) => IR;
   compileIdent: (expr: IdentifierExpr) => IR;
 
@@ -131,7 +131,7 @@ export function build$compile(in$: CompileOps): void {
       case "IndexExpr":
         return $.compileIndex(expr);
       case "AssignIndexExpr":
-        return $.compileSetIndex(expr);
+        return $.compileAssignIndex(expr);
       case "LiteralExpr":
         return $.compileLiteral(expr);
       case "IdentifierExpr":
@@ -217,10 +217,10 @@ export function build$compile(in$: CompileOps): void {
   };
 
   // obj[key] = value
-  // Compiles to: $.setIndex(<obj>, <key>, <value>)
-  $.compileSetIndex = (expr) => {
+  // Compiles to: $.assignIndex(<obj>, <key>, <value>)
+  $.compileAssignIndex = (expr) => {
     return ir.$(
-      "setIndex",
+      "assignIndex",
       $.compileExpr(expr.object),
       $.compileExpr(expr.key),
       $.compileExpr(expr.value)

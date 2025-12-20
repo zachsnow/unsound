@@ -56,10 +56,10 @@ x["y"]
 === parse: $parse, compile: $compile, emit: $emit
 $.index($.lookup($env, "x"), $.string("y"))
 
---- setindex
+--- assign index
 x["y"] = 1
 === parse: $parse, compile: $compile, emit: $emit
-$.setIndex($.lookup($env, "x"), $.string("y"), $.number(1))
+$.assignIndex($.lookup($env, "x"), $.string("y"), $.number(1))
 
 --- empty object
 {}

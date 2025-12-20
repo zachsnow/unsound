@@ -79,7 +79,7 @@ let o = { a: { b: { c: 1 } } } in o.a.b.c
 ===
 1
 
---- setindex
+--- assign index
 let o = {} in let _ = o["x"] = 42 in o.x
 ===
 42

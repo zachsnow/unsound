@@ -51,7 +51,7 @@ $.object({ ["x"]: $.number(1) })
 === compile: $compile, emit: $emit
 $.index($.lookup($env, "o"), $.string("x"))
 
---- compile setindex
+--- compile assign index
 {"type":"AssignIndexExpr","object":{"type":"IdentifierExpr","name":"o"},"key":{"type":"LiteralExpr","value":"x"},"value":{"type":"LiteralExpr","value":42}}
 === compile: $compile, emit: $emit
-$.setIndex($.lookup($env, "o"), $.string("x"), $.number(42))
+$.assignIndex($.lookup($env, "o"), $.string("x"), $.number(42))

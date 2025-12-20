@@ -7,9 +7,6 @@
 //   binary:  { op: { prec, assoc, method } }  - infix operators
 //   prefix:  { op: { method } }               - prefix unary operators
 //   postfix: { op: { method } }               - postfix unary operators
-//
-// Note: Variable assignment (x = v) is provided by thermo, not meso.
-// Member assignment (o.x = v) is provided by core as SetIndex.
 
 let is = $operators["op==="] in
 let add = $operators["op+"] in
