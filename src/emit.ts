@@ -23,6 +23,9 @@ export function emitString(node: IR): string {
       return `${node.name} = ${emitString(node.value)}`;
 
     case 'literal':
+      if (node.value === undefined) {
+        return "undefined";
+      }
       return JSON.stringify(node.value);
 
     case 'var':

@@ -22,12 +22,12 @@ $.boolean(true)
 $.lookup($env, "x")
 
 --- compile lambda
-{"type":"LambdaExpr","params":["x","y"],"body":{"type":"IdentifierExpr","name":"x"}}
+{"type":"LambdaExpr","params":[{"name": "x"},{"name": "y"}],"body":{"type":"IdentifierExpr","name":"x"}}
 === compile: $compile, emit: $emit
 $.lambda($env, ["x", "y"], ($env) => $.lookup($env, "x"))
 
 --- compile application
-{"type":"App","fn":{"type":"IdentifierExpr","name":"f"},"args":[{"type":"LiteralExpr","value":1}]}
+{"type":"AppExpr","fn":{"type":"IdentifierExpr","name":"f"},"args":[{"type":"LiteralExpr","value":1}]}
 === compile: $compile, emit: $emit
 $.call($.lookup($env, "f"), [$.number(1)])
 
@@ -47,7 +47,7 @@ $.if($.boolean(true), ($env) => $.number(1), ($env) => $.number(2), $env)
 $.object({ ["x"]: $.number(1) })
 
 --- compile index
-{"type":"Index","object":{"type":"IdentifierExpr","name":"o"},"key":{"type":"LiteralExpr","value":"x"}}
+{"type":"IndexExpr","object":{"type":"IdentifierExpr","name":"o"},"key":{"type":"LiteralExpr","value":"x"}}
 === compile: $compile, emit: $emit
 $.index($.lookup($env, "o"), $.string("x"))
 
