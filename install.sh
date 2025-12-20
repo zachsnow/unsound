@@ -10,6 +10,11 @@ INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 # Extensions install location (defaults to ~/.config/usc/extensions)
 EXTENSIONS_DIR="${EXTENSIONS_DIR:-$HOME/.config/usc/extensions}"
 
+# Clean
+echo "Cleaning previous builds..."
+bun run clean
+
+# Build usc and usc-language-server
 echo "Building usc and usc-language-server..."
 bun run build
 

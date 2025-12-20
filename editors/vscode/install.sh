@@ -19,6 +19,10 @@ echo "Installing extension dependencies..."
 cd "$SCRIPT_DIR"
 bun install
 
+# Clean previous build
+echo "Cleaning..."
+bun run clean
+
 # Build extension
 echo "Building extension..."
 bun run build
