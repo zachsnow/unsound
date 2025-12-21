@@ -1,0 +1,27 @@
+# Tests
+*.test.ts
+src/test.ts
+tests/
+
+# Build-only
+src/embed.ts
+src/.embedignore
+embedded-sources.json
+build-binary.sh
+dist/
+
+# Generated
+*.us.js
+
+# Editor extensions (separate install)
+editors/
+
+# Dev/docs
+examples/
+docs/
+site/
+tsconfig.json
+bun.lock
+.claude/
+CLAUDE.md
+*.sh
