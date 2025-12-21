@@ -10,18 +10,23 @@ import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } f
 let client: LanguageClient;
 let outputChannel: OutputChannel;
 
-// Find the usc-language-server binary
-function findServerBinary(): string | null {
-  // Check common install locations
+// Find usc-language-server - check PATH first, then common locations
+function findServer(): string | null {
+  const { execSync } = require('child_process');
+
+  // Check if available in PATH (works with bun link, npm install -g, etc.)
+  try {
+    const result = execSync('which usc-language-server', { encoding: 'utf8' }).trim();
+    if (result) return result;
+  } catch {}
+
+  // Fallback: check common binary install locations
   const candidates = [
     path.join(os.homedir(), '.local', 'bin', 'usc-language-server'),
     '/usr/local/bin/usc-language-server',
   ];
-
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
+    if (fs.existsSync(candidate)) return candidate;
   }
 
   return null;
@@ -31,27 +36,27 @@ export function activate(context: ExtensionContext) {
   outputChannel = window.createOutputChannel('Unsound Language Server');
   outputChannel.appendLine('Extension activating...');
 
-  const serverBinary = findServerBinary();
+  const server = findServer();
 
   let serverOptions: ServerOptions;
 
-  if (serverBinary) {
-    outputChannel.appendLine(`Found server binary: ${serverBinary}`);
+  if (server) {
+    outputChannel.appendLine(`Found server: ${server}`);
     serverOptions = {
       run: {
-        command: serverBinary,
+        command: server,
         args: ['--stdio'],
         transport: TransportKind.stdio,
       },
       debug: {
-        command: serverBinary,
+        command: server,
         args: ['--stdio'],
         transport: TransportKind.stdio,
       },
     };
   } else {
     // Fallback: try running with bun from extension directory
-    outputChannel.appendLine('Server binary not found, falling back to bun');
+    outputChannel.appendLine('Server not found in PATH, falling back to bun');
     const serverModule = context.asAbsolutePath(path.join('lsp', 'server.ts'));
     outputChannel.appendLine(`Server module: ${serverModule}`);
     serverOptions = {

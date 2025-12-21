@@ -32,8 +32,7 @@
   "scripts": {
     "build": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode --external vscode-languageclient",
     "watch": "bun build src/extension.ts --outdir dist --target node --format cjs --external vscode --external vscode-languageclient --watch",
-    "install": "./install.sh",
-    "clean": "./clean.sh",
+    "clean": "rm -rf dist",
     "types": "tsc --noEmit"
   },
   "dependencies": {
