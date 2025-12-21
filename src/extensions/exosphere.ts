@@ -1,204 +1,571 @@
 /**
  * Exosphere Extension
  *
- * This extension implements something like the meso/thermo/exo language layers, plus additional
- * type checking and inference functionality.
+ * A JS-like language layer built directly on core.ts.
+ * Adds: operators, statements, blocks, assignment, type annotations.
  */
-/*
-
-Programs are statement lists.
-Statements are just expressions + ";"
-Blocks are { ... } with statement lists inside.
-
-*/
-import { AssignIndexExpr, Expr, SpanExpr } from "../ast";
+import { Expr, Span, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
 import { CoreInterpretOps } from "../interpret";
 import { ir, IR } from "../ir";
-import { CoreParseOps, Parser } from "../parse"
+import { CoreParseOps, ParseResult, Parser } from "../parse";
 import { Extension } from "../types";
-import { UnhandledCaseError } from "../util";
 
-type EProgram = {
-  type: "Program",
-  body: EExpr;
+// =============================================================================
+// AST Types
+// =============================================================================
+
+interface BinaryExpr extends SpanExpr {
+  type: "BinaryExpr";
+  op: string;
+  left: EExpr;
+  right: EExpr;
+}
+
+interface UnaryExpr extends SpanExpr {
+  type: "UnaryExpr";
+  op: string;
+  operand: EExpr;
+}
+
+interface BlockExpr extends SpanExpr {
+  type: "BlockExpr";
+  stmts: EExpr[];
+}
+
+interface LetStmtExpr extends SpanExpr {
+  type: "LetStmtExpr";
+  name: string;
+  nameLoc?: Span;
+  annotation: EExpr | null;
+  value: EExpr;
+}
+
+interface AssignExpr extends SpanExpr {
+  type: "AssignExpr";
+  name: string;
+  nameLoc?: Span;
+  value: EExpr;
+}
+
+interface VoidExpr extends SpanExpr {
+  type: "VoidExpr";
 }
 
 type EExpr =
   | Expr
-  | TypedLetExpr
-  | AssignExpr
+  | BinaryExpr
+  | UnaryExpr
   | BlockExpr
-  ;
+  | LetStmtExpr
+  | AssignExpr
+  | VoidExpr;
 
-interface AssignExpr extends SpanExpr {
-  type: "AssignExpr"; target: ETarget; value: EExpr
+// =============================================================================
+// Operator Table
+// =============================================================================
+
+interface BinaryOpDef {
+  prec: number;
+  assoc: "left" | "right";
+  method?: string;
+  prim?: string;
 }
 
-interface BlockExpr extends SpanExpr { type: "SeqExpr", exprs: EExpr[] }
-
-interface TypedLetExpr extends SpanExpr {
-  type: "TypedLetExpr"; name: string; annotation: EExpr; value: EExpr; body: EExpr;
+interface UnaryOpDef {
+  method: string;
 }
 
-type ETarget =
-  | { type: "AssignIdentifierTarget", name: string }
-  | { type: "AssignIndexTarget", object: EExpr, index: EExpr }
-  ;
+const operators = {
+  binary: {
+    "||": { prec: 1, assoc: "left", method: "op||" },
+    "&&": { prec: 2, assoc: "left", method: "op&&" },
+    "===": { prec: 3, assoc: "left", prim: "strictEq" },
+    "!==": { prec: 3, assoc: "left", prim: "strictNeq" },
+    "==": { prec: 3, assoc: "left", method: "op==" },
+    "!=": { prec: 3, assoc: "left", method: "op!=" },
+    "<": { prec: 4, assoc: "left", method: "op<" },
+    ">": { prec: 4, assoc: "left", method: "op>" },
+    "<=": { prec: 4, assoc: "left", method: "op<=" },
+    ">=": { prec: 4, assoc: "left", method: "op>=" },
+    "+": { prec: 5, assoc: "left", method: "op+" },
+    "-": { prec: 5, assoc: "left", method: "op-" },
+    "*": { prec: 6, assoc: "left", method: "op*" },
+    "/": { prec: 6, assoc: "left", method: "op/" },
+    "%": { prec: 6, assoc: "left", method: "op%" },
+  } as Record<string, BinaryOpDef>,
+  prefix: {
+    "!": { method: "op!" },
+    "-": { method: "opNeg" },
+  } as Record<string, UnaryOpDef>,
+};
 
-interface ParseOps {
-  program: () => Parser<EExpr>;
-  expr: () => Parser<EExpr>;
+// =============================================================================
+// Parse Phase
+// =============================================================================
 
-  blockExpr: () => Parser<BlockExpr>;
-  assignExpr: () => Parser<AssignExpr>;
-  assignTarget: () => Parser<ETarget>;
+interface ExoParseOps extends CoreParseOps {
+  operators: typeof operators;
 
-  statements: () => Parser<EExpr[]>;
-  letStatement: () => Parser<EExpr>;
+  // Operators
+  binaryOp: () => Parser<{ op: string; start: number }>;
+  prefixOp: () => Parser<{ op: string; start: number }>;
+  binaryExpr: (minPrec: number) => Parser<EExpr>;
+  unaryExpr: () => Parser<EExpr>;
+
+  // Statements
+  statement: () => Parser<EExpr>;
+  statements: (isEnd: (pos: number) => ParseResult<unknown>) => (pos: number, acc: EExpr[]) => ParseResult<EExpr[]>;
+  stmtsToExpr: (stmts: EExpr[]) => EExpr;
+  letStmt: () => Parser<LetStmtExpr>;
+
+  // Blocks
+  block: () => Parser<EExpr>;
+
+  // Assignment
+  varAssign: () => Parser<EExpr>;
 }
-type ExoParseOps = CoreParseOps & ParseOps;
-
-interface CompileOps {
-  compileProgram: (expr: EExpr) => IR;
-
-  compileExpr: (expr: EExpr) => IR;
-}
-type ExoCompileOps = CoreCompileOps & CompileOps;
-
-interface InterpretOps extends CoreInterpretOps { }
 
 const build$parse = (in$: CoreParseOps): void => {
   const $ = in$ as unknown as ExoParseOps;
 
-  $.program = () => (input: string, pos: number) => {
-    const exprs = $.statements()(input, pos);
+  $.operators = operators;
 
-    if (!exprs.ok) {
-      return exprs;
+  // ---------------------------------------------------------------------------
+  // Operator Parsing
+  // ---------------------------------------------------------------------------
+
+  // Try to parse an N-char binary operator
+  const tryBinaryN = (input: string, p: number, n: number): ParseResult<{ op: string; start: number }> => {
+    const chars = input.slice(p, p + n);
+    const def = $.operators.binary[chars];
+    if (def) {
+      return { ok: true, value: { op: chars, start: p }, pos: p + n };
     }
-    return {
-      ok: exprs.ok,
-      pos: exprs.pos,
-      value: { type: "Program", body: { type: "SeqExpr", exprs: exprs.value } },
-    };
+    return { ok: false, expected: "binary operator", pos: p };
   };
 
-  $.expr = () => (input: string, pos: number) => {
+  $.binaryOp = () => (input, pos) => {
+    const ws = $.ws()(input, pos);
+    const p = ws.pos;
+    // Try 3-char, then 2-char, then 1-char
+    const r3 = tryBinaryN(input, p, 3);
+    if (r3.ok) return r3;
+    const r2 = tryBinaryN(input, p, 2);
+    if (r2.ok) return r2;
+    return tryBinaryN(input, p, 1);
+  };
 
-    $.blockExpr = () => (input: string, pos: number) => {
-      const exprs = $.between(
-        $.token("{"),
-        $.statements(),
-        $.token("}"),
-      )(input, pos);
+  $.prefixOp = () => (input, pos) => {
+    const ws = $.ws()(input, pos);
+    const p = ws.pos;
+    const ch = input[p];
+    if ($.operators.prefix[ch]) {
+      return { ok: true, value: { op: ch, start: p }, pos: p + 1 };
+    }
+    return { ok: false, expected: "prefix operator", pos: p };
+  };
 
-      if (!exprs.ok) {
-        return exprs;
-      }
-
-      return {
-        ok: exprs.ok,
-        pos: exprs.pos,
-        value: { type: "SeqExpr", exprs: exprs.value },
-      };
-    };
-
-    $.statements = () => {
-      return $.sepBy($.statement(), $.token(";"));
-    };
-
-    $.statement = () => (input: string, pos: number) => {
-      return $.alt(
-        $.letStatement(),
-        $.expr(),
-      )(input, pos);
-    };
-
-    $.letStatement = () => (input: string, pos: number) => {
-      const results = $.seq(
-        $.letKeyword(),
-        $.typedLetBinding(),
-        $.letInitializer(),
-        $.letBody(),
-      )(input, pos);
-      if (!results) {
-        return results;
-      }
+  // Unary expression: prefix operator or appExpr
+  const baseAppExpr = $.appExpr;
+  $.unaryExpr = () => (input, pos) => {
+    const prefix = $.prefixOp()(input, pos);
+    if (prefix.ok) {
+      const operand = $.unaryExpr()(input, prefix.pos);
+      if (!operand.ok) return operand;
       return {
         ok: true,
-        pos: results.pos,
-        value: {
-          type: "TypedLetExpr",
-          name: results.value[1].name,
-          value: results.value[2],
-          body: results.value[3],
-        },
+        value: { type: "UnaryExpr", op: prefix.value.op, operand: operand.value } as UnaryExpr,
+        pos: operand.pos,
       };
-    };
+    }
+    return baseAppExpr()(input, pos);
+  };
 
-    const coreExpr = $.expr;
-    $.expr = () => (input: string, pos: number) => {
-      return $.alt(
-        $.lazy(() => $.assignExpr()),
-        $.lazy(() => $.blockExpr()),
-        coreExpr(),
-      )(input, pos);
-    };
+  // Binary expression with precedence climbing
+  $.binaryExpr = (minPrec: number) => (input, pos) => {
+    let left = $.unaryExpr()(input, pos);
+    if (!left.ok) return left;
 
-    $.assignExpr = () => (input: string, pos: number) => {
+    while (true) {
+      const opResult = $.binaryOp()(input, left.pos);
+      if (!opResult.ok) break;
 
+      const opDef = $.operators.binary[opResult.value.op];
+      if (!opDef || opDef.prec < minPrec) break;
+
+      const nextMinPrec = opDef.assoc === "left" ? opDef.prec + 1 : opDef.prec;
+      const right = $.binaryExpr(nextMinPrec)(input, opResult.pos);
+      if (!right.ok) return right;
+
+      left = {
+        ok: true,
+        value: { type: "BinaryExpr", op: opResult.value.op, left: left.value, right: right.value } as BinaryExpr,
+        pos: right.pos,
+      };
+    }
+
+    return left;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Assignment Parsing
+  // ---------------------------------------------------------------------------
+
+  $.varAssign = () => (input, pos) => {
+    const result = $.binaryExpr(0)(input, pos);
+    if (!result.ok) return result;
+
+    // Check if it's an identifier followed by =
+    if (result.value.type === "IdentifierExpr") {
+      const ws = $.ws()(input, result.pos);
+      const ch1 = input[ws.pos];
+      const ch2 = input[ws.pos + 1];
+      if (ch1 === "=" && ch2 !== "=") {
+        const rhs = $.expr()(input, ws.pos + 1);
+        if (!rhs.ok) return rhs;
+        return {
+          ok: true,
+          value: {
+            type: "AssignExpr",
+            name: result.value.name,
+            nameLoc: result.value.loc,
+            value: rhs.value,
+          } as AssignExpr,
+          pos: rhs.pos,
+        };
+      }
+    }
+    return result;
+  };
+
+  // Override appExpr to use operators
+  $.appExpr = (() => $.varAssign()) as unknown as typeof $.appExpr;
+
+  // ---------------------------------------------------------------------------
+  // Statement Parsing
+  // ---------------------------------------------------------------------------
+
+  $.letStmt = () => (input, pos) => {
+    const kw = $.letKeyword()(input, pos);
+    if (!kw.ok) return { ok: false, expected: "let", pos };
+
+    const binding = $.letBinding()(input, kw.pos);
+    if (!binding.ok) return { ok: false, expected: "identifier", pos: kw.pos };
+
+    // Optional type annotation: `: expr`
+    let annotation: EExpr | null = null;
+    let afterAnnotation = binding.pos;
+    const ws1 = $.ws()(input, binding.pos);
+    if (input[ws1.pos] === ":") {
+      const typeExpr = $.atom()(input, ws1.pos + 1);
+      if (!typeExpr.ok) return { ok: false, expected: "type expression", pos: ws1.pos + 1 };
+      annotation = typeExpr.value as EExpr;
+      afterAnnotation = typeExpr.pos;
+    }
+
+    const init = $.letInitializer()(input, afterAnnotation);
+    if (!init.ok) return init;
+
+    return {
+      ok: true,
+      value: {
+        type: "LetStmtExpr",
+        name: binding.value.name,
+        nameLoc: binding.value.nameLoc,
+        annotation,
+        value: init.value as EExpr,
+      } as LetStmtExpr,
+      pos: init.pos,
     };
   };
 
-  const build$compile = (in$: CoreCompileOps): void => {
-    const $ = in$ as ExoCompileOps;
+  // Disable let...in expression syntax
+  $.letExpr = () => () => ({ ok: false, expected: "expression", pos: 0 });
 
-    $.compileProgram = (program: EProgram): IR => {
-      return $.compileExpr(program.body);
+  $.statement = () => (input, pos) => {
+    const letResult = $.letStmt()(input, pos);
+    if (letResult.ok) return letResult;
+    return $.expr()(input, pos);
+  };
+
+  $.statements = (isEnd) => (pos, acc) => {
+    const loop = (p: number, acc: EExpr[]): ParseResult<EExpr[]> => {
+      const ws = $.ws()("", 0); // dummy - we need input
+      // This needs access to input - let's restructure
+      return { ok: true, value: acc, pos: p };
     };
+    return loop(pos, acc);
+  };
 
-    const coreCompileExpr = $.compileExpr;
-    $.compileExpr = (expr: EExpr): IR => {
-      switch (expr.type) {
-        case "AssignExpr": {
-          const target = expr.target;
-          switch (target.type) {
-            case "AssignIdentifierTarget": {
-              return ir.$("assign", $.ir.var("$env"), $.ir.string(target.name), $.compileExpr(expr.value));
-            }
-            case "AssignIndexTarget": {
-              const objectIR = $.compileExpr(target.object);
-              const indexIR = $.compileExpr(target.index);
-              const valueIR = $.compileExpr(expr.value);
-              return ir.$("assignIndex", objectIR, indexIR, valueIR);
-            }
-            default:
-              throw new UnhandledCaseError("compileExpr: assign target", target);
-          }
-        }
-        case "SeqExpr": {
-          const exprsIR = expr.exprs.map(e => $.compileExpr(e));
-          return ir.seq(...exprsIR);
-        }
-        case "TypedLetExpr": {
+  // Helper to convert statement list to expression
+  $.stmtsToExpr = (stmts) => {
+    if (stmts.length === 0) return { type: "VoidExpr" } as VoidExpr;
+    if (stmts.length === 1) return stmts[0];
+    return { type: "BlockExpr", stmts } as BlockExpr;
+  };
 
+  // ---------------------------------------------------------------------------
+  // Block Parsing
+  // ---------------------------------------------------------------------------
+
+  const baseAtom = $.atom;
+  $.block = () => (input, pos) => {
+    const open = $.token("{")(input, pos);
+    if (!open.ok) return { ok: false, expected: "{", pos };
+
+    const stmts: EExpr[] = [];
+    let p = open.pos;
+
+    while (true) {
+      const ws = $.ws()(input, p);
+      const close = $.token("}")(input, ws.pos);
+      if (close.ok) {
+        return { ok: true, value: $.stmtsToExpr(stmts), pos: close.pos };
+      }
+
+      const stmt = $.statement()(input, ws.pos);
+      if (!stmt.ok) {
+        // Check if it's an empty block (object literal)
+        if (stmts.length === 0) return { ok: false, expected: "statement", pos };
+        return stmt;
+      }
+
+      stmts.push(stmt.value as EExpr);
+      p = stmt.pos;
+
+      const ws2 = $.ws()(input, p);
+      const semi = $.token(";")(input, ws2.pos);
+      if (semi.ok) {
+        p = semi.pos;
+      } else {
+        // No semicolon - must be last statement
+        const ws3 = $.ws()(input, ws2.pos);
+        const close2 = $.token("}")(input, ws3.pos);
+        if (close2.ok) {
+          return { ok: true, value: $.stmtsToExpr(stmts), pos: close2.pos };
         }
-        default:
-          return coreCompileExpr(expr);
+        return { ok: false, expected: "; or }", pos: ws2.pos };
       }
     }
   };
 
-  const build$interpret = (in$: CoreInterpretOps): void => {
-    const $ = in$ as InterpretOps;
+  // Override atom to try block first
+  const exoAtom = () => (input: string, pos: number) => {
+    // Try block, but not empty {} (that's an object)
+    const ws = $.ws()(input, pos);
+    if (input[ws.pos] === "{") {
+      const ws2 = $.ws()(input, ws.pos + 1);
+      if (input[ws2.pos] === "}") {
+        // Empty braces - let baseAtom handle as object
+        return baseAtom()(input, pos);
+      }
+      // Check if first thing is a statement (not key:value)
+      const firstStmt = $.statement()(input, ws2.pos);
+      if (firstStmt.ok) {
+        const ws3 = $.ws()(input, firstStmt.pos);
+        // If followed by ; or }, it's a block
+        if (input[ws3.pos] === ";" || input[ws3.pos] === "}") {
+          return $.block()(input, pos);
+        }
+      }
+    }
+    return baseAtom()(input, pos);
+  };
+  $.atom = exoAtom as unknown as typeof $.atom;
+
+  // ---------------------------------------------------------------------------
+  // If Without Else
+  // ---------------------------------------------------------------------------
+
+  const baseIfExpr = $.ifExpr;
+  const exoIfExpr = () => (input: string, pos: number) => {
+    const kw = $.ifKeyword()(input, pos);
+    if (!kw.ok) return { ok: false, expected: "if", pos };
+
+    const cond = $.ifCondition()(input, kw.pos);
+    if (!cond.ok) return cond;
+
+    const thenKw = $.thenKeyword()(input, cond.pos);
+    if (!thenKw.ok) return { ok: false, expected: "then", pos: cond.pos };
+
+    const thenExpr = $.thenBranch()(input, thenKw.pos);
+    if (!thenExpr.ok) return thenExpr;
+
+    const elseKw = $.elseKeyword()(input, thenExpr.pos);
+    if (elseKw.ok) {
+      const elseExpr = $.elseBranch()(input, elseKw.pos);
+      if (!elseExpr.ok) return elseExpr;
+      return {
+        ok: true,
+        value: { type: "IfExpr", cond: cond.value, then: thenExpr.value, else: elseExpr.value },
+        pos: elseExpr.pos,
+      };
+    }
+
+    // No else - use VoidExpr
+    return {
+      ok: true,
+      value: { type: "IfExpr", cond: cond.value, then: thenExpr.value, else: { type: "VoidExpr" } },
+      pos: thenExpr.pos,
+    };
+  };
+  $.ifExpr = exoIfExpr as unknown as typeof $.ifExpr;
+
+  // ---------------------------------------------------------------------------
+  // Program (top-level statements)
+  // ---------------------------------------------------------------------------
+
+  const exoProgram = () => (input: string, pos: number) => {
+    const stmts: EExpr[] = [];
+    let p = pos;
+
+    while (true) {
+      const ws = $.ws()(input, p);
+      const eof = $.eof()(input, ws.pos);
+      if (eof.ok) {
+        return { ok: true, value: $.stmtsToExpr(stmts), pos: ws.pos };
+      }
+
+      const stmt = $.statement()(input, ws.pos);
+      if (!stmt.ok) return stmt;
+      stmts.push(stmt.value as EExpr);
+      p = stmt.pos;
+
+      const ws2 = $.ws()(input, p);
+      const semi = $.token(";")(input, ws2.pos);
+      if (semi.ok) {
+        p = semi.pos;
+      } else {
+        // No semicolon - check for EOF
+        const ws3 = $.ws()(input, ws2.pos);
+        const eof2 = $.eof()(input, ws3.pos);
+        if (eof2.ok) {
+          return { ok: true, value: $.stmtsToExpr(stmts), pos: ws3.pos };
+        }
+        return { ok: false, expected: "; or EOF", pos: ws2.pos };
+      }
+    }
+  };
+  $.program = exoProgram as unknown as typeof $.program;
+};
+
+// =============================================================================
+// Compile Phase
+// =============================================================================
+
+interface ExoCompileOps extends CoreCompileOps {
+  compileExpr: (expr: EExpr) => IR;
+  compileBlock: (stmts: EExpr[], idx: number) => IR;
+}
+
+const build$compile = (in$: CoreCompileOps): void => {
+  const $ = in$ as unknown as ExoCompileOps;
+
+  const baseCompileExpr = $.compileExpr;
+
+  // Compile a block: each LetStmtExpr scopes over the rest
+  $.compileBlock = (stmts, idx) => {
+    if (idx >= stmts.length) return ir.lit(undefined);
+
+    const stmt = stmts[idx];
+    const isLast = idx === stmts.length - 1;
+
+    if (stmt.type === "LetStmtExpr") {
+      // let x = v; rest -> $.let($env, "x", value, rest)
+      return ir.$(
+        "let",
+        ir.var("$env"),
+        ir.lit(stmt.name),
+        ir.arrow(["$env"], $.compileExpr(stmt.value)),
+        ir.arrow(["$env"], $.compileBlock(stmts, idx + 1))
+      );
+    }
+
+    if (isLast) {
+      return $.compileExpr(stmt);
+    }
+
+    return ir.seq($.compileExpr(stmt), $.compileBlock(stmts, idx + 1));
   };
 
-  export const exosphereExtension: Extension = {
-    name: "Exosphere",
-    version: "1.0.0",
-    description: "An extension that provides an untyped JS-like language.",
-    $parse: build$parse,
-    $compile: build$compile,
-    $interpret: build$interpret,
-  }
+  $.compileExpr = (expr: EExpr): IR => {
+    switch (expr.type) {
+      case "VoidExpr":
+        return ir.lit(undefined);
+
+      case "BlockExpr":
+        return $.compileBlock(expr.stmts, 0);
+
+      case "LetStmtExpr":
+        // Standalone let - bind and return undefined
+        return ir.$(
+          "let",
+          ir.var("$env"),
+          ir.lit(expr.name),
+          ir.arrow(["$env"], $.compileExpr(expr.value)),
+          ir.arrow(["$env"], ir.lit(undefined))
+        );
+
+      case "AssignExpr":
+        return ir.$("assign", ir.var("$env"), ir.lit(expr.name), $.compileExpr(expr.value));
+
+      case "BinaryExpr": {
+        const opDef = operators.binary[expr.op];
+        const left = $.compileExpr(expr.left);
+        const right = $.compileExpr(expr.right);
+
+        if (opDef.prim) {
+          // Primitive operation (like strictEq)
+          return ir.$(opDef.prim, left, right);
+        }
+
+        // Method call: $.index(left, "op+")(right) - use $.index for primitive member access
+        return ir.$("call", ir.$("index", left, ir.lit(opDef.method!)), ir.array(right));
+      }
+
+      case "UnaryExpr": {
+        const opDef = operators.prefix[expr.op];
+        const operand = $.compileExpr(expr.operand);
+        // Method call: $.index(operand, "op!")() - use $.index for primitive member access
+        return ir.$("call", ir.$("index", operand, ir.lit(opDef.method)), ir.array());
+      }
+
+      default:
+        return baseCompileExpr(expr as Expr);
+    }
+  };
+};
+
+// =============================================================================
+// Interpret Phase
+// =============================================================================
+
+interface ExoInterpretOps extends CoreInterpretOps {
+  assign: ($env: unknown, name: string, value: unknown) => unknown;
+}
+
+const build$interpret = (in$: CoreInterpretOps): void => {
+  const $ = in$ as unknown as ExoInterpretOps;
+
+  $.assign = ($env: any, name: string, value: unknown) => {
+    $env.mutate(name, value);
+    return value;
+  };
+};
+
+// =============================================================================
+// Extension Export
+// =============================================================================
+
+export const exosphereExtension: Extension = {
+  name: "exosphere",
+  version: "1.0.0",
+  description: "JS-like language with operators, statements, blocks, and type annotations",
+  requires: "core",
+  $parse: build$parse,
+  $compile: build$compile,
+  $interpret: build$interpret,
+};
+
+export default exosphereExtension;
