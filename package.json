@@ -8,7 +8,12 @@
     "usc-language-server": "./src/lsp/server.ts"
   },
   "files": [
-    "src"
+    "src/**/*.ts",
+    "src/**/*.us",
+    "!src/**/*.test.ts",
+    "!src/test.ts",
+    "!src/embed.ts",
+    "!src/.embedignore"
   ],
   "scripts": {
     "usc": "bun src/cli.ts",
