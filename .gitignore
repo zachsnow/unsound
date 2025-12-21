@@ -4,5 +4,8 @@ bun.lockb
 .test-temp/
 *.us.js
 embedded-sources.json
+
 site/dist/
 site/node_modules/
+
+editors/vscode/dist/

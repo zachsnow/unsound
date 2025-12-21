@@ -13,6 +13,12 @@ Bun and Typescript are the only dependencies for the core compiler. Once `bun` i
 bun install
 ```
 
+This will:
+
+1. Build and install `usc`.
+2. Build and install `usc-language-server`.
+3. Build and install the VS Code extension.
+
 The following scripts are available:
 
 ```bash
