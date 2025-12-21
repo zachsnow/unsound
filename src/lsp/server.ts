@@ -1,3 +1,4 @@
+#!/usr/bin/env bun
 // Unsound Language Server - using extension system with //usc directive support
 import {
   createConnection,

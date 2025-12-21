@@ -4,16 +4,18 @@
   "type": "module",
   "main": "src/extension.ts",
   "bin": {
-    "usc": "./src/cli.ts"
+    "usc": "./src/cli.ts",
+    "usc-language-server": "./src/lsp/server.ts"
   },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "usc": "bun src/cli.ts",
     "test": "bun src/test.ts",
     "types": "tsc --noEmit && cd editors/vscode && bun run types",
-    "build": "./build.sh",
-    "clean": "./clean.sh",
-    "embed": "bun src/embed.ts",
-    "install": "./install.sh"
+    "clean": "rm -rf dist && find . -name '*.us.js' -type f -delete",
+    "build:binary": "./build-binary.sh"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
