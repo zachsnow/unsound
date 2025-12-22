@@ -1256,3 +1256,12 @@ let f = () => 42; f  !
 ===
 42
 
+--- postfix with inequality confusion
+let f = () => 42; f !== f
+===
+false
+
+--- postfix with equality confusion
+let f = () => 42; f ! == f !
+===
+true
