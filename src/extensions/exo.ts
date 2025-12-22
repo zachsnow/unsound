@@ -173,13 +173,18 @@ const build$parse = (in$: CoreParseOps): void => {
     return { ok: false, expected: "prefix operator", pos: p };
   };
 
-  // Postfix operator - no whitespace before (same as function call)
   $.postfixOp = () => (input, pos) => {
-    const ch = input[pos];
+    const ws = $.ws()(input, pos);
+    const p = ws.pos;
+    const ch = input[p];
     if ($.operators.postfix[ch]) {
-      return { ok: true, value: { op: ch, start: pos }, pos: pos + 1 };
+      // Don't match ! if followed by = (that's != or !==)
+      if (ch === "!" && input[p + 1] === "=") {
+        return { ok: false, expected: "postfix operator", pos: p };
+      }
+      return { ok: true, value: { op: ch, start: p }, pos: p + 1 };
     }
-    return { ok: false, expected: "postfix operator", pos };
+    return { ok: false, expected: "postfix operator", pos: p };
   };
 
   // Postfix expression: appExpr followed by postfix operators

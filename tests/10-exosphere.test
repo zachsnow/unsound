@@ -1245,3 +1245,14 @@ let o = { f: () => 42 }; o.f!
 ===
 42
 
+
+--- postfix with whitespace
+let f = () => 42; f !
+===
+42
+
+--- postfix with more whitespace
+let f = () => 42; f  !
+===
+42
+
