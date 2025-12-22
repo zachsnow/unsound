@@ -18,8 +18,8 @@ interface BinaryExpr extends SpanExpr {
   right: EExpr;
 }
 
-interface UnaryExpr extends SpanExpr {
-  type: "UnaryExpr";
+interface PrefixExpr extends SpanExpr {
+  type: "PrefixExpr";
   op: string;
   operand: EExpr;
 }
@@ -58,7 +58,7 @@ interface VoidExpr extends SpanExpr {
 type EExpr =
   | Expr
   | BinaryExpr
-  | UnaryExpr
+  | PrefixExpr
   | PostfixExpr
   | BlockExpr
   | LetStmtExpr
@@ -73,6 +73,7 @@ interface BinaryOpDef {
 }
 
 interface UnaryOpDef {
+  prec: number;
   method: string;
 }
 
@@ -95,11 +96,11 @@ const operators = {
     "%": { prec: 6, assoc: "left", method: "op%" },
   } as Record<string, BinaryOpDef>,
   prefix: {
-    "!": { method: "op!" },
-    "-": { method: "opNeg" },
+    "!": { prec: 7, method: "op!" },
+    "-": { prec: 7, method: "opNeg" },
   } as Record<string, UnaryOpDef>,
   postfix: {
-    "!": { method: "call" },  // foo! is same as foo()
+    "!": { prec: 8, method: "call" },  // foo! is same as foo()
   } as Record<string, UnaryOpDef>
 };
 
@@ -117,7 +118,7 @@ interface ExoParseOps extends CoreParseOps {
   prefixOp: () => Parser<{ op: string; start: number }>;
   postfixOp: () => Parser<{ op: string; start: number }>;
   binaryExpr: (minPrec: number) => Parser<EExpr>;
-  unaryExpr: () => Parser<EExpr>;
+  prefixExpr: () => Parser<EExpr>;
   postfixExpr: () => Parser<EExpr>;
 
   // Statements
@@ -187,67 +188,73 @@ const build$parse = (in$: CoreParseOps): void => {
     return { ok: false, expected: "postfix operator", pos: p };
   };
 
-  // Postfix expression: appExpr followed by postfix operators
+  // Pratt parser: unified handling of prefix, postfix, and binary operators
   const baseAppExpr = $.appExpr;
-  $.postfixExpr = () => (input, pos) => {
-    const base = baseAppExpr()(input, pos);
-    if (!base.ok) return base;
 
-    let current: EExpr = base.value;
-    let currentPos = base.pos;
+  // Unified Pratt parser
+  $.binaryExpr = (minPrec: number) => (input, pos) => {
+    let left: ParseResult<EExpr>;
 
-    // Loop to handle chained postfix operators like foo!!
-    while (true) {
-      const postfix = $.postfixOp()(input, currentPos);
-      if (!postfix.ok) break;
-
-      current = { type: "PostfixExpr", op: postfix.value.op, operand: current } as PostfixExpr;
-      currentPos = postfix.pos;
-    }
-
-    return { ok: true, value: current, pos: currentPos } as ParseResult<EExpr>;
-  };
-
-  // Unary expression: prefix operator or postfixExpr
-  $.unaryExpr = () => (input, pos) => {
+    // 1. Try prefix operator
     const prefix = $.prefixOp()(input, pos);
     if (prefix.ok) {
-      const operand = $.unaryExpr()(input, prefix.pos);
+      const opDef = $.operators.prefix[prefix.value.op];
+      const operand = $.binaryExpr(opDef.prec)(input, prefix.pos);
       if (!operand.ok) return operand;
-      return {
-        ok: true,
-        value: { type: "UnaryExpr", op: prefix.value.op, operand: operand.value } as UnaryExpr,
-        pos: operand.pos,
-      };
-    }
-    return $.postfixExpr()(input, pos);
-  };
-
-  // Binary expression with precedence climbing
-  $.binaryExpr = (minPrec: number) => (input, pos) => {
-    let left = $.unaryExpr()(input, pos);
-    if (!left.ok) return left;
-
-    while (true) {
-      const opResult = $.binaryOp()(input, left.pos);
-      if (!opResult.ok) break;
-
-      const opDef = $.operators.binary[opResult.value.op];
-      if (!opDef || opDef.prec < minPrec) break;
-
-      const nextMinPrec = opDef.assoc === "left" ? opDef.prec + 1 : opDef.prec;
-      const right = $.binaryExpr(nextMinPrec)(input, opResult.pos);
-      if (!right.ok) return right;
-
       left = {
         ok: true,
-        value: { type: "BinaryExpr", op: opResult.value.op, left: left.value, right: right.value } as BinaryExpr,
-        pos: right.pos,
+        value: { type: "PrefixExpr", op: prefix.value.op, operand: operand.value } as PrefixExpr,
+        pos: operand.pos,
       };
+    } else {
+      // 2. No prefix - parse atom (baseAppExpr handles (), ., [])
+      const base = baseAppExpr()(input, pos);
+      if (!base.ok) return base as ParseResult<EExpr>;
+      left = { ok: true, value: base.value, pos: base.pos };
+    }
+
+    // 3. Loop: binary and postfix operators
+    while (true) {
+      // Try binary operator
+      const binOp = $.binaryOp()(input, left.pos);
+      if (binOp.ok) {
+        const opDef = $.operators.binary[binOp.value.op];
+        if (opDef && opDef.prec >= minPrec) {
+          const nextPrec = opDef.assoc === "left" ? opDef.prec + 1 : opDef.prec;
+          const right = $.binaryExpr(nextPrec)(input, binOp.pos);
+          if (!right.ok) return right;
+          left = {
+            ok: true,
+            value: { type: "BinaryExpr", op: binOp.value.op, left: left.value, right: right.value } as BinaryExpr,
+            pos: right.pos,
+          };
+          continue;
+        }
+      }
+
+      // Try postfix operator
+      const postfix = $.postfixOp()(input, left.pos);
+      if (postfix.ok) {
+        const opDef = $.operators.postfix[postfix.value.op];
+        if (opDef.prec >= minPrec) {
+          left = {
+            ok: true,
+            value: { type: "PostfixExpr", op: postfix.value.op, operand: left.value } as PostfixExpr,
+            pos: postfix.pos,
+          };
+          continue;
+        }
+      }
+
+      break;
     }
 
     return left;
   };
+
+  // Keep prefixExpr and postfixExpr as aliases for compatibility
+  $.prefixExpr = () => $.binaryExpr(0);
+  $.postfixExpr = () => $.binaryExpr(0);
 
   $.varAssign = () => (input, pos) => {
     const result = $.binaryExpr(0)(input, pos);
@@ -534,7 +541,7 @@ const build$compile = (in$: CoreCompileOps): void => {
         return ir.$("call", ir.$("index", left, ir.lit(opDef.method!)), ir.array(right));
       }
 
-      case "UnaryExpr": {
+      case "PrefixExpr": {
         const opDef = operators.prefix[expr.op];
         const operand = $.compileExpr(expr.operand);
         // Method call: $.index(operand, "op!")() - use $.index for primitive member access
