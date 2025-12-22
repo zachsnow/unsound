@@ -8,7 +8,7 @@
  * be unaware of which parameters are lazy or eager.
  */
 import { AnalyzeOps } from "../analyze";
-import type { Expr, LambdaExpr, Param, SpanExpr } from "../ast";
+import type { Expr, LambdaExpr, Name, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
 import { ir, IR } from "../ir";
 import { CoreParseOps, Parser, ParseResult } from "../parse";
@@ -32,7 +32,7 @@ interface LazyLambdaExpr extends SpanExpr {
   body: LazyExpr;
 }
 
-interface LazyParam extends Param {
+interface LazyParam extends Name {
   /** Whether the parameter is lazy. */
   lazy: boolean;
 }

@@ -1,10 +1,10 @@
 /**
- * Exosphere Extension
+ * Exo Extension
  *
  * A JS-like language layer built directly on core.ts.
  * Adds: operators, statements, blocks, assignment, type annotations.
  */
-import { Expr, Span, SpanExpr } from "../ast";
+import { Expr, Name, Span, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
 import { CoreInterpretOps } from "../interpret";
 import { ir, IR } from "../ir";
@@ -35,16 +35,14 @@ interface BlockExpr extends SpanExpr {
 
 interface LetStmtExpr extends SpanExpr {
   type: "LetStmtExpr";
-  name: string;
-  nameLoc?: Span;
+  name: Name;
   annotation: EExpr | null;
   value: EExpr;
 }
 
 interface AssignExpr extends SpanExpr {
   type: "AssignExpr";
-  name: string;
-  nameLoc?: Span;
+  name: Name;
   value: EExpr;
 }
 
@@ -228,10 +226,9 @@ const build$parse = (in$: CoreParseOps): void => {
           ok: true,
           value: {
             type: "AssignExpr",
-            name: result.value.name,
-            nameLoc: result.value.loc,
+            name: { name: result.value.name, loc: result.value.loc },
             value: rhs.value,
-          } as AssignExpr,
+          },
           pos: rhs.pos,
         };
       }
@@ -260,7 +257,7 @@ const build$parse = (in$: CoreParseOps): void => {
     if (input[ws1.pos] === ":") {
       const typeExpr = $.atom()(input, ws1.pos + 1);
       if (!typeExpr.ok) return { ok: false, expected: "type expression", pos: ws1.pos + 1 };
-      annotation = typeExpr.value as EExpr;
+      annotation = typeExpr.value;
       afterAnnotation = typeExpr.pos;
     }
 
@@ -271,8 +268,7 @@ const build$parse = (in$: CoreParseOps): void => {
       ok: true,
       value: {
         type: "LetStmtExpr",
-        name: binding.value.name,
-        nameLoc: binding.value.nameLoc,
+        name: binding.value,
         annotation,
         value: init.value as EExpr,
       } as LetStmtExpr,
@@ -476,7 +472,7 @@ const build$compile = (in$: CoreCompileOps): void => {
       return ir.$(
         "let",
         ir.var("$env"),
-        ir.lit(stmt.name),
+        ir.lit(stmt.name.name),
         ir.arrow(["$env"], $.compileExpr(stmt.value)),
         ir.arrow(["$env"], $.compileBlock(stmts, idx + 1))
       );
@@ -502,13 +498,13 @@ const build$compile = (in$: CoreCompileOps): void => {
         return ir.$(
           "let",
           ir.var("$env"),
-          ir.lit(expr.name),
+          ir.lit(expr.name.name),
           ir.arrow(["$env"], $.compileExpr(expr.value)),
           ir.arrow(["$env"], ir.lit(undefined))
         );
 
       case "AssignExpr":
-        return ir.$("assign", ir.var("$env"), ir.lit(expr.name), $.compileExpr(expr.value));
+        return ir.$("assign", ir.var("$env"), ir.lit(expr.name.name), $.compileExpr(expr.value));
 
       case "BinaryExpr": {
         const opDef = operators.binary[expr.op];
@@ -558,8 +554,8 @@ const build$interpret = (in$: CoreInterpretOps): void => {
 // Extension Export
 // =============================================================================
 
-export const exosphereExtension: Extension = {
-  name: "exosphere",
+export const exoExtension: Extension = {
+  name: "exo",
   version: "1.0.0",
   description: "JS-like language with operators, statements, blocks, and type annotations",
   requires: "core",
@@ -568,4 +564,4 @@ export const exosphereExtension: Extension = {
   $interpret: build$interpret,
 };
 
-export default exosphereExtension;
+export default exoExtension;

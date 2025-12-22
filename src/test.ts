@@ -494,11 +494,11 @@ async function runTest(
   // Report result
   if (errors.length === 0) {
     passed++;
-    logger.info(`${logger.green("✓")} ${testId}`);
+    logger.info(`${logger.green("✓ passed")} ${testId}`);
   } else {
     failed++;
     failures.push({ testId, errors });
-    logger.info(`${logger.red("✗")} ${testId}`);
+    logger.info(`${logger.red("✗ failed")} ${testId}`);
     for (const err of errors) {
       logger.info(`  ${logger.dim(err)}`);
     }

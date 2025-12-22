@@ -39,8 +39,7 @@ export type Expr =
  */
 export interface LetExpr extends SpanExpr {
   type: 'LetExpr';
-  name: string;
-  nameLoc?: Span;  // Location of the binding name
+  name: Name;
   value: Expr;
   body: Expr;
 }
@@ -50,11 +49,11 @@ export interface LetExpr extends SpanExpr {
  */
 export interface LambdaExpr extends SpanExpr {
   type: 'LambdaExpr';
-  params: Param[];
+  params: Name[];
   body: Expr;
 }
 
-export interface Param extends SpanExpr {
+export interface Name extends SpanExpr {
   name: string;
 }
 

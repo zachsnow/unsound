@@ -13,7 +13,7 @@ import type {
   LiteralExpr,
   IdentifierExpr,
   Span,
-  Param,
+  Name,
 } from "./ast.ts";
 import { Builder, ParseOps } from "./types.ts";
 import { fix, posToLineCol } from "./util.ts";
@@ -85,15 +85,15 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   // Let expressions - broken into pieces
   letExpr: () => Parser<LetExpr>;
   letKeyword: () => Parser<string>; // "let"
-  letBinding: () => Parser<{ name: string; nameLoc: Span }>; // the "x" in "let x = ..."
+  letBinding: () => Parser<Name>; // the "x" in "let x = ..."
   letInitializer: () => Parser<Expr>; // "= expr"
   letInKeyword: () => Parser<string>; // "in"
   letBody: () => Parser<Expr>; // body expression
 
   // Lambda expressions - broken into pieces
   lambda: () => Parser<LambdaExpr>;
-  lambdaParams: () => Parser<Param[]>; // (x, y, z)
-  lambdaParam: () => Parser<Param>; // single param
+  lambdaParams: () => Parser<Name[]>; // (x, y, z)
+  lambdaParam: () => Parser<Name>; // single param
   lambdaArrow: () => Parser<string>; // "=>"
   lambdaBody: () => Parser<Expr>; // body expression
 
@@ -127,8 +127,7 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   property: () => Parser<{ key: string; keyLoc?: Span; value: Expr }>;
   propertyKey: () => Parser<{ value: string; loc: Span }>;
 
-  // Function args and params (legacy, for compatibility)
-  params: () => Parser<{ value: string; loc: Span }[]>;
+  // Function call arguments.
   args: () => Parser<Expr[]>;
 }
 
@@ -629,9 +628,9 @@ export function build$parse(in$: ParseOps): void {
   $.letKeyword = () => $.keyword("let");
 
   $.letBinding = () =>
-    $.map($.withLoc($.ident()), (withLoc): { name: string; nameLoc: Span } => ({
+    $.map($.withLoc($.ident()), (withLoc): Name => ({
       name: withLoc.value,
-      nameLoc: withLoc.loc,
+      loc: withLoc.loc,
     }));
 
   $.letInitializer = () => (input, pos) => {
@@ -679,8 +678,7 @@ export function build$parse(in$: ParseOps): void {
       ok: true,
       value: {
         type: "LetExpr",
-        name: binding.value.name,
-        nameLoc: binding.value.nameLoc,
+        name: binding.value,
         value: value.value,
         body: body.value,
         loc: { start, end: body.pos },
@@ -700,7 +698,7 @@ export function build$parse(in$: ParseOps): void {
       value: {
         name: ident.value.value,
         loc: ident.value.loc,
-      } satisfies Param,
+      },
       pos: ident.pos,
     };
   };

@@ -1,5 +1,5 @@
-# usc -x core -x exosphere
-# Tests for exosphere.ts extension (operators, statements, blocks, assignment, type annotations)
+# usc -x core -x exo
+# Tests for exo.ts extension (operators, statements, blocks, assignment, type annotations)
 
 # =============================================================================
 # BINARY OPERATORS - Arithmetic

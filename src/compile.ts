@@ -149,7 +149,7 @@ export function build$compile(in$: CompileOps): void {
     return ir.$(
       "let",
       ir.var("$env"),
-      ir.lit(expr.name),
+      ir.lit(expr.name.name),
       ir.arrow(["$env"], $.compileExpr(expr.value)),
       ir.arrow(["$env"], $.compileExpr(expr.body))
     );

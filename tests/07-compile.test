@@ -32,7 +32,7 @@ $.lambda($env, ["x", "y"], ($env) => $.lookup($env, "x"))
 $.call($.lookup($env, "f"), [$.number(1)])
 
 --- compile let
-{"type":"LetExpr","name":"x","value":{"type":"LiteralExpr","value":1},"body":{"type":"IdentifierExpr","name":"x"}}
+{"type":"LetExpr","name":{"name":"x"},"value":{"type":"LiteralExpr","value":1},"body":{"type":"IdentifierExpr","name":"x"}}
 === compile: $compile, emit: $emit
 $.let($env, "x", ($env) => $.number(1), ($env) => $.lookup($env, "x"))
 
