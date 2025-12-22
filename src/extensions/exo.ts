@@ -59,6 +59,7 @@ type EExpr =
   | Expr
   | BinaryExpr
   | UnaryExpr
+  | PostfixExpr
   | BlockExpr
   | LetStmtExpr
   | AssignExpr
@@ -97,8 +98,16 @@ const operators = {
     "!": { method: "op!" },
     "-": { method: "opNeg" },
   } as Record<string, UnaryOpDef>,
-  postfix: {} as Record<string, UnaryOpDef>
+  postfix: {
+    "!": { method: "call" },  // foo! is same as foo()
+  } as Record<string, UnaryOpDef>
 };
+
+interface PostfixExpr extends SpanExpr {
+  type: "PostfixExpr";
+  op: string;
+  operand: EExpr;
+}
 
 interface ExoParseOps extends CoreParseOps {
   operators: typeof operators;
@@ -106,8 +115,10 @@ interface ExoParseOps extends CoreParseOps {
   // Operators
   binaryOp: () => Parser<{ op: string; start: number }>;
   prefixOp: () => Parser<{ op: string; start: number }>;
+  postfixOp: () => Parser<{ op: string; start: number }>;
   binaryExpr: (minPrec: number) => Parser<EExpr>;
   unaryExpr: () => Parser<EExpr>;
+  postfixExpr: () => Parser<EExpr>;
 
   // Statements
   statement: () => Parser<EExpr>;
@@ -162,8 +173,37 @@ const build$parse = (in$: CoreParseOps): void => {
     return { ok: false, expected: "prefix operator", pos: p };
   };
 
-  // Unary expression: prefix operator or appExpr
+  // Postfix operator - no whitespace before (same as function call)
+  $.postfixOp = () => (input, pos) => {
+    const ch = input[pos];
+    if ($.operators.postfix[ch]) {
+      return { ok: true, value: { op: ch, start: pos }, pos: pos + 1 };
+    }
+    return { ok: false, expected: "postfix operator", pos };
+  };
+
+  // Postfix expression: appExpr followed by postfix operators
   const baseAppExpr = $.appExpr;
+  $.postfixExpr = () => (input, pos) => {
+    const base = baseAppExpr()(input, pos);
+    if (!base.ok) return base;
+
+    let current: EExpr = base.value;
+    let currentPos = base.pos;
+
+    // Loop to handle chained postfix operators like foo!!
+    while (true) {
+      const postfix = $.postfixOp()(input, currentPos);
+      if (!postfix.ok) break;
+
+      current = { type: "PostfixExpr", op: postfix.value.op, operand: current } as PostfixExpr;
+      currentPos = postfix.pos;
+    }
+
+    return { ok: true, value: current, pos: currentPos } as ParseResult<EExpr>;
+  };
+
+  // Unary expression: prefix operator or postfixExpr
   $.unaryExpr = () => (input, pos) => {
     const prefix = $.prefixOp()(input, pos);
     if (prefix.ok) {
@@ -175,7 +215,7 @@ const build$parse = (in$: CoreParseOps): void => {
         pos: operand.pos,
       };
     }
-    return baseAppExpr()(input, pos);
+    return $.postfixExpr()(input, pos);
   };
 
   // Binary expression with precedence climbing
@@ -494,6 +534,12 @@ const build$compile = (in$: CoreCompileOps): void => {
         const operand = $.compileExpr(expr.operand);
         // Method call: $.index(operand, "op!")() - use $.index for primitive member access
         return ir.$("call", ir.$("index", operand, ir.lit(opDef.method)), ir.array());
+      }
+
+      case "PostfixExpr": {
+        // foo! compiles the same as foo()
+        const operand = $.compileExpr(expr.operand);
+        return ir.$("call", operand, ir.array());
       }
 
       default:

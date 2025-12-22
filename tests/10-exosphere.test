@@ -1210,3 +1210,38 @@ false
 ===
 false
 
+
+# =============================================================================
+# POSTFIX OPERATORS
+# =============================================================================
+
+--- postfix call simple
+let f = () => 42; f!
+===
+42
+
+--- postfix call lambda
+(() => 42)!
+===
+42
+
+--- postfix call chained
+let f = () => () => 99; f!!
+===
+99
+
+--- postfix vs prefix
+let f = () => true; !f!
+===
+false
+
+--- postfix with args still works
+let f = (x) => x + 1; f(10)
+===
+11
+
+--- postfix on method result
+let o = { f: () => 42 }; o.f!
+===
+42
+
