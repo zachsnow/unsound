@@ -11,10 +11,6 @@ import { ir, IR } from "../ir";
 import { CoreParseOps, ParseResult, Parser } from "../parse";
 import { Extension } from "../types";
 
-// =============================================================================
-// AST Types
-// =============================================================================
-
 interface BinaryExpr extends SpanExpr {
   type: "BinaryExpr";
   op: string;
@@ -50,6 +46,15 @@ interface VoidExpr extends SpanExpr {
   type: "VoidExpr";
 }
 
+/**
+ * Extended AST for Exo
+ *
+ * Note that this is not technically correct as what we'd *like*
+ * is for all nested instances of `Expr` within `EExpr` (including
+ * those in `Expr` itself) to also be `EExpr`. However, this is difficult to
+ * express in TypeScript, so we settle for this simpler definition and then
+ * cast in the implementation when necessary.
+ */
 type EExpr =
   | Expr
   | BinaryExpr
@@ -58,10 +63,6 @@ type EExpr =
   | LetStmtExpr
   | AssignExpr
   | VoidExpr;
-
-// =============================================================================
-// Operator Table
-// =============================================================================
 
 interface BinaryOpDef {
   prec: number;
@@ -96,11 +97,8 @@ const operators = {
     "!": { method: "op!" },
     "-": { method: "opNeg" },
   } as Record<string, UnaryOpDef>,
+  postfix: {} as Record<string, UnaryOpDef>
 };
-
-// =============================================================================
-// Parse Phase
-// =============================================================================
 
 interface ExoParseOps extends CoreParseOps {
   operators: typeof operators;
@@ -206,10 +204,6 @@ const build$parse = (in$: CoreParseOps): void => {
     return left;
   };
 
-  // ---------------------------------------------------------------------------
-  // Assignment Parsing
-  // ---------------------------------------------------------------------------
-
   $.varAssign = () => (input, pos) => {
     const result = $.binaryExpr(0)(input, pos);
     if (!result.ok) return result;
@@ -238,10 +232,6 @@ const build$parse = (in$: CoreParseOps): void => {
 
   // Override appExpr to use operators
   $.appExpr = (() => $.varAssign()) as unknown as typeof $.appExpr;
-
-  // ---------------------------------------------------------------------------
-  // Statement Parsing
-  // ---------------------------------------------------------------------------
 
   $.letStmt = () => (input, pos) => {
     const kw = $.letKeyword()(input, pos);
@@ -300,10 +290,6 @@ const build$parse = (in$: CoreParseOps): void => {
     if (stmts.length === 1) return stmts[0];
     return { type: "BlockExpr", stmts } as BlockExpr;
   };
-
-  // ---------------------------------------------------------------------------
-  // Block Parsing
-  // ---------------------------------------------------------------------------
 
   const baseAtom = $.atom;
   $.block = () => (input, pos) => {
@@ -368,13 +354,8 @@ const build$parse = (in$: CoreParseOps): void => {
     }
     return baseAtom()(input, pos);
   };
-  $.atom = exoAtom as unknown as typeof $.atom;
+  $.atom = exoAtom as () => Parser<Expr>;
 
-  // ---------------------------------------------------------------------------
-  // If Without Else
-  // ---------------------------------------------------------------------------
-
-  const baseIfExpr = $.ifExpr;
   const exoIfExpr = () => (input: string, pos: number) => {
     const kw = $.ifKeyword()(input, pos);
     if (!kw.ok) return { ok: false, expected: "if", pos };
@@ -407,10 +388,6 @@ const build$parse = (in$: CoreParseOps): void => {
     };
   };
   $.ifExpr = exoIfExpr as unknown as typeof $.ifExpr;
-
-  // ---------------------------------------------------------------------------
-  // Program (top-level statements)
-  // ---------------------------------------------------------------------------
 
   const exoProgram = () => (input: string, pos: number) => {
     const stmts: EExpr[] = [];
@@ -446,43 +423,31 @@ const build$parse = (in$: CoreParseOps): void => {
   $.program = exoProgram as unknown as typeof $.program;
 };
 
-// =============================================================================
-// Compile Phase
-// =============================================================================
-
-interface ExoCompileOps extends CoreCompileOps {
+interface CompileOps {
   compileExpr: (expr: EExpr) => IR;
   compileBlock: (stmts: EExpr[], idx: number) => IR;
 }
+
+type ExoCompileOps = CoreCompileOps & CompileOps;
 
 const build$compile = (in$: CoreCompileOps): void => {
   const $ = in$ as unknown as ExoCompileOps;
 
   const baseCompileExpr = $.compileExpr;
 
-  // Compile a block: each LetStmtExpr scopes over the rest
+  // Compile statements to a sequence of ir.seq
   $.compileBlock = (stmts, idx) => {
     if (idx >= stmts.length) return ir.lit(undefined);
 
     const stmt = stmts[idx];
     const isLast = idx === stmts.length - 1;
-
-    if (stmt.type === "LetStmtExpr") {
-      // let x = v; rest -> $.let($env, "x", value, rest)
-      return ir.$(
-        "let",
-        ir.var("$env"),
-        ir.lit(stmt.name.name),
-        ir.arrow(["$env"], $.compileExpr(stmt.value)),
-        ir.arrow(["$env"], $.compileBlock(stmts, idx + 1))
-      );
-    }
+    const compiledStmt = $.compileExpr(stmt);
 
     if (isLast) {
-      return $.compileExpr(stmt);
+      return compiledStmt;
     }
 
-    return ir.seq($.compileExpr(stmt), $.compileBlock(stmts, idx + 1));
+    return ir.seq(compiledStmt, $.compileBlock(stmts, idx + 1));
   };
 
   $.compileExpr = (expr: EExpr): IR => {
@@ -491,16 +456,20 @@ const build$compile = (in$: CoreCompileOps): void => {
         return ir.lit(undefined);
 
       case "BlockExpr":
-        return $.compileBlock(expr.stmts, 0);
+        // Wrap in $.block to create child scope, then compile statements with seq
+        return ir.$(
+          "block",
+          ir.var("$env"),
+          ir.arrow(["$env"], $.compileBlock(expr.stmts, 0))
+        );
 
       case "LetStmtExpr":
-        // Standalone let - bind and return undefined
+        // Compile to $.letBind which binds in current scope
         return ir.$(
-          "let",
+          "letBind",
           ir.var("$env"),
           ir.lit(expr.name.name),
-          ir.arrow(["$env"], $.compileExpr(expr.value)),
-          ir.arrow(["$env"], ir.lit(undefined))
+          $.compileExpr(expr.value)
         );
 
       case "AssignExpr":
@@ -533,12 +502,10 @@ const build$compile = (in$: CoreCompileOps): void => {
   };
 };
 
-// =============================================================================
-// Interpret Phase
-// =============================================================================
-
 interface ExoInterpretOps extends CoreInterpretOps {
   assign: ($env: unknown, name: string, value: unknown) => unknown;
+  letBind: ($env: unknown, name: string, value: unknown) => unknown;
+  block: ($env: unknown, bodyFn: ($env: unknown) => unknown) => unknown;
 }
 
 const build$interpret = (in$: CoreInterpretOps): void => {
@@ -548,11 +515,19 @@ const build$interpret = (in$: CoreInterpretOps): void => {
     $env.mutate(name, value);
     return value;
   };
-};
 
-// =============================================================================
-// Extension Export
-// =============================================================================
+  // Bind a new variable in the current scope (for statement-style let)
+  $.letBind = ($env: any, name: string, value: unknown) => {
+    $env.bind(name, value);
+    return undefined;
+  };
+
+  // Create a child scope for a block
+  $.block = ($env: any, bodyFn: ($env: unknown) => unknown) => {
+    const child = $env.extend({});
+    return bodyFn(child);
+  };
+};
 
 export const exoExtension: Extension = {
   name: "exo",
