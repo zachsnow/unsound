@@ -46,6 +46,14 @@ interface VoidExpr extends SpanExpr {
   type: "VoidExpr";
 }
 
+interface OperatorDeclExpr extends SpanExpr {
+  type: "OperatorDeclExpr";
+  op: string;
+  kind: "prefix" | "postfix" | "infix";
+  prec: number;
+  assoc?: "left" | "right";
+}
+
 /**
  * Extended AST for Exo
  *
@@ -63,11 +71,12 @@ type EExpr =
   | BlockExpr
   | LetStmtExpr
   | AssignExpr
-  | VoidExpr;
+  | VoidExpr
+  | OperatorDeclExpr;
 
 interface BinaryOpDef {
   prec: number;
-  assoc: "left" | "right";
+  assoc: "left" | "right" | "none";
   method?: string;
   prim?: string;
 }
@@ -132,6 +141,9 @@ interface ExoParseOps extends CoreParseOps {
 
   // Assignment
   varAssign: () => Parser<EExpr>;
+
+  // Operator declarations
+  operatorDecl: () => Parser<OperatorDeclExpr>;
 }
 
 const build$parse = (in$: CoreParseOps): void => {
@@ -220,7 +232,8 @@ const build$parse = (in$: CoreParseOps): void => {
       if (binOp.ok) {
         const opDef = $.operators.binary[binOp.value.op];
         if (opDef && opDef.prec >= minPrec) {
-          const nextPrec = opDef.assoc === "left" ? opDef.prec + 1 : opDef.prec;
+          // For non-associative, use prec + 1 (like left) to prevent same-precedence chaining
+          const nextPrec = opDef.assoc === "right" ? opDef.prec : opDef.prec + 1;
           const right = $.binaryExpr(nextPrec)(input, binOp.pos);
           if (!right.ok) return right;
           left = {
@@ -228,6 +241,13 @@ const build$parse = (in$: CoreParseOps): void => {
             value: { type: "BinaryExpr", op: binOp.value.op, left: left.value, right: right.value } as BinaryExpr,
             pos: right.pos,
           };
+          // For non-associative operators, check if the same operator appears again
+          if (opDef.assoc === "none") {
+            const nextOp = $.binaryOp()(input, left.pos);
+            if (nextOp.ok && nextOp.value.op === binOp.value.op) {
+              return { ok: false, expected: `operator '${binOp.value.op}' is non-associative`, pos: nextOp.value.start };
+            }
+          }
           continue;
         }
       }
@@ -321,7 +341,98 @@ const build$parse = (in$: CoreParseOps): void => {
   // Disable let...in expression syntax
   $.letExpr = () => () => ({ ok: false, expected: "expression", pos: 0 });
 
+  // Compute default precedence (one higher than current max)
+  const getDefaultPrec = (): number => {
+    let max = 0;
+    for (const op in $.operators.binary) max = Math.max(max, $.operators.binary[op].prec);
+    for (const op in $.operators.prefix) max = Math.max(max, $.operators.prefix[op].prec);
+    for (const op in $.operators.postfix) max = Math.max(max, $.operators.postfix[op].prec);
+    return max + 1;
+  };
+
+  // Operator declarations: operator <op> prefix|postfix|infix [<prec>] [left|right];
+  $.operatorDecl = () => (input, pos) => {
+    const ws = $.ws()(input, pos);
+    const p = ws.pos;
+
+    // Check for "operator" keyword
+    if (input.slice(p, p + 8) !== "operator" || /\w/.test(input[p + 8] || "")) {
+      return { ok: false, expected: "operator", pos: p };
+    }
+    let cur = p + 8;
+
+    // Parse the operator symbol (one or more operator characters)
+    const ws1 = $.ws()(input, cur);
+    cur = ws1.pos;
+    const opChars = /^[!@#$%^&*\-+=<>?/|~:]+/.exec(input.slice(cur));
+    if (!opChars) {
+      return { ok: false, expected: "operator symbol", pos: cur };
+    }
+    const op = opChars[0];
+    cur += op.length;
+
+    // Parse the kind: prefix, postfix, or infix
+    const ws2 = $.ws()(input, cur);
+    cur = ws2.pos;
+    let kind: "prefix" | "postfix" | "infix";
+    if (input.slice(cur, cur + 6) === "prefix" && !/\w/.test(input[cur + 6] || "")) {
+      kind = "prefix";
+      cur += 6;
+    } else if (input.slice(cur, cur + 7) === "postfix" && !/\w/.test(input[cur + 7] || "")) {
+      kind = "postfix";
+      cur += 7;
+    } else if (input.slice(cur, cur + 5) === "infix" && !/\w/.test(input[cur + 5] || "")) {
+      kind = "infix";
+      cur += 5;
+    } else {
+      return { ok: false, expected: "prefix, postfix, or infix", pos: cur };
+    }
+
+    // Optionally parse the precedence (a number)
+    const ws3 = $.ws()(input, cur);
+    let prec: number;
+    const precMatch = /^\d+/.exec(input.slice(ws3.pos));
+    if (precMatch) {
+      prec = parseInt(precMatch[0], 10);
+      cur = ws3.pos + precMatch[0].length;
+    } else {
+      prec = getDefaultPrec();
+    }
+
+    // For infix, optionally parse associativity (left or right, no default)
+    let assoc: "left" | "right" | undefined;
+    if (kind === "infix") {
+      const ws4 = $.ws()(input, cur);
+      if (input.slice(ws4.pos, ws4.pos + 4) === "left" && !/\w/.test(input[ws4.pos + 4] || "")) {
+        assoc = "left";
+        cur = ws4.pos + 4;
+      } else if (input.slice(ws4.pos, ws4.pos + 5) === "right" && !/\w/.test(input[ws4.pos + 5] || "")) {
+        assoc = "right";
+        cur = ws4.pos + 5;
+      }
+      // No default - assoc remains undefined for non-associative
+    }
+
+    // Register the operator (method name is "op" + operator symbol)
+    if (kind === "prefix") {
+      $.operators.prefix[op] = { prec, method: `op${op}` };
+    } else if (kind === "postfix") {
+      $.operators.postfix[op] = { prec, method: `op${op}` };
+    } else {
+      // Use "none" for non-associative operators (will cause parse error on chaining)
+      $.operators.binary[op] = { prec, assoc: assoc || "none", method: `op${op}` };
+    }
+
+    return {
+      ok: true,
+      value: { type: "OperatorDeclExpr", op, kind, prec, assoc } as OperatorDeclExpr,
+      pos: cur,
+    };
+  };
+
   $.statement = () => (input, pos) => {
+    const opDecl = $.operatorDecl()(input, pos);
+    if (opDecl.ok) return opDecl;
     const letResult = $.letStmt()(input, pos);
     if (letResult.ok) return letResult;
     return $.expr()(input, pos);
@@ -505,6 +616,8 @@ const build$compile = (in$: CoreCompileOps): void => {
   $.compileExpr = (expr: EExpr): IR => {
     switch (expr.type) {
       case "VoidExpr":
+      case "OperatorDeclExpr":
+        // Operator declarations have no runtime effect
         return ir.lit(undefined);
 
       case "BlockExpr":
