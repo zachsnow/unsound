@@ -54,6 +54,12 @@ interface OperatorDeclExpr extends SpanExpr {
   assoc?: "left" | "right";
 }
 
+interface ImportExpr extends SpanExpr {
+  type: "ImportExpr";
+  name: Name;
+  path: string;
+}
+
 /**
  * Extended AST for Exo
  *
@@ -72,7 +78,8 @@ type EExpr =
   | LetStmtExpr
   | AssignExpr
   | VoidExpr
-  | OperatorDeclExpr;
+  | OperatorDeclExpr
+  | ImportExpr;
 
 interface BinaryOpDef {
   prec: number;
@@ -144,6 +151,9 @@ interface ExoParseOps extends CoreParseOps {
 
   // Operator declarations
   operatorDecl: () => Parser<OperatorDeclExpr>;
+
+  // Import declarations
+  importDecl: () => Parser<ImportExpr>;
 }
 
 const build$parse = (in$: CoreParseOps): void => {
@@ -430,7 +440,75 @@ const build$parse = (in$: CoreParseOps): void => {
     };
   };
 
+  // Import declarations: import <name> from "<path>";
+  $.importDecl = () => (input, pos) => {
+    const ws = $.ws()(input, pos);
+    const p = ws.pos;
+
+    // Check for "import" keyword
+    if (input.slice(p, p + 6) !== "import" || /\w/.test(input[p + 6] || "")) {
+      return { ok: false, expected: "import", pos: p };
+    }
+    let cur = p + 6;
+
+    // Parse the binding name
+    const ws1 = $.ws()(input, cur);
+    cur = ws1.pos;
+    const nameMatch = /^[a-zA-Z_$][a-zA-Z0-9_$]*/.exec(input.slice(cur));
+    if (!nameMatch) {
+      return { ok: false, expected: "identifier", pos: cur };
+    }
+    const name = nameMatch[0];
+    cur += name.length;
+
+    // Check for "from" keyword
+    const ws2 = $.ws()(input, cur);
+    cur = ws2.pos;
+    if (input.slice(cur, cur + 4) !== "from" || /\w/.test(input[cur + 4] || "")) {
+      return { ok: false, expected: "from", pos: cur };
+    }
+    cur += 4;
+
+    // Parse the path string
+    const ws3 = $.ws()(input, cur);
+    cur = ws3.pos;
+    const quote = input[cur];
+    if (quote !== '"' && quote !== "'") {
+      return { ok: false, expected: "string", pos: cur };
+    }
+    cur++;
+    let path = "";
+    while (cur < input.length && input[cur] !== quote) {
+      if (input[cur] === "\\") {
+        cur++;
+        if (cur < input.length) {
+          path += input[cur];
+          cur++;
+        }
+      } else {
+        path += input[cur];
+        cur++;
+      }
+    }
+    if (input[cur] !== quote) {
+      return { ok: false, expected: "closing quote", pos: cur };
+    }
+    cur++;
+
+    return {
+      ok: true,
+      value: {
+        type: "ImportExpr",
+        name: { name, loc: { start: ws1.pos, end: ws1.pos + name.length } },
+        path,
+      } as ImportExpr,
+      pos: cur,
+    };
+  };
+
   $.statement = () => (input, pos) => {
+    const importDecl = $.importDecl()(input, pos);
+    if (importDecl.ok) return importDecl;
     const opDecl = $.operatorDecl()(input, pos);
     if (opDecl.ok) return opDecl;
     const letResult = $.letStmt()(input, pos);
@@ -619,6 +697,10 @@ const build$compile = (in$: CoreCompileOps): void => {
       case "OperatorDeclExpr":
         // Operator declarations have no runtime effect
         return ir.lit(undefined);
+
+      case "ImportExpr":
+        // Compile to ir.import which will be hoisted by emit
+        return ir.import(expr.name.name, expr.path);
 
       case "BlockExpr":
         // Wrap in $.block to create child scope, then compile statements with seq

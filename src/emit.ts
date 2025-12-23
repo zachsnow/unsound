@@ -83,9 +83,65 @@ export function emitString(node: IR): string {
       const parts = node.elements.map(emitString).join(', ');
       return `(${parts})`;
 
+    case 'import':
+      // Import is hoisted; bind into $env so it's accessible via lookup, then return value
+      return `($env.bind(${JSON.stringify(node.name)}, ${node.name}), ${node.name})`;
+
     default:
       throw new UnhandledCaseError("IR tag", node);
   }
+}
+
+// Collect all imports from IR tree
+function collectImports(node: IR): { name: string; path: string }[] {
+  const imports: { name: string; path: string }[] = [];
+
+  function walk(n: IR): void {
+    switch (n.tag) {
+      case 'import':
+        imports.push({ name: n.name, path: n.path });
+        break;
+      case 'call':
+        walk(n.fn);
+        n.args.forEach(walk);
+        break;
+      case 'member':
+        walk(n.obj);
+        break;
+      case 'index':
+        walk(n.obj);
+        walk(n.key);
+        break;
+      case 'arrow':
+      case 'function':
+        walk(n.body);
+        break;
+      case 'object':
+        n.properties.forEach(p => walk(p.value));
+        break;
+      case 'array':
+        n.elements.forEach(walk);
+        break;
+      case 'spread':
+        walk(n.value);
+        break;
+      case 'ternary':
+        walk(n.cond);
+        walk(n.then);
+        walk(n.else);
+        break;
+      case 'seq':
+        n.elements.forEach(walk);
+        break;
+      case 'assign':
+        walk(n.value);
+        break;
+      // literal, var - no children
+    }
+  }
+
+  walk(node);
+  return imports;
 }
 
 // === Emit to Closure ===
@@ -222,6 +278,15 @@ export function emitClosure(node: IR): Closure {
       };
     }
 
+    case 'import': {
+      // For closure mode, imports are pre-loaded into env; bind into $env and return
+      return (env) => {
+        const value = env[node.name];
+        (env.$env as any).bind(node.name, value);
+        return value;
+      };
+    }
+
     default:
       throw new UnhandledCaseError("IR tag", node);
   }
@@ -230,18 +295,29 @@ export function emitClosure(node: IR): Closure {
 // === Program wrapper ===
 
 export function emitProgramString(body: IR): string {
-  return `export default async ($) => {
+  const imports = collectImports(body);
+  const importLines = imports.map(i => `import ${i.name} from ${JSON.stringify(i.path)};`).join('\n');
+  const prefix = importLines ? importLines + '\n\n' : '';
+
+  return `${prefix}export default async ($) => {
   let $env = $.env();
   return ${emitString(body)};
 };`;
 }
 
 export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Promise<unknown> {
+  const imports = collectImports(body);
   const bodyClosure = emitClosure(body);
   return (env) => async ($: unknown) => {
+    // Pre-load imports using dynamic import
+    const importedValues: Record<string, unknown> = {};
+    for (const imp of imports) {
+      const mod = await import(imp.path);
+      importedValues[imp.name] = mod.default;
+    }
     // Create initial $env from interpreter
     const $env = ($ as any).env();
-    return bodyClosure({ ...env, $, $env });
+    return bodyClosure({ ...env, ...importedValues, $, $env });
   };
 }
 
