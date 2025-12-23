@@ -1265,3 +1265,81 @@ false
 let f = () => 42; f ! == f !
 ===
 true
+
+# =============================================================================
+# OPERATOR DECLARATIONS
+# =============================================================================
+
+--- operator decl infix simple
+operator +++ infix 5 left; let o = { "op+++": (x) => x + 10 }; o +++ 5
+===
+15
+
+--- operator decl infix default precedence
+operator @@ infix; let o = { "op@@": (x) => x }; o @@ 5
+===
+5
+
+--- operator decl prefix
+operator ~ prefix 10; let o = { "op~": () => 99 }; ~o
+===
+99
+
+--- operator decl postfix
+operator ? postfix; let f = () => 123; f?
+===
+123
+
+--- operator decl affects subsequent parsing
+operator <=> infix 4 left; 1 + 2 == 3
+===
+true
+
+--- operator decl high precedence binds tighter
+operator ** infix 7 left; let o = { "op**": (x) => x * 2 }; 2 + o ** 3
+===
+8
+
+--- operator decl low precedence binds looser
+operator ~~~ infix 1 left; let o = { "op~~~": (x) => x }; o ~~~ 2 + 3
+===
+5
+
+--- operator decl in block
+{ operator +++ infix 5 left; let o = { "op+++": (x) => x + 1 }; o +++ 5 }
+===
+6
+
+--- operator decl prefix with precedence
+operator ~ prefix 8; let o = { "op~": () => 42 }; ~o + 1
+===
+43
+
+--- operator decl postfix with precedence
+operator ? postfix 9; let f = () => 10; f? + 5
+===
+15
+
+--- operator decl right associative
+operator --> infix 5 right; let W = (v) => ({ v: v, "op-->": (x) => W(v - x.v) }); (W(10) --> W(3) --> W(1)).v
+===
+8
+
+--- operator decl left associative
+operator --> infix 5 left; let W = (v) => ({ v: v, "op-->": (x) => W(v - x.v) }); (W(10) --> W(3) --> W(1)).v
+===
+6
+
+# =============================================================================
+# OPERATOR DECLARATIONS - Non-associative
+# =============================================================================
+
+--- operator decl non-associative single use
+operator <=> infix 5; let o = { "op<=>": (x) => x }; o <=> 5
+===
+5
+
+--- operator decl non-associative chained error
+operator <=> infix 5; 1 <=> 2 <=> 3
+=== parse, error
+non-associative
