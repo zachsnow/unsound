@@ -367,152 +367,75 @@ const build$parse = (in$: CoreParseOps): void => {
     return max + 1;
   };
 
-  // Operator declarations: operator <op> prefix|postfix|infix [<prec>] [left|right];
-  $.operatorDeclaration = () => (input, pos) => {
+  // Helper: parse operator symbol (one or more operator characters)
+  const operatorSymbol = (): Parser<string> => (input, pos) => {
     const ws = $.ws()(input, pos);
     const p = ws.pos;
-
-    // Check for "operator" keyword
-    if (input.slice(p, p + 8) !== "operator" || /\w/.test(input[p + 8] || "")) {
-      return { ok: false, expected: "operator", pos: p };
-    }
-    let cur = p + 8;
-
-    // Parse the operator symbol (one or more operator characters)
-    const ws1 = $.ws()(input, cur);
-    cur = ws1.pos;
-    const opChars = /^[!@#$%^&*\-+=<>?/|~:]+/.exec(input.slice(cur));
+    const opChars = /^[!@#$%^&*\-+=<>?/|~:]+/.exec(input.slice(p));
     if (!opChars) {
-      return { ok: false, expected: "operator symbol", pos: cur };
+      return { ok: false, expected: "operator symbol", pos: p };
     }
-    const op = opChars[0];
-    cur += op.length;
-
-    // Parse the kind: prefix, postfix, or infix
-    const ws2 = $.ws()(input, cur);
-    cur = ws2.pos;
-    let kind: "prefix" | "postfix" | "infix";
-    if (input.slice(cur, cur + 6) === "prefix" && !/\w/.test(input[cur + 6] || "")) {
-      kind = "prefix";
-      cur += 6;
-    } else if (input.slice(cur, cur + 7) === "postfix" && !/\w/.test(input[cur + 7] || "")) {
-      kind = "postfix";
-      cur += 7;
-    } else if (input.slice(cur, cur + 5) === "infix" && !/\w/.test(input[cur + 5] || "")) {
-      kind = "infix";
-      cur += 5;
-    } else {
-      return { ok: false, expected: "prefix, postfix, or infix", pos: cur };
-    }
-
-    // Optionally parse the precedence (a number)
-    const ws3 = $.ws()(input, cur);
-    let prec: number;
-    const precMatch = /^\d+/.exec(input.slice(ws3.pos));
-    if (precMatch) {
-      prec = parseInt(precMatch[0], 10);
-      cur = ws3.pos + precMatch[0].length;
-    } else {
-      prec = getDefaultPrec();
-    }
-
-    // For infix, optionally parse associativity (left or right, no default)
-    let assoc: "left" | "right" | undefined;
-    if (kind === "infix") {
-      const ws4 = $.ws()(input, cur);
-      if (input.slice(ws4.pos, ws4.pos + 4) === "left" && !/\w/.test(input[ws4.pos + 4] || "")) {
-        assoc = "left";
-        cur = ws4.pos + 4;
-      } else if (input.slice(ws4.pos, ws4.pos + 5) === "right" && !/\w/.test(input[ws4.pos + 5] || "")) {
-        assoc = "right";
-        cur = ws4.pos + 5;
-      }
-      // No default - assoc remains undefined for non-associative
-    }
-
-    // Register the operator (method name is "op" + operator symbol)
-    if (kind === "prefix") {
-      $.operators.prefix[op] = { prec, method: `op${op}` };
-    } else if (kind === "postfix") {
-      $.operators.postfix[op] = { prec, method: `op${op}` };
-    } else {
-      // Use "none" for non-associative operators (will cause parse error on chaining)
-      $.operators.binary[op] = { prec, assoc: assoc || "none", method: `op${op}` };
-    }
-
-    return {
-      ok: true,
-      value: { type: "OperatorDeclaration", op, kind, prec, assoc } as OperatorDeclaration,
-      pos: cur,
-    };
+    return { ok: true, value: opChars[0], pos: p + opChars[0].length };
   };
+
+  // Helper: parse operator kind
+  const operatorKind = (): Parser<"prefix" | "postfix" | "infix"> =>
+    $.alt(
+      $.map($.keyword("prefix"), (): "prefix" => "prefix"),
+      $.map($.keyword("postfix"), (): "postfix" => "postfix"),
+      $.map($.keyword("infix"), (): "infix" => "infix")
+    );
+
+  // Helper: parse associativity
+  const operatorAssoc = (): Parser<"left" | "right"> =>
+    $.alt(
+      $.map($.keyword("left"), (): "left" => "left"),
+      $.map($.keyword("right"), (): "right" => "right")
+    );
+
+  // Operator declarations: operator <op> prefix|postfix|infix [<prec>] [left|right];
+  $.operatorDeclaration = () =>
+    $.map(
+      $.seq(
+        $.keyword("operator"),
+        operatorSymbol(),
+        operatorKind(),
+        $.opt($.numberLit()),
+        $.opt(operatorAssoc())
+      ),
+      ([_kw, op, kind, precOpt, assocOpt]): OperatorDeclaration => {
+        const prec = precOpt ?? getDefaultPrec();
+        const assoc = kind === "infix" ? assocOpt : undefined;
+
+        // Register the operator (method name is "op" + operator symbol)
+        if (kind === "prefix") {
+          $.operators.prefix[op] = { prec, method: `op${op}` };
+        } else if (kind === "postfix") {
+          $.operators.postfix[op] = { prec, method: `op${op}` };
+        } else {
+          // Use "none" for non-associative operators (will cause parse error on chaining)
+          $.operators.binary[op] = { prec, assoc: assoc || "none", method: `op${op}` };
+        }
+
+        return { type: "OperatorDeclaration", op, kind, prec, assoc };
+      }
+    );
 
   // Import declarations: import <name> from "<path>";
-  $.importDeclaration = () => (input, pos) => {
-    const ws = $.ws()(input, pos);
-    const p = ws.pos;
-
-    // Check for "import" keyword
-    if (input.slice(p, p + 6) !== "import" || /\w/.test(input[p + 6] || "")) {
-      return { ok: false, expected: "import", pos: p };
-    }
-    let cur = p + 6;
-
-    // Parse the binding name
-    const ws1 = $.ws()(input, cur);
-    cur = ws1.pos;
-    const nameMatch = /^[a-zA-Z_$][a-zA-Z0-9_$]*/.exec(input.slice(cur));
-    if (!nameMatch) {
-      return { ok: false, expected: "identifier", pos: cur };
-    }
-    const name = nameMatch[0];
-    const nameStart = cur;
-    cur += name.length;
-
-    // Check for "from" keyword
-    const ws2 = $.ws()(input, cur);
-    cur = ws2.pos;
-    if (input.slice(cur, cur + 4) !== "from" || /\w/.test(input[cur + 4] || "")) {
-      return { ok: false, expected: "from", pos: cur };
-    }
-    cur += 4;
-
-    // Parse the path string
-    const ws3 = $.ws()(input, cur);
-    cur = ws3.pos;
-    const quote = input[cur];
-    if (quote !== '"' && quote !== "'") {
-      return { ok: false, expected: "string", pos: cur };
-    }
-    cur++;
-    let path = "";
-    while (cur < input.length && input[cur] !== quote) {
-      if (input[cur] === "\\") {
-        cur++;
-        if (cur < input.length) {
-          path += input[cur];
-          cur++;
-        }
-      } else {
-        path += input[cur];
-        cur++;
-      }
-    }
-    if (input[cur] !== quote) {
-      return { ok: false, expected: "closing quote", pos: cur };
-    }
-    cur++;
-
-    return {
-      ok: true,
-      value: {
+  $.importDeclaration = () =>
+    $.map(
+      $.seq(
+        $.keyword("import"),
+        $.letBinding(),
+        $.keyword("from"),
+        $.stringLit()
+      ),
+      ([_import, name, _from, path]): ImportDeclaration => ({
         type: "ImportDeclaration",
-        name: { name, loc: { start: nameStart, end: nameStart + name.length } },
+        name,
         path,
-      } as ImportDeclaration,
-      pos: cur,
-    };
-  };
+      })
+    );
 
   $.importKeyword = () => $.keyword("import");
 
