@@ -1305,8 +1305,8 @@ operator ~~~ infix 1 left; let o = { "op~~~": (x) => x }; o ~~~ 2 + 3
 ===
 5
 
---- operator decl in block
-{ operator +++ infix 5 left; let o = { "op+++": (x) => x + 1 }; o +++ 5 }
+--- operator decl at top level with block body
+operator +++ infix 5 left; { let o = { "op+++": (x) => x + 1 }; o +++ 5 }
 ===
 6
 

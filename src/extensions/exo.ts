@@ -4,12 +4,13 @@
  * A JS-like language layer built directly on core.ts.
  * Adds: operators, statements, blocks, assignment, type annotations.
  */
-import { Expr, Name, Span, SpanExpr } from "../ast";
+import { Expr, IfExpr, Name, Span, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
 import { CoreInterpretOps } from "../interpret";
 import { ir, IR } from "../ir";
 import { CoreParseOps, ParseResult, Parser } from "../parse";
 import { Extension } from "../types";
+import { UnhandledCaseError } from "../util";
 
 interface BinaryExpr extends SpanExpr {
   type: "BinaryExpr";
@@ -46,18 +47,26 @@ interface VoidExpr extends SpanExpr {
   type: "VoidExpr";
 }
 
-interface OperatorDeclExpr extends SpanExpr {
-  type: "OperatorDeclExpr";
+interface OperatorDeclaration extends SpanExpr {
+  type: "OperatorDeclaration";
   op: string;
   kind: "prefix" | "postfix" | "infix";
   prec: number;
   assoc?: "left" | "right";
 }
 
-interface ImportExpr extends SpanExpr {
-  type: "ImportExpr";
+interface ImportDeclaration extends SpanExpr {
+  type: "ImportDeclaration";
   name: Name;
   path: string;
+}
+
+type Declaration = OperatorDeclaration | ImportDeclaration;
+
+type Program = {
+  type: "Program";
+  declarations: Declaration[];
+  body: EExpr[];
 }
 
 /**
@@ -77,9 +86,7 @@ type EExpr =
   | BlockExpr
   | LetStmtExpr
   | AssignExpr
-  | VoidExpr
-  | OperatorDeclExpr
-  | ImportExpr;
+  | VoidExpr;
 
 interface BinaryOpDef {
   prec: number;
@@ -139,7 +146,6 @@ interface ExoParseOps extends CoreParseOps {
 
   // Statements
   statement: () => Parser<EExpr>;
-  statements: (isEnd: (pos: number) => ParseResult<unknown>) => (pos: number, acc: EExpr[]) => ParseResult<EExpr[]>;
   stmtsToExpr: (stmts: EExpr[]) => EExpr;
   letStmt: () => Parser<LetStmtExpr>;
 
@@ -149,11 +155,12 @@ interface ExoParseOps extends CoreParseOps {
   // Assignment
   varAssign: () => Parser<EExpr>;
 
-  // Operator declarations
-  operatorDecl: () => Parser<OperatorDeclExpr>;
-
-  // Import declarations
-  importDecl: () => Parser<ImportExpr>;
+  // Declarations.
+  declarations: () => Parser<Declaration[]>;
+  declaration: () => Parser<Declaration>;
+  operatorDeclaration: () => Parser<OperatorDeclaration>;
+  importDeclaration: () => Parser<ImportDeclaration>;
+  importKeyword: () => Parser<string>;
 }
 
 const build$parse = (in$: CoreParseOps): void => {
@@ -361,7 +368,7 @@ const build$parse = (in$: CoreParseOps): void => {
   };
 
   // Operator declarations: operator <op> prefix|postfix|infix [<prec>] [left|right];
-  $.operatorDecl = () => (input, pos) => {
+  $.operatorDeclaration = () => (input, pos) => {
     const ws = $.ws()(input, pos);
     const p = ws.pos;
 
@@ -435,13 +442,13 @@ const build$parse = (in$: CoreParseOps): void => {
 
     return {
       ok: true,
-      value: { type: "OperatorDeclExpr", op, kind, prec, assoc } as OperatorDeclExpr,
+      value: { type: "OperatorDeclaration", op, kind, prec, assoc } as OperatorDeclaration,
       pos: cur,
     };
   };
 
   // Import declarations: import <name> from "<path>";
-  $.importDecl = () => (input, pos) => {
+  $.importDeclaration = () => (input, pos) => {
     const ws = $.ws()(input, pos);
     const p = ws.pos;
 
@@ -459,6 +466,7 @@ const build$parse = (in$: CoreParseOps): void => {
       return { ok: false, expected: "identifier", pos: cur };
     }
     const name = nameMatch[0];
+    const nameStart = cur;
     cur += name.length;
 
     // Check for "from" keyword
@@ -498,31 +506,53 @@ const build$parse = (in$: CoreParseOps): void => {
     return {
       ok: true,
       value: {
-        type: "ImportExpr",
-        name: { name, loc: { start: ws1.pos, end: ws1.pos + name.length } },
+        type: "ImportDeclaration",
+        name: { name, loc: { start: nameStart, end: nameStart + name.length } },
         path,
-      } as ImportExpr,
+      } as ImportDeclaration,
       pos: cur,
     };
   };
 
-  $.statement = () => (input, pos) => {
-    const importDecl = $.importDecl()(input, pos);
+  $.importKeyword = () => $.keyword("import");
+
+  $.declaration = () => (input, pos) => {
+    const importDecl = $.importDeclaration()(input, pos);
     if (importDecl.ok) return importDecl;
-    const opDecl = $.operatorDecl()(input, pos);
+    const opDecl = $.operatorDeclaration()(input, pos);
     if (opDecl.ok) return opDecl;
+    return { ok: false, expected: "declaration", pos };
+  };
+
+  // Parse zero or more declarations, each optionally followed by semicolon
+  $.declarations = () => (input, pos) => {
+    const decls: Declaration[] = [];
+    let p = pos;
+
+    while (true) {
+      const ws = $.ws()(input, p);
+      const decl = $.declaration()(input, ws.pos);
+      if (!decl.ok) break;
+
+      decls.push(decl.value);
+      p = decl.pos;
+
+      // Optional semicolon after declaration
+      const ws2 = $.ws()(input, p);
+      const semi = $.token(";")(input, ws2.pos);
+      if (semi.ok) {
+        p = semi.pos;
+      }
+    }
+
+    return { ok: true, value: decls, pos: p };
+  };
+
+  $.statement = () => (input, pos) => {
+    // Try let statement first, then expression
     const letResult = $.letStmt()(input, pos);
     if (letResult.ok) return letResult;
     return $.expr()(input, pos);
-  };
-
-  $.statements = (isEnd) => (pos, acc) => {
-    const loop = (p: number, acc: EExpr[]): ParseResult<EExpr[]> => {
-      const ws = $.ws()("", 0); // dummy - we need input
-      // This needs access to input - let's restructure
-      return { ok: true, value: acc, pos: p };
-    };
-    return loop(pos, acc);
   };
 
   // Helper to convert statement list to expression
@@ -628,17 +658,31 @@ const build$parse = (in$: CoreParseOps): void => {
       pos: thenExpr.pos,
     };
   };
-  $.ifExpr = exoIfExpr as unknown as typeof $.ifExpr;
+  $.ifExpr = exoIfExpr as () => Parser<IfExpr>;
 
   const exoProgram = () => (input: string, pos: number) => {
+    // Parse declarations first
+    const decls = $.declarations()(input, pos);
+    if (!decls.ok) return decls;
+
+    // Parse statements (expressions separated by semicolons)
     const stmts: EExpr[] = [];
-    let p = pos;
+    let p = decls.pos;
 
     while (true) {
       const ws = $.ws()(input, p);
       const eof = $.eof()(input, ws.pos);
       if (eof.ok) {
-        return { ok: true, value: $.stmtsToExpr(stmts), pos: ws.pos };
+        // Build Program AST
+        return {
+          ok: true,
+          value: {
+            type: "Program",
+            declarations: decls.value,
+            body: stmts,
+          } as Program,
+          pos: ws.pos,
+        };
       }
 
       const stmt = $.statement()(input, ws.pos);
@@ -655,63 +699,67 @@ const build$parse = (in$: CoreParseOps): void => {
         const ws3 = $.ws()(input, ws2.pos);
         const eof2 = $.eof()(input, ws3.pos);
         if (eof2.ok) {
-          return { ok: true, value: $.stmtsToExpr(stmts), pos: ws3.pos };
+          return {
+            ok: true,
+            value: {
+              type: "Program",
+              declarations: decls.value,
+              body: stmts,
+            } as Program,
+            pos: ws3.pos,
+          };
         }
         return { ok: false, expected: "; or EOF", pos: ws2.pos };
       }
     }
   };
-  $.program = exoProgram as unknown as typeof $.program;
+  $.program = exoProgram as () => Parser<Expr>;
 };
 
 interface CompileOps {
+  compileProgram: (expr: Program | EExpr) => IR;
+  compileDeclaration: (decl: Declaration) => IR;
   compileExpr: (expr: EExpr) => IR;
   compileBlock: (stmts: EExpr[], idx: number) => IR;
-  compileProgram: (expr: EExpr) => IR;
 }
 
 type ExoCompileOps = CoreCompileOps & CompileOps;
-
-// Helper to extract statements from a program expression
-function getTopLevelStatements(expr: EExpr): EExpr[] {
-  if (expr.type === "BlockExpr") {
-    return expr.stmts;
-  }
-  return [expr];
-}
 
 const build$compile = (in$: CoreCompileOps): void => {
   const $ = in$ as unknown as ExoCompileOps;
 
   const baseCompileExpr = $.compileExpr;
 
-  // Override compileProgram to separate imports from body
-  $.compileProgram = (expr: EExpr): IR => {
-    const stmts = getTopLevelStatements(expr);
+  // Override compileProgram to handle Program AST with declarations
+  $.compileProgram = (expr: Program | EExpr): IR => {
+    // Handle Program AST node
+    if ((expr as any).type === "Program") {
+      const prog = expr as Program;
 
-    // Separate imports from other statements
-    const imports: IR[] = [];
-    const bodyStmts: EExpr[] = [];
-
-    for (const stmt of stmts) {
-      if (stmt.type === "ImportExpr") {
-        // Compile import without await wrapper - program level handles awaiting
-        imports.push(ir.$("import", ir.var("$env"), ir.lit(stmt.name.name), ir.lit(stmt.path)));
-      } else {
-        bodyStmts.push(stmt);
+      // Compile imports (only imports need runtime code)
+      const imports: IR[] = [];
+      for (const decl of prog.declarations) {
+        if (decl.type === "ImportDeclaration") {
+          // Just the $.import call, no await wrapper - program level handles awaiting
+          imports.push(ir.$("import", ir.var("$env"), ir.lit(decl.name.name), ir.lit(decl.path)));
+        }
+        // OperatorDeclaration has no runtime code
       }
+
+      // Compile body statements
+      const body = $.compileBlock(prog.body, 0);
+
+      // If no imports, just return the body
+      if (imports.length === 0) {
+        return body;
+      }
+
+      // Return program node with imports and body
+      return ir.program(imports, body);
     }
 
-    // Compile body statements
-    const body = $.compileBlock(bodyStmts, 0);
-
-    // If no imports, just return the body (for backwards compatibility)
-    if (imports.length === 0) {
-      return body;
-    }
-
-    // Return program node with imports and body
-    return ir.program(imports, body);
+    // Legacy: non-Program AST (e.g., single expression)
+    return $.compileExpr(expr as EExpr);
   };
 
   // Compile statements to a sequence of ir.seq
@@ -729,17 +777,25 @@ const build$compile = (in$: CoreCompileOps): void => {
     return ir.seq(compiledStmt, $.compileBlock(stmts, idx + 1));
   };
 
+  $.compileDeclaration = (decl: Declaration): IR => {
+    switch (decl.type) {
+      case "OperatorDeclaration":
+        // No runtime code needed for operator declarations
+        return ir.lit(undefined);
+
+      case "ImportDeclaration":
+        // Compile to $.import($env, name, path) - async import
+        return ir.$("import", ir.var("$env"), ir.lit(decl.name.name), ir.lit(decl.path));
+
+      default:
+        throw new UnhandledCaseError("declaration", decl);
+    }
+  };
+
   $.compileExpr = (expr: EExpr): IR => {
     switch (expr.type) {
       case "VoidExpr":
-      case "OperatorDeclExpr":
-        // Operator declarations have no runtime effect
         return ir.lit(undefined);
-
-      case "ImportExpr":
-        // At expression level (not top-level), imports are errors
-        // Top-level imports are handled by compileProgram
-        throw new Error("Import statements must be at the top level of a program");
 
       case "BlockExpr":
         // Wrap in $.block to create child scope, then compile statements with seq
