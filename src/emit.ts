@@ -313,9 +313,10 @@ export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Prom
     // Pre-load imports using dynamic import
     const importedValues: Record<string, unknown> = {};
     for (const imp of imports) {
-      // Resolve relative paths against cwd
+      // Resolve relative paths against source directory (passed via env) or cwd
+      const sourceDir = (env.$sourceDir as string) || process.cwd();
       const importPath = imp.path.startsWith(".")
-        ? path.resolve(process.cwd(), imp.path)
+        ? path.resolve(sourceDir, imp.path)
         : imp.path;
       const mod = await import(importPath);
       importedValues[imp.name] = mod.default;

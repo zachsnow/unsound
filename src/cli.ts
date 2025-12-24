@@ -492,7 +492,8 @@ async function main() {
         // the module; we have already loaded all the extensions and built
         // the interpreter.
         logger.debug(`running...`);
-        const closure = emitter.programClosure(ir)(opts.global);
+        const env = { ...opts.global, $sourceDir: sourceFile ? path.dirname(sourceFile) : process.cwd() };
+        const closure = emitter.programClosure(ir)(env);
         const result = await closure(interpreter);
         if (result !== undefined) {
           // Print result to stdout as JSON.

@@ -158,7 +158,8 @@ function parsePipeline(spec: string, previousPipeline: Phase[] = []): Pipeline {
 async function runPhase(
   phase: Phase,
   input: unknown,
-  lang: Language
+  lang: Language,
+  sourceDir?: string
 ): Promise<unknown> {
   const { name, implementation } = phase;
 
@@ -223,7 +224,8 @@ async function runPhase(
       }
       logger.debug(`running interpret phase with ${implementation}...`);
       const closure = input.closure;
-      return await closure({})(interpreter);
+      const env = sourceDir ? { $sourceDir: sourceDir } : {};
+      return await closure(env)(interpreter);
     }
 
     default:
@@ -389,7 +391,8 @@ function prepareInput(input: string, phase: string): unknown {
 async function runTest(
   test: TestCase,
   filename: string,
-  lang: Language
+  lang: Language,
+  testDir: string
 ): Promise<void> {
   const { name, input, expectations } = test;
   const testId = `${filename}::${name}`;
@@ -442,7 +445,7 @@ async function runTest(
 
       // Run pipeline
       for (const phase of phases) {
-        result = await runPhase(phase, result, lang);
+        result = await runPhase(phase, result, lang, testDir);
       }
 
       // If we expected an error but didn't get one, that's a failure
@@ -576,7 +579,7 @@ async function main(): Promise<void> {
     // Run tests.
     logger.debug(`running ${testFile.tests.length} tests in file: ${file}...`);
     for (const test of testFile.tests) {
-      await runTest(test, file, language);
+      await runTest(test, file, language, TESTS_DIR);
       if (failFast && failed > 0) {
         break;
       }
