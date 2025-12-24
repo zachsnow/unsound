@@ -1349,21 +1349,21 @@ non-associative
 # =============================================================================
 
 --- import from js file
-import answer from "/Users/z/Projects/ZachSnow/git/unsound/tests/fixtures/answer.js"; answer
+import answer from "./tests/fixtures/answer.js"; answer
 ===
 42
 
 --- import and use in expression
-import answer from "/Users/z/Projects/ZachSnow/git/unsound/tests/fixtures/answer.js"; answer + 8
+import answer from "./tests/fixtures/answer.js"; answer + 8
 ===
 50
 
 --- import object and access property
-import point from "/Users/z/Projects/ZachSnow/git/unsound/tests/fixtures/point.js"; point.x + point.y
+import point from "./tests/fixtures/point.js"; point.x + point.y
 ===
 30
 
 --- import multiple modules
-import answer from "/Users/z/Projects/ZachSnow/git/unsound/tests/fixtures/answer.js"; import point from "/Users/z/Projects/ZachSnow/git/unsound/tests/fixtures/point.js"; answer + point.x
+import answer from "./tests/fixtures/answer.js"; import point from "./tests/fixtures/point.js"; answer + point.x
 ===
 52

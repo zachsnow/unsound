@@ -1,6 +1,7 @@
 /**
  * Core emitter.
  */
+import * as path from "path";
 import { type IR } from "./ir.ts";
 import { EmitOps } from "./types.ts";
 import { UnhandledCaseError } from "./util.ts";
@@ -312,7 +313,11 @@ export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Prom
     // Pre-load imports using dynamic import
     const importedValues: Record<string, unknown> = {};
     for (const imp of imports) {
-      const mod = await import(imp.path);
+      // Resolve relative paths against cwd
+      const importPath = imp.path.startsWith(".")
+        ? path.resolve(process.cwd(), imp.path)
+        : imp.path;
+      const mod = await import(importPath);
       importedValues[imp.name] = mod.default;
     }
     // Create initial $env from interpreter
