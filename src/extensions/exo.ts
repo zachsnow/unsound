@@ -289,10 +289,6 @@ const build$parse = (in$: CoreParseOps): void => {
     return left;
   };
 
-  // Keep prefixExpr and postfixExpr as aliases for compatibility
-  $.prefixExpr = () => $.binaryExpr(0);
-  $.postfixExpr = () => $.binaryExpr(0);
-
   $.varAssign = () => (input, pos) => {
     const result = $.binaryExpr(0)(input, pos);
     if (!result.ok) return result;
@@ -319,41 +315,31 @@ const build$parse = (in$: CoreParseOps): void => {
     return result;
   };
 
-  // Override appExpr to use operators
-  $.appExpr = (() => $.varAssign()) as unknown as typeof $.appExpr;
+  // Override appExpr to use operators.
+  $.appExpr = (() => $.varAssign()) as () => Parser<Expr>;
 
-  $.letStmt = () => (input, pos) => {
-    const kw = $.letKeyword()(input, pos);
-    if (!kw.ok) return { ok: false, expected: "let", pos };
-
-    const binding = $.letBinding()(input, kw.pos);
-    if (!binding.ok) return { ok: false, expected: "identifier", pos: kw.pos };
-
-    // Optional type annotation: `: expr`
-    let annotation: EExpr | null = null;
-    let afterAnnotation = binding.pos;
-    const ws1 = $.ws()(input, binding.pos);
-    if (input[ws1.pos] === ":") {
-      const typeExpr = $.atom()(input, ws1.pos + 1);
-      if (!typeExpr.ok) return { ok: false, expected: "type expression", pos: ws1.pos + 1 };
-      annotation = typeExpr.value;
-      afterAnnotation = typeExpr.pos;
-    }
-
-    const init = $.letInitializer()(input, afterAnnotation);
-    if (!init.ok) return init;
-
-    return {
-      ok: true,
-      value: {
-        type: "LetStmtExpr",
-        name: binding.value,
-        annotation,
-        value: init.value as EExpr,
-      } as LetStmtExpr,
-      pos: init.pos,
-    };
+  // Helper: parse optional type annotation `: type`
+  const typeAnnotation = (): Parser<EExpr> => (input, pos) => {
+    const colon = $.token(":")(input, pos);
+    if (!colon.ok) return colon;
+    return $.atom()(input, colon.pos);
   };
+
+  $.letStmt = () =>
+    $.map(
+      $.seq(
+        $.letKeyword(),
+        $.letBinding(),
+        $.opt(typeAnnotation()),
+        $.letInitializer()
+      ),
+      ([_kw, name, annotation, value]): LetStmtExpr => ({
+        type: "LetStmtExpr",
+        name,
+        annotation,
+        value: value as EExpr,
+      })
+    );
 
   // Disable let...in expression syntax
   $.letExpr = () => () => ({ ok: false, expected: "expression", pos: 0 });
@@ -439,13 +425,11 @@ const build$parse = (in$: CoreParseOps): void => {
 
   $.importKeyword = () => $.keyword("import");
 
-  $.declaration = () => (input, pos) => {
-    const importDecl = $.importDeclaration()(input, pos);
-    if (importDecl.ok) return importDecl;
-    const opDecl = $.operatorDeclaration()(input, pos);
-    if (opDecl.ok) return opDecl;
-    return { ok: false, expected: "declaration", pos };
-  };
+  $.declaration = () =>
+    $.alt(
+      $.lazy(() => $.importDeclaration()),
+      $.lazy(() => $.operatorDeclaration())
+    );
 
   // Parse zero or more declarations, each optionally followed by semicolon
   $.declarations = () => (input, pos) => {
@@ -471,12 +455,11 @@ const build$parse = (in$: CoreParseOps): void => {
     return { ok: true, value: decls, pos: p };
   };
 
-  $.statement = () => (input, pos) => {
-    // Try let statement first, then expression
-    const letResult = $.letStmt()(input, pos);
-    if (letResult.ok) return letResult;
-    return $.expr()(input, pos);
-  };
+  $.statement = () =>
+    $.alt(
+      $.lazy(() => $.letStmt()),
+      $.lazy(() => $.expr())
+    );
 
   // Helper to convert statement list to expression
   $.stmtsToExpr = (stmts) => {
@@ -550,38 +533,29 @@ const build$parse = (in$: CoreParseOps): void => {
   };
   $.atom = exoAtom as () => Parser<Expr>;
 
-  const exoIfExpr = () => (input: string, pos: number) => {
-    const kw = $.ifKeyword()(input, pos);
-    if (!kw.ok) return { ok: false, expected: "if", pos };
-
-    const cond = $.ifCondition()(input, kw.pos);
-    if (!cond.ok) return cond;
-
-    const thenKw = $.thenKeyword()(input, cond.pos);
-    if (!thenKw.ok) return { ok: false, expected: "then", pos: cond.pos };
-
-    const thenExpr = $.thenBranch()(input, thenKw.pos);
-    if (!thenExpr.ok) return thenExpr;
-
-    const elseKw = $.elseKeyword()(input, thenExpr.pos);
-    if (elseKw.ok) {
-      const elseExpr = $.elseBranch()(input, elseKw.pos);
-      if (!elseExpr.ok) return elseExpr;
-      return {
-        ok: true,
-        value: { type: "IfExpr", cond: cond.value, then: thenExpr.value, else: elseExpr.value },
-        pos: elseExpr.pos,
-      };
-    }
-
-    // No else - use VoidExpr
-    return {
-      ok: true,
-      value: { type: "IfExpr", cond: cond.value, then: thenExpr.value, else: { type: "VoidExpr" } },
-      pos: thenExpr.pos,
-    };
+  // Helper: parse else clause
+  const elseClause = (): Parser<Expr> => (input, pos) => {
+    const kw = $.elseKeyword()(input, pos);
+    if (!kw.ok) return kw;
+    return $.elseBranch()(input, kw.pos);
   };
-  $.ifExpr = exoIfExpr as () => Parser<IfExpr>;
+
+  $.ifExpr = () =>
+    $.map(
+      $.seq(
+        $.ifKeyword(),
+        $.lazy(() => $.ifCondition()),
+        $.thenKeyword(),
+        $.lazy(() => $.thenBranch()),
+        $.opt(elseClause())
+      ),
+      ([_if, cond, _then, thenExpr, elseExpr]): IfExpr => ({
+        type: "IfExpr",
+        cond,
+        then: thenExpr,
+        else: elseExpr ?? { type: "VoidExpr" },
+      })
+    );
 
   const exoProgram = () => (input: string, pos: number) => {
     // Parse declarations first
