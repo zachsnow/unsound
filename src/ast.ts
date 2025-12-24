@@ -116,7 +116,7 @@ export interface AssignIndexExpr extends SpanExpr {
  */
 export interface LiteralExpr extends SpanExpr {
   type: 'LiteralExpr';
-  value: number | string | boolean | null;
+  value: number | string | boolean | null | undefined;
 }
 
 /**

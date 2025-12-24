@@ -43,10 +43,6 @@ interface AssignExpr extends SpanExpr {
   value: EExpr;
 }
 
-interface VoidExpr extends SpanExpr {
-  type: "VoidExpr";
-}
-
 interface OperatorDeclaration extends SpanExpr {
   type: "OperatorDeclaration";
   op: string;
@@ -85,8 +81,7 @@ type EExpr =
   | PostfixExpr
   | BlockExpr
   | LetStmtExpr
-  | AssignExpr
-  | VoidExpr;
+  | AssignExpr;
 
 interface BinaryOpDef {
   prec: number;
@@ -391,7 +386,7 @@ const build$parse = (in$: CoreParseOps): void => {
       ),
       ([_kw, op, kind, precOpt, assocOpt]): OperatorDeclaration => {
         const prec = precOpt ?? getDefaultPrec();
-        const assoc = kind === "infix" ? assocOpt : undefined;
+        const assoc = kind === "infix" ? assocOpt ?? undefined : undefined;
 
         // Register the operator (method name is "op" + operator symbol)
         if (kind === "prefix") {
@@ -425,10 +420,10 @@ const build$parse = (in$: CoreParseOps): void => {
 
   $.importKeyword = () => $.keyword("import");
 
-  $.declaration = () =>
+  $.declaration = (): Parser<Declaration> =>
     $.alt(
-      $.lazy(() => $.importDeclaration()),
-      $.lazy(() => $.operatorDeclaration())
+      $.lazy(() => $.importDeclaration() as Parser<Declaration>),
+      $.lazy(() => $.operatorDeclaration()),
     );
 
   // Parse zero or more declarations, each optionally followed by semicolon
@@ -457,15 +452,15 @@ const build$parse = (in$: CoreParseOps): void => {
 
   $.statement = () =>
     $.alt(
-      $.lazy(() => $.letStmt()),
+      $.lazy(() => $.letStmt() as Parser<EExpr>),
       $.lazy(() => $.expr())
     );
 
   // Helper to convert statement list to expression
   $.stmtsToExpr = (stmts) => {
-    if (stmts.length === 0) return { type: "VoidExpr" } as VoidExpr;
+    if (stmts.length === 0) return { type: "LiteralExpr", value: undefined };
     if (stmts.length === 1) return stmts[0];
-    return { type: "BlockExpr", stmts } as BlockExpr;
+    return { type: "BlockExpr", stmts };
   };
 
   const baseAtom = $.atom;
@@ -553,7 +548,7 @@ const build$parse = (in$: CoreParseOps): void => {
         type: "IfExpr",
         cond,
         then: thenExpr,
-        else: elseExpr ?? { type: "VoidExpr" },
+        else: elseExpr ?? { type: "LiteralExpr", value: undefined },
       })
     );
 
@@ -691,9 +686,6 @@ const build$compile = (in$: CoreCompileOps): void => {
 
   $.compileExpr = (expr: EExpr): IR => {
     switch (expr.type) {
-      case "VoidExpr":
-        return ir.lit(undefined);
-
       case "BlockExpr":
         // Wrap in $.block to create child scope, then compile statements with seq
         return ir.$(
