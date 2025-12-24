@@ -492,7 +492,11 @@ async function main() {
         // the module; we have already loaded all the extensions and built
         // the interpreter.
         logger.debug(`running...`);
-        const env = { ...opts.global };
+        const env: Record<string, unknown> = { ...opts.global };
+        // Pass source directory for import path resolution
+        if (sourceFile) {
+          env.$sourceDir = path.dirname(sourceFile);
+        }
         const closure = emitter.programClosure(ir)(env);
         const result = await closure(interpreter);
         if (result !== undefined) {
