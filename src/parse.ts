@@ -41,15 +41,8 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   map: <A, B>(p: Parser<A>, fn: (a: A, loc: Span) => B) => Parser<B>;
   opt: <T>(p: Parser<T>) => Parser<T | null>;
   lazy: <T>(fn: () => Parser<T>) => Parser<T>;
-  /**
-   * Parse
-   */
   sepBy: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
   sepBy1: <T, S>(p: Parser<T>, sep: Parser<S>) => Parser<T[]>;
-
-  /**
-   * Parse something that should appear between two delimiters.
-   */
   between: <A, B, C>(
     open: Parser<A>,
     p: Parser<B>,
@@ -206,6 +199,9 @@ export function build$parse(in$: ParseOps): void {
 
   // === Primitive combinators ===
 
+  /**
+   * Parse the given character `c` or fail.
+   */
   $.char = (c) => (input, pos) => {
     if (input[pos] === c) {
       return { ok: true, value: c, pos: pos + 1 };
@@ -213,6 +209,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: false, expected: `'${c}'`, pos };
   };
 
+  /**
+   * Parse a single character satisfying the given predicate `pred` or fail.
+   */
   $.satisfy = (pred, name) => (input, pos) => {
     if (pos < input.length && pred(input[pos])) {
       return { ok: true, value: input[pos], pos: pos + 1 };
@@ -220,6 +219,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: false, expected: name, pos };
   };
 
+  /**
+   * Parse the given string `s` or fail.
+   */
   $.str = (s) => (input, pos) => {
     if (input.slice(pos, pos + s.length) === s) {
       return { ok: true, value: s, pos: pos + s.length };
@@ -227,6 +229,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: false, expected: `"${s}"`, pos };
   };
 
+  /**
+   * Parse the end of input or fail.
+   */
   $.eof = () => (input, pos) => {
     if (pos >= input.length) {
       return { ok: true, value: null, pos };
@@ -236,6 +241,10 @@ export function build$parse(in$: ParseOps): void {
 
   // === Higher-order combinators ===
 
+  /**
+   * Given a list of parsers, parse them in sequence and return their results in an array;
+   * otherwise return the first failure.
+   */
   $.seq =
     (...parsers) =>
       (input, pos) => {
@@ -252,10 +261,14 @@ export function build$parse(in$: ParseOps): void {
         return { ok: true, value: results as any, pos: p };
       };
 
+  /**
+   * Given a list of parsers, try each in order and return the first success;
+   * otherwise return the failure that got the farthest.
+   */
   $.alt =
     (...parsers) =>
       (input, pos) => {
-        let furthest: ParseResult<any> = {
+        let farthest: ParseResult<any> = {
           ok: false,
           expected: "alternative",
           pos,
@@ -263,11 +276,15 @@ export function build$parse(in$: ParseOps): void {
         for (const parser of parsers) {
           const r = parser(input, pos);
           if (r.ok) return r;
-          if (r.pos > furthest.pos) furthest = r;
+          if (r.pos > farthest.pos) farthest = r;
         }
-        return furthest;
+        return farthest;
       };
 
+  /**
+   * Repeat parser `p` zero or more times, returning an array of results;
+   * always succeeds.
+   */
   $.many = (p) => (input, pos) => {
     const results: any[] = [];
     let current = pos;
@@ -282,15 +299,21 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value: results, pos: current };
   };
 
+  /**
+   * Repeat parser `p` one or more times, returning an array of results;
+   * fails if `p` does not succeed at least once.
+   */
   $.many1 = (p) => (input, pos) => {
-    const first = p(input, pos);
-    if (!first.ok) return first;
-    const rest = $.many(p)(input, first.pos);
-    if (!rest.ok) return rest;
-    return { ok: true, value: [first.value, ...rest.value], pos: rest.pos };
+    const result = $.many(p)(input, pos);
+    if (result.ok && result.value.length > 0) {
+      return result;
+    }
+    return { ok: false, expected: "at least one repetition", pos };
   };
 
-  // Map with location: fn receives (value, loc) - loc can be ignored if not needed
+  /**
+   * Transform the result of parser `p` with function `fn`.
+   */
   $.map = (p, fn) => (input, pos) => {
     const ws = $.ws()(input, pos);
     const start = ws.pos;
@@ -301,14 +324,29 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value: fn(r.value, { start, end: r.pos }), pos: r.pos };
   };
 
+  /**
+   * Optionally parse `p`; if it fails, return null instead of failing.
+   */
   $.opt = (p) => (input, pos) => {
     const r = p(input, pos);
     if (r.ok) return r;
     return { ok: true, value: null, pos };
   };
 
+  /**
+   * Lazily construct a parser by calling `fn` when invoked;
+   * used to ensure that extensions can override parsers e.g. in $.seq(...),
+   * as otherwise the parsers will be bound to their "initial" value:
+   *
+   * $.seq($.someParser, $.someOtherParser) vs. $.seq($.lazy(() => $.someParser), $.lazy(() => $.someOtherParser)).
+   *
+   * If an extension wants to override `$.someParser`, the lazy version will pick up the new value.
+   */
   $.lazy = (fn) => (input, pos) => fn()(input, pos);
 
+  /**
+   * Returns zero or more parsed `p` separated by `sep`.
+   */
   $.sepBy = (p, sep) => (input, pos) => {
     const first = p(input, pos);
     if (!first.ok) {
@@ -330,6 +368,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value: results, pos: current };
   };
 
+  /**
+   * Returns at least one parsed `p` separated by `sep`.
+   */
   $.sepBy1 = (p, sep) => (input, pos) => {
     const result = $.sepBy(p, sep)(input, pos);
     if (!result.ok) {
@@ -341,6 +382,9 @@ export function build$parse(in$: ParseOps): void {
     return result;
   };
 
+  /**
+   * Parses `open`, then `p`, then `close`, returning the value of `p`.
+   */
   $.between = (open, p, close) => (input, pos) => {
     const o = open(input, pos);
     if (!o.ok) {
@@ -357,7 +401,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value: content.value, pos: c.pos };
   };
 
-  // Wrap a parser to return { value, loc } for capturing sub-part positions
+  /**
+   * Wrap a parser to return { value, loc } for capturing sub-part positions
+   */
   $.withLoc = (p) => (input, pos) => {
     const ws = $.ws()(input, pos);
     const start = ws.pos;
@@ -380,7 +426,9 @@ export function build$parse(in$: ParseOps): void {
     "whitespace"
   );
 
-  // Line comment: // ... until end of line
+  /**
+   * Line comment.
+   */
   const lineComment = () => (input: string, pos: number) => {
     if (input.slice(pos, pos + 2) !== "//") {
       return { ok: false, expected: "comment", pos };
@@ -407,41 +455,61 @@ export function build$parse(in$: ParseOps): void {
     return { ok: false, expected: "*/", pos: end };
   };
 
-  $.whitespace = () => (input: string, pos: number) => {
+  /**
+   * Consumes whitespace and comments; does not require any whitespace.
+   */
+  $.whitespace = (required: boolean = false) => (input: string, pos: number) => {
+    let value = "";
     let current = pos;
     while (current < input.length) {
       // Try whitespace char
       const wsResult = wsChar(input, current);
       if (wsResult.ok) {
+        value += wsResult.value;
         current = wsResult.pos;
         continue;
       }
       // Try line comment
       const lineResult = lineComment()(input, current);
       if (lineResult.ok) {
+        value += lineResult.value;
         current = lineResult.pos;
         continue;
       }
       // Try block comment
       const blockResult = blockComment()(input, current);
       if (blockResult.ok) {
+        value += lineResult.value;
         current = blockResult.pos;
         continue;
       }
+
+      // Otherwise we found non-whitespace, be done.
       break;
     }
-    return { ok: true, value: "", pos: current };
+
+    // Sometimes we require whitespace, like between tokens.
+    if (!value && required) {
+      return { ok: false, expected: "whitespace", pos };
+    }
+
+    return { ok: true, value, pos: current };
   };
 
-  // Note: can't use $.map here because $.map calls $.ws (would be circular)
+  /**
+   * Whitespace (ignore value); really just a shortcut.
+   */
   $.ws = () => (input, pos) => {
     const r = $.whitespace()(input, pos);
     return { ok: true, value: null, pos: r.pos };
   };
 
-  $.token = (s) => (input, pos) => {
+  /**
+   * Consumes optional whitespace and then the given `token`.
+   */
+  $.token = (token) => (input, pos) => {
     const ws = $.ws()(input, pos);
-    return $.str(s)(input, ws.pos);
+    return $.str(token)(input, ws.pos);
   };
 
   $.keywords = ["let", "in", "if", "then", "else", "true", "false", "null"];
@@ -468,14 +536,23 @@ export function build$parse(in$: ParseOps): void {
 
   // === Lexemes ===
 
+  /**
+   * Parses a single digit, 0-9, or fails.
+   */
   $.digit = () => $.satisfy((c) => c >= "0" && c <= "9", "digit");
 
+  /**
+   * Parses a single letter, a-z or A-Z, or fails.
+   */
   $.letter = () =>
     $.satisfy(
       (c) => (c >= "a" && c <= "z") || (c >= "A" && c <= "Z"),
       "letter"
     );
 
+  /**
+   * Parses a single identifier character: letter, digit, _, or $, or fails.
+   */
   $.identChar = () =>
     $.satisfy(
       (c) =>
@@ -487,6 +564,9 @@ export function build$parse(in$: ParseOps): void {
       "identifier character"
     );
 
+  /**
+   * Parses a number literal (integer) or fails.
+   */
   $.numberLit = () => (input, pos) => {
     const ws = $.ws()(input, pos);
     const digits = $.many1($.digit())(input, ws.pos);
@@ -498,6 +578,11 @@ export function build$parse(in$: ParseOps): void {
     };
   };
 
+  /**
+   * Parses a string literal (double-quoted) or fails.
+   *
+   * This is a custom parser to handle escape sequences more easily.
+   */
   $.stringLit = () => (input, pos) => {
     const ws = $.ws()(input, pos);
     const open = $.char('"')(input, ws.pos);
@@ -542,6 +627,9 @@ export function build$parse(in$: ParseOps): void {
     return { ok: true, value, pos: current + 1 }; // Skip closing "
   };
 
+  /**
+   * Parses an identifier or fails.
+   */
   $.ident =
     () =>
       (input, pos): ParseResult<string> => {
@@ -569,7 +657,10 @@ export function build$parse(in$: ParseOps): void {
       };
 
   // === Grammar rules ===
-
+  /**
+   * Parses an entire program; it's an error if there is trailing input that
+   * it is not whitespace.
+   */
   $.program = () => (input, pos) => {
     const e = $.expr()(input, pos);
     if (!e.ok) {
@@ -582,6 +673,9 @@ export function build$parse(in$: ParseOps): void {
     return e;
   };
 
+  /**
+   * Parses a core expression.
+   */
   $.expr = () =>
     $.alt(
       $.lazy(() => $.letExpr()),
