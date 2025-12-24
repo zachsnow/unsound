@@ -1,7 +1,6 @@
 /**
  * Core emitter.
  */
-import * as path from "path";
 import { type IR } from "./ir.ts";
 import { EmitOps } from "./types.ts";
 import { UnhandledCaseError } from "./util.ts";
@@ -84,65 +83,19 @@ export function emitString(node: IR): string {
       const parts = node.elements.map(emitString).join(', ');
       return `(${parts})`;
 
-    case 'import':
-      // Import is hoisted; bind into $env so it's accessible via lookup, then return value
-      return `($env.bind(${JSON.stringify(node.name)}, ${node.name}), ${node.name})`;
+    case 'await':
+      return `(await ${emitString(node.value)})`;
+
+    case 'program':
+      // Program node - emit imports as awaits, then body
+      // This is used when emitString is called directly on program IR
+      const importParts = node.imports.map(imp => `(await ${emitString(imp)})`);
+      const allParts = [...importParts, emitString(node.body)];
+      return `(${allParts.join(', ')})`;
 
     default:
       throw new UnhandledCaseError("IR tag", node);
   }
-}
-
-// Collect all imports from IR tree
-function collectImports(node: IR): { name: string; path: string }[] {
-  const imports: { name: string; path: string }[] = [];
-
-  function walk(n: IR): void {
-    switch (n.tag) {
-      case 'import':
-        imports.push({ name: n.name, path: n.path });
-        break;
-      case 'call':
-        walk(n.fn);
-        n.args.forEach(walk);
-        break;
-      case 'member':
-        walk(n.obj);
-        break;
-      case 'index':
-        walk(n.obj);
-        walk(n.key);
-        break;
-      case 'arrow':
-      case 'function':
-        walk(n.body);
-        break;
-      case 'object':
-        n.properties.forEach(p => walk(p.value));
-        break;
-      case 'array':
-        n.elements.forEach(walk);
-        break;
-      case 'spread':
-        walk(n.value);
-        break;
-      case 'ternary':
-        walk(n.cond);
-        walk(n.then);
-        walk(n.else);
-        break;
-      case 'seq':
-        n.elements.forEach(walk);
-        break;
-      case 'assign':
-        walk(n.value);
-        break;
-      // literal, var - no children
-    }
-  }
-
-  walk(node);
-  return imports;
 }
 
 // === Emit to Closure ===
@@ -279,14 +232,29 @@ export function emitClosure(node: IR): Closure {
       };
     }
 
-    case 'import': {
-      // For closure mode, imports are pre-loaded into env; bind into $env and return
-      return (env) => {
-        const value = env[node.name];
-        (env.$env as any).bind(node.name, value);
-        return value;
-      };
+    case 'await': {
+      // Await nodes should only appear at program level, not in closures
+      // For now, just evaluate the inner value (caller handles awaiting)
+      const valueClosure = emitClosure(node.value);
+      return (env) => valueClosure(env);
     }
+
+    case 'program':
+      // Program node is handled at top level by emitProgramClosure
+      // If we get here, create a closure that awaits imports then runs body
+      // Note: the caller must be async for this to work properly
+      const importClosuresP = node.imports.map(emitClosure);
+      const bodyClosureP = emitClosure(node.body);
+      return (env) => {
+        // Return an async function that awaits imports
+        // The caller (emitProgramClosure) will await this
+        return (async () => {
+          for (const importClosure of importClosuresP) {
+            await importClosure(env);
+          }
+          return bodyClosureP(env);
+        })();
+      };
 
     default:
       throw new UnhandledCaseError("IR tag", node);
@@ -296,34 +264,53 @@ export function emitClosure(node: IR): Closure {
 // === Program wrapper ===
 
 export function emitProgramString(body: IR): string {
-  const imports = collectImports(body);
-  const importLines = imports.map(i => `import ${i.name} from ${JSON.stringify(i.path)};`).join('\n');
-  const prefix = importLines ? importLines + '\n\n' : '';
+  // Handle program node with imports
+  if (body.tag === 'program') {
+    const importStmts = body.imports.map(imp => `  await ${emitString(imp)};`).join('\n');
+    const bodyStr = emitString(body.body);
+    return `export default async ($) => {
+  let $env = $.env();
+${importStmts}
+  return ${bodyStr};
+};`;
+  }
 
-  return `${prefix}export default async ($) => {
+  // Legacy: plain body without separate imports
+  return `export default async ($) => {
   let $env = $.env();
   return ${emitString(body)};
 };`;
 }
 
 export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Promise<unknown> {
-  const imports = collectImports(body);
+  // Handle program node with imports
+  if (body.tag === 'program') {
+    const importClosures = body.imports.map(emitClosure);
+    const bodyClosure = emitClosure(body.body);
+    return (env) => async ($: unknown) => {
+      const $env = ($ as any).env();
+      // Pass $sourceDir to $env if provided, for $.import path resolution
+      if (env.$sourceDir) {
+        $env.bind("$sourceDir", env.$sourceDir);
+      }
+      const runEnv = { ...env, $, $env };
+      // Await each import in sequence
+      for (const importClosure of importClosures) {
+        await importClosure(runEnv);
+      }
+      return bodyClosure(runEnv);
+    };
+  }
+
+  // Legacy: plain body without separate imports
   const bodyClosure = emitClosure(body);
   return (env) => async ($: unknown) => {
-    // Pre-load imports using dynamic import
-    const importedValues: Record<string, unknown> = {};
-    for (const imp of imports) {
-      // Resolve relative paths against source directory (passed via env) or cwd
-      const sourceDir = (env.$sourceDir as string) || process.cwd();
-      const importPath = imp.path.startsWith(".")
-        ? path.resolve(sourceDir, imp.path)
-        : imp.path;
-      const mod = await import(importPath);
-      importedValues[imp.name] = mod.default;
-    }
-    // Create initial $env from interpreter
     const $env = ($ as any).env();
-    return bodyClosure({ ...env, ...importedValues, $, $env });
+    // Pass $sourceDir to $env if provided, for $.import path resolution
+    if (env.$sourceDir) {
+      $env.bind("$sourceDir", env.$sourceDir);
+    }
+    return bodyClosure({ ...env, $, $env });
   };
 }
 

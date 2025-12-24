@@ -667,14 +667,52 @@ const build$parse = (in$: CoreParseOps): void => {
 interface CompileOps {
   compileExpr: (expr: EExpr) => IR;
   compileBlock: (stmts: EExpr[], idx: number) => IR;
+  compileProgram: (expr: EExpr) => IR;
 }
 
 type ExoCompileOps = CoreCompileOps & CompileOps;
+
+// Helper to extract statements from a program expression
+function getTopLevelStatements(expr: EExpr): EExpr[] {
+  if (expr.type === "BlockExpr") {
+    return expr.stmts;
+  }
+  return [expr];
+}
 
 const build$compile = (in$: CoreCompileOps): void => {
   const $ = in$ as unknown as ExoCompileOps;
 
   const baseCompileExpr = $.compileExpr;
+
+  // Override compileProgram to separate imports from body
+  $.compileProgram = (expr: EExpr): IR => {
+    const stmts = getTopLevelStatements(expr);
+
+    // Separate imports from other statements
+    const imports: IR[] = [];
+    const bodyStmts: EExpr[] = [];
+
+    for (const stmt of stmts) {
+      if (stmt.type === "ImportExpr") {
+        // Compile import without await wrapper - program level handles awaiting
+        imports.push(ir.$("import", ir.var("$env"), ir.lit(stmt.name.name), ir.lit(stmt.path)));
+      } else {
+        bodyStmts.push(stmt);
+      }
+    }
+
+    // Compile body statements
+    const body = $.compileBlock(bodyStmts, 0);
+
+    // If no imports, just return the body (for backwards compatibility)
+    if (imports.length === 0) {
+      return body;
+    }
+
+    // Return program node with imports and body
+    return ir.program(imports, body);
+  };
 
   // Compile statements to a sequence of ir.seq
   $.compileBlock = (stmts, idx) => {
@@ -699,8 +737,9 @@ const build$compile = (in$: CoreCompileOps): void => {
         return ir.lit(undefined);
 
       case "ImportExpr":
-        // Compile to ir.import which will be hoisted by emit
-        return ir.import(expr.name.name, expr.path);
+        // At expression level (not top-level), imports are errors
+        // Top-level imports are handled by compileProgram
+        throw new Error("Import statements must be at the top level of a program");
 
       case "BlockExpr":
         // Wrap in $.block to create child scope, then compile statements with seq

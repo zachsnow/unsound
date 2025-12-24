@@ -158,8 +158,7 @@ function parsePipeline(spec: string, previousPipeline: Phase[] = []): Pipeline {
 async function runPhase(
   phase: Phase,
   input: unknown,
-  lang: Language,
-  sourceDir?: string
+  lang: Language
 ): Promise<unknown> {
   const { name, implementation } = phase;
 
@@ -224,8 +223,8 @@ async function runPhase(
       }
       logger.debug(`running interpret phase with ${implementation}...`);
       const closure = input.closure;
-      const env = sourceDir ? { $sourceDir: sourceDir } : {};
-      return await closure(env)(interpreter);
+      // Pass $sourceDir for $.import to resolve relative paths
+      return await closure({ $sourceDir: TESTS_DIR })(interpreter);
     }
 
     default:
@@ -391,8 +390,7 @@ function prepareInput(input: string, phase: string): unknown {
 async function runTest(
   test: TestCase,
   filename: string,
-  lang: Language,
-  testDir: string
+  lang: Language
 ): Promise<void> {
   const { name, input, expectations } = test;
   const testId = `${filename}::${name}`;
@@ -445,7 +443,7 @@ async function runTest(
 
       // Run pipeline
       for (const phase of phases) {
-        result = await runPhase(phase, result, lang, testDir);
+        result = await runPhase(phase, result, lang);
       }
 
       // If we expected an error but didn't get one, that's a failure
@@ -579,7 +577,7 @@ async function main(): Promise<void> {
     // Run tests.
     logger.debug(`running ${testFile.tests.length} tests in file: ${file}...`);
     for (const test of testFile.tests) {
-      await runTest(test, file, language, TESTS_DIR);
+      await runTest(test, file, language);
       if (failFast && failed > 0) {
         break;
       }

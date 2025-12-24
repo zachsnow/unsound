@@ -21,7 +21,8 @@ export type IR =
   | { tag: 'spread'; value: IR }
   | { tag: 'ternary'; cond: IR; then: IR; else: IR }
   | { tag: 'seq'; elements: IR[] }
-  | { tag: 'import'; name: string; path: string };
+  | { tag: 'await'; value: IR }
+  | { tag: 'program'; imports: IR[]; body: IR };
 
 /**
  * IR constructors and helpers.
@@ -99,7 +100,11 @@ export const ir = {
   $: (method: string, ...args: IR[]): IR =>
     ir.call(ir.member(ir.var('$'), method), ...args),
 
-  // Import statement
-  import: (name: string, path: string): IR =>
-    ({ tag: 'import', name, path }),
+  // Await an async expression
+  await: (value: IR): IR =>
+    ({ tag: 'await', value }),
+
+  // Program with imports (awaited at top level) and body (synchronous)
+  program: (imports: IR[], body: IR): IR =>
+    ({ tag: 'program', imports, body }),
 };
