@@ -1104,7 +1104,11 @@ export function build$parse(in$: ParseOps): void {
       $.map(
         $.keyword("null"),
         (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: null, loc })
-      )
+      ),
+      $.map(
+        $.keyword("undefined"),
+        (_, loc): LiteralExpr => ({ type: "LiteralExpr", value: undefined, loc })
+      ),
     );
 
   $.identifierExpr = () =>

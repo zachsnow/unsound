@@ -158,10 +158,12 @@ export function build$interpret(in$: InterpretOps): void {
   // Environment factory - creates initial env with globals
   $.env = () => createEnv({ $operators });
 
+  // Literals.
   $.number = (n) => n;
   $.string = (s) => s;
   $.boolean = (b) => b;
   $.null = () => null;
+  $.undefined = () => undefined;
 
   $.lookup = ($env, name) => $env.lookup(name);
 

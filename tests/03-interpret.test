@@ -19,6 +19,16 @@ $.let($env, "x", ($env) => $.number(42), ($env) => $.lookup($env, "x"))
 ===
 "hello"
 
+--- literal null
+null
+===
+null
+
+--- literal undefined
+undefined
+===
+undefined
+
 --- literal boolean true
 true
 ===
@@ -28,6 +38,7 @@ true
 false
 ===
 false
+
 
 --- simple let
 let x = 42 in x
