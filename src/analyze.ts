@@ -284,11 +284,11 @@ export function build$analyze(in$: unknown): void {
     // Define the name before analyzing the value and body; this allows the value
     // to refer to the name, for recursive functions. This also means that
     // (incorrectly) recursive values will not trigger undefined warnings, but cest la vie.
-    $.define(expr.name, 'let', expr.nameLoc ?? expr.loc);
+    $.define(expr.name.name, 'let', expr.name.loc ?? expr.loc);
 
     // Record token for binding name
-    if (expr.nameLoc) {
-      $.token(expr.nameLoc, 'variable', ['declaration']);
+    if (expr.name.loc) {
+      $.token(expr.name.loc, 'variable', ['declaration']);
     }
 
     $.analyzeExpr(expr.value);

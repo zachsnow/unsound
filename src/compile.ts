@@ -16,7 +16,7 @@ import type {
 } from "./ast.ts";
 import { ir, type IR } from "./ir.ts";
 import { Builder, CompileOps } from "./types.ts";
-import { fix } from "./util.ts";
+import { fix, UnhandledCaseError } from "./util.ts";
 
 // Compiler operations interface - all methods can be overridden by extensions
 export interface CoreCompileOps extends CompileOps<Expr, IR> {
@@ -149,7 +149,7 @@ export function build$compile(in$: CompileOps): void {
     return ir.$(
       "let",
       ir.var("$env"),
-      ir.lit(expr.name),
+      ir.lit(expr.name.name),
       ir.arrow(["$env"], $.compileExpr(expr.value)),
       ir.arrow(["$env"], $.compileExpr(expr.body))
     );
@@ -230,19 +230,23 @@ export function build$compile(in$: CompileOps): void {
   // 42, "hello", true, false
   // Compiles to: $.number(42), $.string("hello"), $.boolean(true/false)
   $.compileLiteral = (expr) => {
-    if (typeof expr.value === "number") {
-      return ir.$("number", ir.lit(expr.value));
-    }
-    if (typeof expr.value === "string") {
-      return ir.$("string", ir.lit(expr.value));
-    }
-    if (typeof expr.value === "boolean") {
-      return ir.$("boolean", ir.lit(expr.value));
-    }
+    const type = typeof expr.value;
     if (expr.value === null) {
       return ir.$("null");
     }
-    return ir.lit(null);
+
+    switch (type) {
+      case "number":
+        return ir.$("number", ir.lit(expr.value));
+      case "string":
+        return ir.$("string", ir.lit(expr.value));
+      case "boolean":
+        return ir.$("boolean", ir.lit(expr.value));
+      case "undefined":
+        return ir.$("undefined");
+      default:
+        throw new Error("invalid literal of type " + type + ": " + expr.value);
+    }
   };
 
   // x

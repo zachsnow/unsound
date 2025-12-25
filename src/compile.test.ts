@@ -201,7 +201,7 @@ function dynCompilerExtension($: CoreCompileOps): void {
   ($ as any).compileDyn = (expr: any) => {
     return ir.$(
       "dyn",
-      ir.lit(expr.name),
+      ir.lit(expr.name.name),
       $.compileExpr(expr.value),
       ir.arrow([], $.compileExpr(expr.body))
     );

@@ -223,7 +223,8 @@ async function runPhase(
       }
       logger.debug(`running interpret phase with ${implementation}...`);
       const closure = input.closure;
-      return await closure({})(interpreter);
+      // Pass $sourceDir for $.import to resolve relative paths
+      return await closure({ $sourceDir: TESTS_DIR })(interpreter);
     }
 
     default:
@@ -494,11 +495,11 @@ async function runTest(
   // Report result
   if (errors.length === 0) {
     passed++;
-    logger.info(`${logger.green("✓")} ${testId}`);
+    logger.info(`${logger.green("✓ passed")} ${testId}`);
   } else {
     failed++;
     failures.push({ testId, errors });
-    logger.info(`${logger.red("✗")} ${testId}`);
+    logger.info(`${logger.red("✗ failed")} ${testId}`);
     for (const err of errors) {
       logger.info(`  ${logger.dim(err)}`);
     }

@@ -158,10 +158,12 @@ export function build$interpret(in$: InterpretOps): void {
   // Environment factory - creates initial env with globals
   $.env = () => createEnv({ $operators });
 
+  // Literals.
   $.number = (n) => n;
   $.string = (s) => s;
   $.boolean = (b) => b;
   $.null = () => null;
+  $.undefined = () => undefined;
 
   $.lookup = ($env, name) => $env.lookup(name);
 
@@ -232,6 +234,21 @@ export function build$interpret(in$: InterpretOps): void {
 
   $.assignIndex = (obj, key, value) => {
     (obj as Record<string, unknown>)[key as string] = value;
+    return value;
+  };
+
+  // Dynamic import - used by exo's import statement
+  // Relative paths resolve from $sourceDir in $env, or process.cwd()
+  $.import = async ($env: Env, name: string, modulePath: string) => {
+    let resolved = modulePath;
+    if (modulePath.startsWith(".")) {
+      const path = await import("path");
+      const sourceDir = ($env.lookup("$sourceDir") as string) || process.cwd();
+      resolved = path.resolve(sourceDir, modulePath);
+    }
+    const mod = await import(resolved);
+    const value = mod.default;
+    $env.bind(name, value);
     return value;
   };
 }

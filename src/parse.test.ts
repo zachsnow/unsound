@@ -79,18 +79,18 @@ logger.info('Testing let expressions...');
 
 expectParse('let x = 1 in x', {
   type: 'LetExpr',
-  name: 'x',
+  name: { name: 'x' },
   value: { type: 'LiteralExpr', value: 1 },
   body: { type: 'IdentifierExpr', name: 'x' }
 });
 
 expectParse('let x = 1 in let y = 2 in x', {
   type: 'LetExpr',
-  name: 'x',
+  name: { name: 'x' },
   value: { type: 'LiteralExpr', value: 1 },
   body: {
     type: 'LetExpr',
-    name: 'y',
+    name: { name: 'y' },
     value: { type: 'LiteralExpr', value: 2 },
     body: { type: 'IdentifierExpr', name: 'x' }
   }

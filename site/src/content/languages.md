@@ -1,4 +1,6 @@
-Unsound provides several language extensions that build on each other:
+Unsound provides several language extensions that build on each other.
+
+# Layers
 
 ## Core
 
@@ -34,10 +36,33 @@ let y = 2;
 }
 ```
 
-## Exo
+# Programmable Types
 
-Exo adds type annotation syntax, along with typechecking semantics:
+Exo adds type annotation syntax, along with typechecking semantics.
 
 ```unsound
-let x : Num = 42;
+let x : Number = 42;
+let f: (n: Number) => Number = (n) => n + 1;
+f(x)
 ```
+
+<aside>
+
+In the interest of not spending time building space elevator, Exo is
+implemented in TS directly on Core.
+
+</aside>
+
+The interesting thing about Exo is *how* types and typechecking are implemented. Specifically,
+each type annotation is an Exo *expression* -- a value -- that is itself evaluated before performing
+type checking.
+
+In addition, when interpreting a binding's value
+
+```unsound
+let x: T = value;
+```
+
+We first evaluate `T` using the default `$interpret` semantics to determine the type. Then we evaluate `value`
+using the `$type` semantics, and compare the results using `op==` on `T` to determine whether `value` is assignable
+to `x`. In addition, when `$type` evaluates *any* expression it checks whether the type-leval

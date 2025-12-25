@@ -83,6 +83,16 @@ export function emitString(node: IR): string {
       const parts = node.elements.map(emitString).join(', ');
       return `(${parts})`;
 
+    case 'await':
+      return `(await ${emitString(node.value)})`;
+
+    case 'program':
+      // Program node - emit imports as awaits, then body
+      // This is used when emitString is called directly on program IR
+      const importParts = node.imports.map(imp => `(await ${emitString(imp)})`);
+      const allParts = [...importParts, emitString(node.body)];
+      return `(${allParts.join(', ')})`;
+
     default:
       throw new UnhandledCaseError("IR tag", node);
   }
@@ -222,6 +232,30 @@ export function emitClosure(node: IR): Closure {
       };
     }
 
+    case 'await': {
+      // Await nodes should only appear at program level, not in closures
+      // For now, just evaluate the inner value (caller handles awaiting)
+      const valueClosure = emitClosure(node.value);
+      return (env) => valueClosure(env);
+    }
+
+    case 'program':
+      // Program node is handled at top level by emitProgramClosure
+      // If we get here, create a closure that awaits imports then runs body
+      // Note: the caller must be async for this to work properly
+      const importClosuresP = node.imports.map(emitClosure);
+      const bodyClosureP = emitClosure(node.body);
+      return (env) => {
+        // Return an async function that awaits imports
+        // The caller (emitProgramClosure) will await this
+        return (async () => {
+          for (const importClosure of importClosuresP) {
+            await importClosure(env);
+          }
+          return bodyClosureP(env);
+        })();
+      };
+
     default:
       throw new UnhandledCaseError("IR tag", node);
   }
@@ -230,6 +264,18 @@ export function emitClosure(node: IR): Closure {
 // === Program wrapper ===
 
 export function emitProgramString(body: IR): string {
+  // Handle program node with imports
+  if (body.tag === 'program') {
+    const importStmts = body.imports.map(imp => `  await ${emitString(imp)};`).join('\n');
+    const bodyStr = emitString(body.body);
+    return `export default async ($) => {
+  let $env = $.env();
+${importStmts}
+  return ${bodyStr};
+};`;
+  }
+
+  // Legacy: plain body without separate imports
   return `export default async ($) => {
   let $env = $.env();
   return ${emitString(body)};
@@ -237,10 +283,33 @@ export function emitProgramString(body: IR): string {
 }
 
 export function emitProgramClosure(body: IR): (env: Env) => ($: unknown) => Promise<unknown> {
+  // Handle program node with imports
+  if (body.tag === 'program') {
+    const importClosures = body.imports.map(emitClosure);
+    const bodyClosure = emitClosure(body.body);
+    return (env) => async ($: unknown) => {
+      const $env = ($ as any).env();
+      // Pass $sourceDir to $env if provided, for $.import path resolution
+      if (env.$sourceDir) {
+        $env.bind("$sourceDir", env.$sourceDir);
+      }
+      const runEnv = { ...env, $, $env };
+      // Await each import in sequence
+      for (const importClosure of importClosures) {
+        await importClosure(runEnv);
+      }
+      return bodyClosure(runEnv);
+    };
+  }
+
+  // Legacy: plain body without separate imports
   const bodyClosure = emitClosure(body);
   return (env) => async ($: unknown) => {
-    // Create initial $env from interpreter
     const $env = ($ as any).env();
+    // Pass $sourceDir to $env if provided, for $.import path resolution
+    if (env.$sourceDir) {
+      $env.bind("$sourceDir", env.$sourceDir);
+    }
     return bodyClosure({ ...env, $, $env });
   };
 }

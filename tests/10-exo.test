@@ -1,0 +1,1369 @@
+# usc -x core -x exo
+# Tests for exo.ts extension (operators, statements, blocks, assignment, type annotations)
+
+# =============================================================================
+# BINARY OPERATORS - Arithmetic
+# =============================================================================
+
+--- addition
+1 + 2
+===
+3
+
+--- addition with zero
+0 + 5
+===
+5
+
+--- addition negative
+-3 + 5
+===
+2
+
+--- subtraction
+10 - 3
+===
+7
+
+--- subtraction negative result
+3 - 10
+===
+-7
+
+--- subtraction from zero
+0 - 5
+===
+-5
+
+--- multiplication
+4 * 5
+===
+20
+
+--- multiplication by zero
+100 * 0
+===
+0
+
+--- multiplication negative
+-3 * 4
+===
+-12
+
+--- multiplication two negatives
+-3 * -4
+===
+12
+
+--- division
+20 / 4
+===
+5
+
+--- division decimal result
+7 / 2
+===
+3.5
+
+--- division by one
+42 / 1
+===
+42
+
+--- modulo
+10 % 3
+===
+1
+
+--- modulo even division
+10 % 5
+===
+0
+
+--- modulo larger divisor
+3 % 10
+===
+3
+
+--- modulo with one
+7 % 1
+===
+0
+
+# =============================================================================
+# BINARY OPERATORS - Comparison
+# =============================================================================
+
+--- less than true
+3 < 5
+===
+true
+
+--- less than false
+5 < 3
+===
+false
+
+--- less than equal
+3 < 3
+===
+false
+
+--- greater than true
+5 > 3
+===
+true
+
+--- greater than false
+3 > 5
+===
+false
+
+--- greater than equal
+3 > 3
+===
+false
+
+--- less than or equal true less
+3 <= 5
+===
+true
+
+--- less than or equal true equal
+3 <= 3
+===
+true
+
+--- less than or equal false
+5 <= 3
+===
+false
+
+--- greater than or equal true greater
+5 >= 3
+===
+true
+
+--- greater than or equal true equal
+3 >= 3
+===
+true
+
+--- greater than or equal false
+3 >= 5
+===
+false
+
+--- negative comparison
+-5 < -3
+===
+true
+
+--- negative comparison greater
+-3 > -5
+===
+true
+
+--- zero comparisons
+0 < 1
+===
+true
+
+--- zero comparison greater
+0 > -1
+===
+true
+
+# =============================================================================
+# BINARY OPERATORS - Equality
+# =============================================================================
+
+--- equality numbers true
+3 == 3
+===
+true
+
+--- equality numbers false
+3 == 4
+===
+false
+
+--- equality strings true
+"hello" == "hello"
+===
+true
+
+--- equality strings false
+"hello" == "world"
+===
+false
+
+--- equality booleans true
+true == true
+===
+true
+
+--- equality booleans false
+true == false
+===
+false
+
+--- not equal true
+3 != 4
+===
+true
+
+--- not equal false
+3 != 3
+===
+false
+
+--- strict equality numbers
+3 === 3
+===
+true
+
+--- strict equality strings
+"foo" === "foo"
+===
+true
+
+--- strict equality null
+null === null
+===
+true
+
+--- strict equality undefined
+undefined === undefined
+===
+true
+
+--- strict not equal true
+3 !== 4
+===
+true
+
+--- strict not equal false
+3 !== 3
+===
+false
+
+--- strict not equal null
+null !== undefined
+===
+true
+
+--- zero equality
+0 == 0
+===
+true
+
+--- negative zero
+-0 == 0
+===
+true
+
+# =============================================================================
+# BINARY OPERATORS - Logical
+# =============================================================================
+
+--- and true true
+true && true
+===
+true
+
+--- and true false
+true && false
+===
+false
+
+--- and false true
+false && true
+===
+false
+
+--- and false false
+false && false
+===
+false
+
+--- or true true
+true || true
+===
+true
+
+--- or true false
+true || false
+===
+true
+
+--- or false true
+false || true
+===
+true
+
+--- or false false
+false || false
+===
+false
+
+--- and short circuit
+false && (1 / 0)
+===
+false
+
+--- or short circuit
+true || (1 / 0)
+===
+true
+
+# =============================================================================
+# STRING OPERATORS
+# =============================================================================
+
+--- string concatenation
+"hello" + " " + "world"
+===
+"hello world"
+
+--- string number concat
+"value: " + 42
+===
+"value: 42"
+
+--- number string concat
+42 + " is the answer"
+===
+"42 is the answer"
+
+--- empty string concat
+"" + "hello"
+===
+"hello"
+
+# =============================================================================
+# UNARY OPERATORS
+# =============================================================================
+
+--- not true
+!true
+===
+false
+
+--- not false
+!false
+===
+true
+
+--- double not true
+!!true
+===
+true
+
+--- double not false
+!!false
+===
+false
+
+--- triple not
+!!!true
+===
+false
+
+--- unary minus
+-5
+===
+-5
+
+--- unary minus negative
+--5
+===
+5
+
+--- unary minus zero
+-0
+===
+0
+
+--- unary minus expression
+-(3 + 2)
+===
+-5
+
+--- unary minus in expression
+-5 + 10
+===
+5
+
+--- double unary minus
+- -5
+===
+5
+
+# =============================================================================
+# OPERATOR PRECEDENCE
+# =============================================================================
+
+--- mul over add
+2 + 3 * 4
+===
+14
+
+--- mul over add reverse
+3 * 4 + 2
+===
+14
+
+--- div over sub
+10 - 6 / 2
+===
+7
+
+--- parens override precedence
+(2 + 3) * 4
+===
+20
+
+--- nested parens
+((1 + 2) * (3 + 4))
+===
+21
+
+--- comparison over logical
+3 < 5 && 2 > 1
+===
+true
+
+--- arithmetic over comparison
+2 + 3 > 4
+===
+true
+
+--- and over or
+true || false && false
+===
+true
+
+--- and over or explicit
+(true || false) && false
+===
+false
+
+--- complex precedence
+1 + 2 * 3 - 4 / 2
+===
+5
+
+--- comparison chain
+1 + 2 == 3
+===
+true
+
+--- complex boolean
+true && false || true
+===
+true
+
+--- equality over and
+1 == 1 && 2 == 2
+===
+true
+
+--- not precedence
+!false && true
+===
+true
+
+--- not with comparison
+!(3 > 5)
+===
+true
+
+--- unary minus precedence
+-5 + 3
+===
+-2
+
+--- unary minus with mul
+-5 * 2
+===
+-10
+
+--- multiple same precedence add
+1 + 2 + 3 + 4
+===
+10
+
+--- multiple same precedence sub
+10 - 3 - 2 - 1
+===
+4
+
+--- left associativity sub
+10 - 3 - 2
+===
+5
+
+--- left associativity div
+100 / 10 / 2
+===
+5
+
+--- mixed arithmetic
+2 * 3 + 4 * 5
+===
+26
+
+--- deeply nested parens
+(((1 + 2)))
+===
+3
+
+# =============================================================================
+# STATEMENTS AND BLOCKS
+# =============================================================================
+
+--- simple statement sequence
+1; 2; 3
+===
+3
+
+--- statement with trailing semicolon
+42;
+===
+42
+
+--- two statements
+1 + 2; 3 * 4
+===
+12
+
+--- three statements
+1; 2; 3
+===
+3
+
+--- statement with let
+let x = 5; x + 1
+===
+6
+
+--- multiple lets
+let x = 1; let y = 2; x + y
+===
+3
+
+--- let shadows
+let x = 1; let x = 2; x
+===
+2
+
+--- simple block
+{ 1; 2; 3 }
+===
+3
+
+--- block single expression
+{ 42 }
+===
+42
+
+--- block with semicolon
+{ 42; }
+===
+42
+
+--- block with let
+let x = 1; { x + 1 }
+===
+2
+
+--- let inside block
+{ let x = 10; x + 1 }
+===
+11
+
+--- let scope in block
+{ let x = 10; x };
+===
+10
+
+--- nested blocks
+{ { 1; 2 }; 3 }
+===
+3
+
+--- deeply nested blocks
+{ { { 1; 2 }; 3 }; 4 }
+===
+4
+
+--- block in expression
+1 + { 2; 3 }
+===
+4
+
+--- block with multiple statements
+{ 1; 2; 3; 4; 5 }
+===
+5
+
+--- empty object still works
+{}
+===
+{}
+
+--- object with property
+{ x: 1 }
+===
+{"x": 1}
+
+--- block vs object disambiguation
+{ let x = 1; x }
+===
+1
+
+--- block returns object
+{ 1; { y: 42 } }
+===
+{"y": 42}
+
+--- block as function body
+let f = () => { 1; 2; 3 }; f()
+===
+3
+
+--- block in let value
+let x = { 1; 2 }; x + 1
+===
+3
+
+--- block returning function result
+let f = () => 42; { 1; f() }
+===
+42
+
+--- complex nested lets in blocks
+let a = 1; let b = { let c = 2; let d = 3; c + d }; a + b
+===
+6
+
+--- lambda with block and multiple lets
+let f = (x) => { let y = x + 1; let z = y + 1; z }; f(10)
+===
+12
+
+--- array in block
+{ [1, 2, 3] }
+===
+[1, 2, 3]
+
+--- object with explicit property
+let x = 42; { x: x }
+===
+{"x": 42}
+
+# =============================================================================
+# ASSIGNMENT
+# =============================================================================
+
+--- simple assignment
+let x = 1; { x = 42; x }
+===
+42
+
+--- assignment returns value
+let x = 1; x = 42
+===
+42
+
+--- assignment in expression
+let x = 0; (x = 5) + 1
+===
+6
+
+--- assignment to computed result
+let x = 0; { x = 2 + 3; x }
+===
+5
+
+--- multiple assignments
+let x = 0; { x = 1; x = 2; x = 3; x }
+===
+3
+
+--- chained assignment
+let a = 0; let b = 0; { a = b = 5; a + b }
+===
+10
+
+--- assignment in nested scope
+let x = 1; let y = 2; { x = 10; x + y }
+===
+12
+
+--- assignment with arithmetic
+let x = 5; { x = x + 1; x }
+===
+6
+
+--- increment pattern
+let x = 0; { x = x + 1; x = x + 1; x = x + 1; x }
+===
+3
+
+--- decrement pattern
+let x = 10; { x = x - 1; x = x - 1; x }
+===
+8
+
+--- multiply assign pattern
+let x = 2; { x = x * 2; x = x * 2; x }
+===
+8
+
+--- assignment to object property
+let o = { x: 1 }; { o.x = 42; o.x }
+===
+42
+
+--- assignment to nested property
+let o = { inner: { x: 1 } }; { o.inner.x = 99; o.inner.x }
+===
+99
+
+--- assignment to index
+let arr = [1, 2, 3]; { arr[0] = 10; arr[0] }
+===
+10
+
+--- assignment computed property
+let o = {}; let k = "foo"; { o[k] = 42; o.foo }
+===
+42
+
+--- assignment in if branch
+let x = 0; { if true then x = 10; x }
+===
+10
+
+--- conditional assignment
+let x = 0; { if false then x = 10; x }
+===
+0
+
+--- multiple vars multiple assignments
+let x = 0; let y = 0; { x = 1; y = 2; x + y }
+===
+3
+
+--- lambda assigned to object
+let o = {}; { o.f = (x) => x + 1; o.f(10) }
+===
+11
+
+--- self-referential update
+let x = 1; { x = x * 2; x = x * 2; x = x * 2; x }
+===
+8
+
+--- assignment with function call
+let x = 0; let f = () => 42; { x = f(); x }
+===
+42
+
+# =============================================================================
+# IF WITHOUT ELSE
+# =============================================================================
+
+--- if without else true
+if true then 42
+===
+42
+
+--- if without else false
+if false then 42
+===
+undefined
+
+--- if without else with expression condition
+if 1 < 2 then 42
+===
+42
+
+--- if without else false condition
+if 1 > 2 then 42
+===
+undefined
+
+--- if without else with block
+if true then { 1; 2 }
+===
+2
+
+--- if with else still works
+if false then 1 else 2
+===
+2
+
+--- if without else in block
+{ if true then 10; 20 }
+===
+20
+
+--- if without else in block false
+{ if false then 10; 20 }
+===
+20
+
+--- nested if without else
+if true then if true then 42
+===
+42
+
+--- nested if without else false outer
+if false then if true then 42
+===
+undefined
+
+--- nested if without else false inner
+if true then if false then 42
+===
+undefined
+
+--- dangling else binds to inner
+if true then if false then 1 else 2
+===
+2
+
+--- dangling else outer false
+if false then if true then 1 else 2
+===
+undefined
+
+--- if without else in lambda
+let f = (x) => if x then 100; f(true)
+===
+100
+
+--- if without else in lambda false
+let f = (x) => if x then 100; f(false)
+===
+undefined
+
+--- if without else side effect
+let x = 0; { if true then x = 10; x }
+===
+10
+
+--- if without else no side effect
+let x = 0; { if false then x = 10; x }
+===
+0
+
+--- if without else with function call
+let f = () => 42; if true then f()
+===
+42
+
+--- if without else complex condition
+if 1 + 1 == 2 && true then "yes"
+===
+"yes"
+
+--- if without else or condition
+if false || true then "yes"
+===
+"yes"
+
+--- if without else comparison
+if 10 > 5 then 10 - 5
+===
+5
+
+--- multiple if without else in block
+{ if false then 1; if false then 2; if true then 3; 4 }
+===
+4
+
+--- if else chain
+let x = 2; if x == 1 then "one" else if x == 2 then "two" else "other"
+===
+"two"
+
+--- if else chain first match
+let x = 1; if x == 1 then "one" else if x == 2 then "two" else "other"
+===
+"one"
+
+--- if else chain default
+let x = 3; if x == 1 then "one" else if x == 2 then "two" else "other"
+===
+"other"
+
+# =============================================================================
+# TYPE ANNOTATIONS (parsed but ignored)
+# =============================================================================
+
+--- type annotation simple
+let x: Number = 42; x
+===
+42
+
+--- type annotation string
+let s: String = "hello"; s
+===
+"hello"
+
+--- type annotation boolean
+let b: Boolean = true; b
+===
+true
+
+--- type annotation with expression
+let x: Number = 1 + 2; x
+===
+3
+
+--- type annotation function
+let f: Function = (x) => x + 1; f(10)
+===
+11
+
+--- type annotation any
+let x: Any = 42; x
+===
+42
+
+--- type annotation null
+let x: Null = null; x
+===
+null
+
+--- type annotation with block
+let x: Number = { 1; 2 }; x + 1
+===
+3
+
+--- type annotation multiple vars
+let x: Number = 1; let y: Number = 2; x + y
+===
+3
+
+--- type annotation in block
+{ let x: Number = 10; x + 1 }
+===
+11
+
+--- type annotation with operators
+let x: Number = 1 + 2 * 3; x
+===
+7
+
+# =============================================================================
+# COMBINATIONS AND EDGE CASES
+# =============================================================================
+
+--- operator with let
+let x = 2; x * x + 1
+===
+5
+
+--- operator in lambda
+let f = (x) => x * 2; f(5)
+===
+10
+
+--- operator with function result
+let f = () => 10; f() + 5
+===
+15
+
+--- comparison in if condition
+if 3 > 2 then 1 else 0
+===
+1
+
+--- arithmetic in if condition
+if 2 + 2 == 4 then true else false
+===
+true
+
+--- operator with object property
+let o = { x: 10 }; o.x + 5
+===
+15
+
+--- complex nested let
+let a = 1; let b = 2; let c = 3; a + b * c
+===
+7
+
+--- multiple comparisons
+1 < 2 && 2 < 3 && 3 < 4
+===
+true
+
+--- recursive function
+let f = (n) => if n == 0 then 1 else n + f(n - 1); f(3)
+===
+7
+
+--- fibonacci style
+let fib = (n) => if n <= 1 then n else fib(n - 1) + fib(n - 2); fib(6)
+===
+8
+
+--- factorial style
+let fact = (n) => if n <= 1 then 1 else n * fact(n - 1); fact(5)
+===
+120
+
+--- nested object access
+let o = { inner: { x: 42 } }; o.inner.x
+===
+42
+
+--- chained method style
+let o = { f: (x) => { g: (y) => x + y } }; o.f(10).g(5)
+===
+15
+
+--- array map simulation
+let arr = [1, 2, 3]; let double = (a) => [a[0] * 2, a[1] * 2, a[2] * 2]; double(arr)[1]
+===
+4
+
+--- object with computed property via assignment
+let k = "foo"; let o = {}; o[k] = 42; o.foo
+===
+42
+
+--- complex conditional
+let x = 5; if x > 0 && x < 10 then "in range" else "out of range"
+===
+"in range"
+
+--- ternary-like pattern
+let x = true; if x then "yes" else "no"
+===
+"yes"
+
+--- null check pattern
+let x = null; if x === null then "null" else "not null"
+===
+"null"
+
+--- default value pattern with if
+let x = null; let y = if x === null then "default" else x; y
+===
+"default"
+
+--- guard clause pattern
+let check = (x) => { if x === null then "error"; x + 1 }; check(5)
+===
+6
+
+--- early return simulation
+let find = (arr, v) => if arr[0] == v then 0 else if arr[1] == v then 1 else -1; find([10, 20, 30], 20)
+===
+1
+
+--- builder pattern
+let mk = (k, v) => { let o = {}; o[k] = v; o }; mk("foo", 123)
+===
+{"foo": 123}
+
+--- extension function pattern
+let ext = ($) => { $.foo = 42; {} }; let o = {}; ext(o); o.foo
+===
+42
+
+--- higher order function
+let twice = (f) => (x) => f(f(x)); let add1 = (x) => x + 1; twice(add1)(0)
+===
+2
+
+--- compose functions
+let comp = (f, g) => (x) => f(g(x)); let double = (x) => x * 2; let inc = (x) => x + 1; comp(double, inc)(3)
+===
+8
+
+--- curried function
+let add = (a) => (b) => a + b; add(3)(4)
+===
+7
+
+--- partial application
+let add = (a, b) => a + b; let add5 = (x) => add(5, x); add5(10)
+===
+15
+
+--- closure over mutable var
+let counter = 0; let inc = () => { counter = counter + 1; counter }; inc(); inc(); inc()
+===
+3
+
+--- object with methods
+let obj = { x: 0, inc: (self) => { self.x = self.x + 1; self.x } }; obj.inc(obj); obj.inc(obj)
+===
+2
+
+--- nested closures
+let outer = (x) => { let inner = (y) => x + y; inner }; outer(10)(5)
+===
+15
+
+--- iife pattern
+((x) => x * 2)(21)
+===
+42
+
+--- iife with block
+((x) => { let y = x + 1; y * 2 })(10)
+===
+22
+
+--- complex pipeline
+let x = 5; let y = x * 2; let z = y + 3; z * 2
+===
+26
+
+--- all operators combined
+let a = 1 + 2 * 3 - 4 / 2 % 3; let b = a > 0 && a < 10; let c = !b || true; c
+===
+true
+
+--- deeply nested expression
+((((1 + 2) * 3) - 4) / 2)
+===
+2.5
+
+--- string and number mixed
+let n = 42; let s = "The answer is " + n; s
+===
+"The answer is 42"
+
+--- boolean to string concat
+"Result: " + true
+===
+"Result: true"
+
+--- null concat
+"Value: " + null
+===
+"Value: null"
+
+--- array index assignment
+let arr = [1, 2, 3]; { arr[1] = 10; arr[0] + arr[1] + arr[2] }
+===
+14
+
+--- object spread simulation
+let a = { x: 1 }; let b = { y: 2 }; { let c = {}; c.x = a.x; c.y = b.y; c }
+===
+{"x": 1, "y": 2}
+
+--- very long expression
+1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
+===
+55
+
+--- very nested blocks
+{ { { { { 42 } } } } }
+===
+42
+
+--- whitespace insensitive
+1   +   2   *   3
+===
+7
+
+--- multiline expression
+1 +
+2 +
+3
+===
+6
+
+--- multiline block
+{
+  let x = 1;
+  let y = 2;
+  x + y
+}
+===
+3
+
+--- comparison result used
+if (3 > 2) then 1 else 0
+===
+1
+
+--- mixed type equality
+"3" == 3
+===
+false
+
+--- strict equality type check
+1 === "1"
+===
+false
+
+
+# =============================================================================
+# POSTFIX OPERATORS
+# =============================================================================
+
+--- postfix call simple
+let f = () => 42; f!
+===
+42
+
+--- postfix call lambda
+(() => 42)!
+===
+42
+
+--- postfix call chained
+let f = () => () => 99; f!!
+===
+99
+
+--- postfix vs prefix
+let f = () => true; !f!
+===
+false
+
+--- postfix with args still works
+let f = (x) => x + 1; f(10)
+===
+11
+
+--- postfix on method result
+let o = { f: () => 42 }; o.f!
+===
+42
+
+
+--- postfix with whitespace
+let f = () => 42; f !
+===
+42
+
+--- postfix with more whitespace
+let f = () => 42; f  !
+===
+42
+
+--- postfix with inequality confusion
+let f = () => 42; f !== f
+===
+false
+
+--- postfix with equality confusion
+let f = () => 42; f ! == f !
+===
+true
+
+# =============================================================================
+# OPERATOR DECLARATIONS
+# =============================================================================
+
+--- operator decl infix simple
+operator +++ infix 5 left; let o = { "op+++": (x) => x + 10 }; o +++ 5
+===
+15
+
+--- operator decl infix default precedence
+operator @@ infix; let o = { "op@@": (x) => x }; o @@ 5
+===
+5
+
+--- operator decl prefix
+operator ~ prefix 10; let o = { "op~": () => 99 }; ~o
+===
+99
+
+--- operator decl postfix
+operator ? postfix; let f = () => 123; f?
+===
+123
+
+--- operator decl affects subsequent parsing
+operator <=> infix 4 left; 1 + 2 == 3
+===
+true
+
+--- operator decl high precedence binds tighter
+operator ** infix 7 left; let o = { "op**": (x) => x * 2 }; 2 + o ** 3
+===
+8
+
+--- operator decl low precedence binds looser
+operator ~~~ infix 1 left; let o = { "op~~~": (x) => x }; o ~~~ 2 + 3
+===
+5
+
+--- operator decl at top level with block body
+operator +++ infix 5 left; { let o = { "op+++": (x) => x + 1 }; o +++ 5 }
+===
+6
+
+--- operator decl prefix with precedence
+operator ~ prefix 8; let o = { "op~": () => 42 }; ~o + 1
+===
+43
+
+--- operator decl postfix with precedence
+operator ? postfix 9; let f = () => 10; f? + 5
+===
+15
+
+--- operator decl right associative
+operator --> infix 5 right; let W = (v) => ({ v: v, "op-->": (x) => W(v - x.v) }); (W(10) --> W(3) --> W(1)).v
+===
+8
+
+--- operator decl left associative
+operator --> infix 5 left; let W = (v) => ({ v: v, "op-->": (x) => W(v - x.v) }); (W(10) --> W(3) --> W(1)).v
+===
+6
+
+# =============================================================================
+# OPERATOR DECLARATIONS - Non-associative
+# =============================================================================
+
+--- operator decl non-associative single use
+operator <=> infix 5; let o = { "op<=>": (x) => x }; o <=> 5
+===
+5
+
+--- operator decl non-associative chained error
+operator <=> infix 5; 1 <=> 2 <=> 3
+=== parse, error
+non-associative
+
+# =============================================================================
+# IMPORT DECLARATIONS
+# =============================================================================
+
+--- import from js file
+import answer from "./fixtures/answer.js"; answer
+===
+42
+
+--- import and use in expression
+import answer from "./fixtures/answer.js"; answer + 8
+===
+50
+
+--- import object and access property
+import point from "./fixtures/point.js"; point.x + point.y
+===
+30
+
+--- import multiple modules
+import answer from "./fixtures/answer.js"; import point from "./fixtures/point.js"; answer + point.x
+===
+52

@@ -20,7 +20,9 @@ export type IR =
   | { tag: 'array'; elements: IR[] }
   | { tag: 'spread'; value: IR }
   | { tag: 'ternary'; cond: IR; then: IR; else: IR }
-  | { tag: 'seq'; elements: IR[] };
+  | { tag: 'seq'; elements: IR[] }
+  | { tag: 'await'; value: IR }
+  | { tag: 'program'; imports: IR[]; body: IR };
 
 /**
  * IR constructors and helpers.
@@ -97,4 +99,12 @@ export const ir = {
   // Helper for $.method(...args) pattern
   $: (method: string, ...args: IR[]): IR =>
     ir.call(ir.member(ir.var('$'), method), ...args),
+
+  // Await an async expression
+  await: (value: IR): IR =>
+    ({ tag: 'await', value }),
+
+  // Program with imports (awaited at top level) and body (synchronous)
+  program: (imports: IR[], body: IR): IR =>
+    ({ tag: 'program', imports, body }),
 };
