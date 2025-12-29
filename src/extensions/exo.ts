@@ -6,7 +6,7 @@
  */
 import { Expr, IfExpr, Name, Span, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
-import { build$interpret as buildCoreInterpret, CoreInterpretOps } from "../interpret";
+import { CoreInterpretOps, createEnv } from "../interpret";
 import { ir, IR } from "../ir";
 import { CoreParseOps, ParseResult, Parser } from "../parse";
 import { Extension } from "../types";
@@ -785,10 +785,6 @@ interface ExoTypeOps extends CoreInterpretOps {
 }
 
 const build$type = (in$: CoreInterpretOps): void => {
-  // Start with full interpreter - $type is a drop-in replacement
-  buildCoreInterpret(in$);
-  build$interpret(in$);
-
   const $ = in$ as unknown as ExoTypeOps;
 
   // Type constructors
@@ -801,26 +797,13 @@ const build$type = (in$: CoreInterpretOps): void => {
   const NullType: Record<string, unknown> = { kind: "type", name: "Null" };
   const UndefinedType: Record<string, unknown> = { kind: "type", name: "Undefined" };
 
-  // Override env to bind type constructors as globals
-  const baseEnv = $.env;
-  $.env = () => {
-    const e = baseEnv();
-    e.bind("Number", NumberType);
-    e.bind("String", StringType);
-    e.bind("Boolean", BooleanType);
-    e.bind("Null", NullType);
-    e.bind("Undefined", UndefinedType);
-    e.bind("Arrow", Arrow);
-    return e;
-  };
-
   // Number operators: Num -> Num
   NumberType["op+"] = Arrow(NumberType, NumberType);
   NumberType["op-"] = Arrow(NumberType, NumberType);
   NumberType["op*"] = Arrow(NumberType, NumberType);
   NumberType["op/"] = Arrow(NumberType, NumberType);
   NumberType["op%"] = Arrow(NumberType, NumberType);
-  NumberType["opNeg"] = Arrow(UndefinedType, NumberType); // unary, no arg
+  NumberType["opNeg"] = Arrow(UndefinedType, NumberType); // unary
   // Number comparisons: Num -> Bool
   NumberType["op<"] = Arrow(NumberType, BooleanType);
   NumberType["op>"] = Arrow(NumberType, BooleanType);
@@ -845,7 +828,7 @@ const build$type = (in$: CoreInterpretOps): void => {
   BooleanType["op=="] = Arrow(BooleanType, BooleanType);
   BooleanType["op!="] = Arrow(BooleanType, BooleanType);
 
-  // Type checking helper
+  // Type checking helpers
   const typeEqual = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
     if (typeof a === "object" && typeof b === "object" && a !== null && b !== null) {
@@ -872,22 +855,45 @@ const build$type = (in$: CoreInterpretOps): void => {
     return "?";
   };
 
-  // Literals return their types
+  // === Environment ===
+  $.env = () => createEnv({
+    Number: NumberType,
+    String: StringType,
+    Boolean: BooleanType,
+    Null: NullType,
+    Undefined: UndefinedType,
+    Arrow,
+  });
+
+  // === Literals ===
   $.number = () => NumberType;
   $.string = () => StringType;
   $.boolean = () => BooleanType;
   ($ as any).null = () => NullType;
   ($ as any).undefined = () => UndefinedType;
 
-  // Index: look up field on type (for operator methods)
-  $.index = (obj: unknown, key: unknown) => {
-    if (typeof obj === "object" && obj !== null) {
-      return (obj as Record<string, unknown>)[key as string];
-    }
-    return undefined;
+  // === Bindings ===
+  $.lookup = ($env: any, name: string) => $env.lookup(name);
+
+  $.let = ($env: any, name: string, valueFn: ($env: any) => unknown, bodyFn: ($env: any) => unknown) => {
+    const child = $env.extend({ [name]: undefined });
+    const valueType = valueFn(child);
+    child.bind(name, valueType);
+    return bodyFn(child);
   };
 
-  // Call: if fn is Arrow, check arg type and return result type
+  // === Functions ===
+  $.lambda = ($env: any, params: string[], bodyFn: ($env: any) => unknown) => {
+    // Params are untyped for now - bind as Any
+    const AnyType = { kind: "type", name: "Any" };
+    const bindings: Record<string, unknown> = {};
+    params.forEach(p => { bindings[p] = AnyType; });
+    const child = $env.extend(bindings);
+    const retType = bodyFn(child);
+    const paramType = params.length === 1 ? AnyType : AnyType;
+    return Arrow(paramType, retType);
+  };
+
   $.call = (fn: unknown, args: unknown[]) => {
     if (typeof fn === "object" && fn !== null && (fn as any).kind === "arrow") {
       const arrow = fn as { param: unknown; ret: unknown };
@@ -899,27 +905,46 @@ const build$type = (in$: CoreInterpretOps): void => {
     throw new Error(`Type error: cannot call non-function type ${showType(fn)}`);
   };
 
-  // Strict equality works on any types
-  ($ as any).strictEq = (_a: unknown, _b: unknown) => BooleanType;
-  ($ as any).strictNeq = (_a: unknown, _b: unknown) => BooleanType;
+  // === Control ===
+  $.if = (cond: unknown, thenFn: ($env: any) => unknown, elseFn: ($env: any) => unknown, $env: any) => {
+    const thenType = thenFn($env);
+    const elseType = elseFn($env);
+    // TODO: check thenType equals elseType
+    return thenType;
+  };
 
+  // === Objects/Arrays ===
+  $.object = (props: Record<string, unknown>) => ({ kind: "record", fields: props });
+  $.array = (elems: unknown[]) => {
+    const elemType = elems.length > 0 ? elems[0] : { kind: "type", name: "Any" };
+    return { kind: "array", elem: elemType };
+  };
+  $.index = (obj: unknown, key: unknown) => {
+    if (typeof obj === "object" && obj !== null) {
+      return (obj as Record<string, unknown>)[key as string];
+    }
+    return undefined;
+  };
+  $.assignIndex = (_obj: unknown, _key: unknown, value: unknown) => value;
+
+  // === Strict equality (works on any types) ===
+  ($ as any).strictEq = () => BooleanType;
+  ($ as any).strictNeq = () => BooleanType;
+
+  // === Exo extensions ===
   $.assign = ($env: any, name: string, value: unknown) => {
     $env.mutate(name, value);
     return value;
   };
 
-  // letBind: if annotation is provided, evaluate it and check against value type
   $.letBind = ($env: any, name: string, valueType: unknown, annotationThunk: (() => unknown) | null) => {
     if (annotationThunk) {
       const annotationType = annotationThunk();
-      // Check that value type matches annotation
       if (!typeEqual(valueType, annotationType)) {
         throw new Error(`Type error: expected ${showType(annotationType)}, got ${showType(valueType)}`);
       }
-      // Bind the annotation type (declared type takes precedence)
       $env.bind(name, annotationType);
     } else {
-      // No annotation - use inferred type
       $env.bind(name, valueType);
     }
     return UndefinedType;
