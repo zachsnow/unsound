@@ -696,11 +696,15 @@ const build$compile = (in$: CoreCompileOps): void => {
 
       case "LetStmtExpr":
         // Compile to $.letBind which binds in current scope
+        // Annotation is thunked so it doesn't evaluate unless needed (by type checker)
         return ir.$(
           "letBind",
           ir.var("$env"),
           ir.lit(expr.name.name),
-          $.compileExpr(expr.value)
+          $.compileExpr(expr.value),
+          expr.annotation
+            ? ir.arrow([], $.compileExpr(expr.annotation))
+            : ir.lit(null)
         );
 
       case "AssignExpr":
@@ -741,7 +745,8 @@ const build$compile = (in$: CoreCompileOps): void => {
 
 interface ExoInterpretOps extends CoreInterpretOps {
   assign: ($env: unknown, name: string, value: unknown) => unknown;
-  letBind: ($env: unknown, name: string, value: unknown) => unknown;
+  // annotationThunk is ignored by interpreter; used by type checker
+  letBind: ($env: unknown, name: string, value: unknown, annotationThunk: (() => unknown) | null) => unknown;
   block: ($env: unknown, bodyFn: ($env: unknown) => unknown) => unknown;
 }
 
@@ -754,12 +759,83 @@ const build$interpret = (in$: CoreInterpretOps): void => {
   };
 
   // Bind a new variable in the current scope (for statement-style let)
-  $.letBind = ($env: any, name: string, value: unknown) => {
+  // annotationThunk is ignored by interpreter; used by type checker
+  $.letBind = ($env: any, name: string, value: unknown, _annotationThunk: (() => unknown) | null) => {
     $env.bind(name, value);
     return undefined;
   };
 
   // Create a child scope for a block
+  $.block = ($env: any, bodyFn: ($env: unknown) => unknown) => {
+    const child = $env.extend({});
+    return bodyFn(child);
+  };
+};
+
+// ---------------------------------------------------------------------------
+// Type Semantics ($type)
+// ---------------------------------------------------------------------------
+// Types are values. The type checker is an alternative interpreter that
+// computes types instead of runtime values.
+
+interface ExoTypeOps extends CoreInterpretOps {
+  assign: ($env: unknown, name: string, value: unknown) => unknown;
+  letBind: ($env: unknown, name: string, value: unknown, annotationThunk: (() => unknown) | null) => unknown;
+  block: ($env: unknown, bodyFn: ($env: unknown) => unknown) => unknown;
+}
+
+const build$type = (in$: CoreInterpretOps): void => {
+  const $ = in$ as unknown as ExoTypeOps;
+
+  // Type values - these are what type expressions evaluate to
+  const NumberType = { kind: "type", name: "Number" };
+  const StringType = { kind: "type", name: "String" };
+  const BooleanType = { kind: "type", name: "Boolean" };
+  const NullType = { kind: "type", name: "Null" };
+  const UndefinedType = { kind: "type", name: "Undefined" };
+
+  // Type checking helper
+  const typeEqual = (a: unknown, b: unknown): boolean => {
+    if (a === b) return true;
+    if (typeof a === "object" && typeof b === "object" && a !== null && b !== null) {
+      const ta = a as { kind?: string; name?: string };
+      const tb = b as { kind?: string; name?: string };
+      return ta.kind === "type" && tb.kind === "type" && ta.name === tb.name;
+    }
+    return false;
+  };
+
+  // Literals return their types
+  $.number = () => NumberType;
+  $.string = () => StringType;
+  $.boolean = () => BooleanType;
+  ($ as any).null = () => NullType;
+  ($ as any).undefined = () => UndefinedType;
+
+  $.assign = ($env: any, name: string, value: unknown) => {
+    $env.mutate(name, value);
+    return value;
+  };
+
+  // letBind: if annotation is provided, evaluate it and check against value type
+  $.letBind = ($env: any, name: string, valueType: unknown, annotationThunk: (() => unknown) | null) => {
+    if (annotationThunk) {
+      const annotationType = annotationThunk();
+      // Check that value type matches annotation
+      if (!typeEqual(valueType, annotationType)) {
+        const vt = (valueType as any)?.name ?? String(valueType);
+        const at = (annotationType as any)?.name ?? String(annotationType);
+        throw new Error(`Type error: expected ${at}, got ${vt}`);
+      }
+      // Bind the annotation type (declared type takes precedence)
+      $env.bind(name, annotationType);
+    } else {
+      // No annotation - use inferred type
+      $env.bind(name, valueType);
+    }
+    return UndefinedType;
+  };
+
   $.block = ($env: any, bodyFn: ($env: unknown) => unknown) => {
     const child = $env.extend({});
     return bodyFn(child);
@@ -774,6 +850,7 @@ export const exoExtension: Extension = {
   $parse: build$parse,
   $compile: build$compile,
   $interpret: build$interpret,
+  $type: build$type,
 };
 
 export default exoExtension;
