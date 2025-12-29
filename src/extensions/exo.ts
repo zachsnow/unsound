@@ -787,12 +787,46 @@ interface ExoTypeOps extends CoreInterpretOps {
 const build$type = (in$: CoreInterpretOps): void => {
   const $ = in$ as unknown as ExoTypeOps;
 
-  // Type values - these are what type expressions evaluate to
-  const NumberType = { kind: "type", name: "Number" };
-  const StringType = { kind: "type", name: "String" };
-  const BooleanType = { kind: "type", name: "Boolean" };
-  const NullType = { kind: "type", name: "Null" };
-  const UndefinedType = { kind: "type", name: "Undefined" };
+  // Type constructors
+  const Arrow = (param: unknown, ret: unknown) => ({ kind: "arrow", param, ret });
+
+  // Type values - recursive objects with operator methods
+  const NumberType: Record<string, unknown> = { kind: "type", name: "Number" };
+  const StringType: Record<string, unknown> = { kind: "type", name: "String" };
+  const BooleanType: Record<string, unknown> = { kind: "type", name: "Boolean" };
+  const NullType: Record<string, unknown> = { kind: "type", name: "Null" };
+  const UndefinedType: Record<string, unknown> = { kind: "type", name: "Undefined" };
+
+  // Number operators: Num -> Num
+  NumberType["op+"] = Arrow(NumberType, NumberType);
+  NumberType["op-"] = Arrow(NumberType, NumberType);
+  NumberType["op*"] = Arrow(NumberType, NumberType);
+  NumberType["op/"] = Arrow(NumberType, NumberType);
+  NumberType["op%"] = Arrow(NumberType, NumberType);
+  NumberType["opNeg"] = Arrow(UndefinedType, NumberType); // unary, no arg
+  // Number comparisons: Num -> Bool
+  NumberType["op<"] = Arrow(NumberType, BooleanType);
+  NumberType["op>"] = Arrow(NumberType, BooleanType);
+  NumberType["op<="] = Arrow(NumberType, BooleanType);
+  NumberType["op>="] = Arrow(NumberType, BooleanType);
+  NumberType["op=="] = Arrow(NumberType, BooleanType);
+  NumberType["op!="] = Arrow(NumberType, BooleanType);
+
+  // String operators
+  StringType["op+"] = Arrow(StringType, StringType);
+  StringType["op=="] = Arrow(StringType, BooleanType);
+  StringType["op!="] = Arrow(StringType, BooleanType);
+  StringType["op<"] = Arrow(StringType, BooleanType);
+  StringType["op>"] = Arrow(StringType, BooleanType);
+  StringType["op<="] = Arrow(StringType, BooleanType);
+  StringType["op>="] = Arrow(StringType, BooleanType);
+
+  // Boolean operators
+  BooleanType["op!"] = Arrow(UndefinedType, BooleanType); // unary
+  BooleanType["op&&"] = Arrow(BooleanType, BooleanType);
+  BooleanType["op||"] = Arrow(BooleanType, BooleanType);
+  BooleanType["op=="] = Arrow(BooleanType, BooleanType);
+  BooleanType["op!="] = Arrow(BooleanType, BooleanType);
 
   // Type checking helper
   const typeEqual = (a: unknown, b: unknown): boolean => {
@@ -800,9 +834,25 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (typeof a === "object" && typeof b === "object" && a !== null && b !== null) {
       const ta = a as { kind?: string; name?: string };
       const tb = b as { kind?: string; name?: string };
-      return ta.kind === "type" && tb.kind === "type" && ta.name === tb.name;
+      if (ta.kind === "type" && tb.kind === "type") {
+        return ta.name === tb.name;
+      }
+      if (ta.kind === "arrow" && tb.kind === "arrow") {
+        const aa = a as { param: unknown; ret: unknown };
+        const ab = b as { param: unknown; ret: unknown };
+        return typeEqual(aa.param, ab.param) && typeEqual(aa.ret, ab.ret);
+      }
     }
     return false;
+  };
+
+  const showType = (t: unknown): string => {
+    if (t === null) return "null";
+    if (typeof t !== "object") return String(t);
+    const ty = t as { kind?: string; name?: string; param?: unknown; ret?: unknown };
+    if (ty.kind === "type") return ty.name ?? "?";
+    if (ty.kind === "arrow") return `(${showType(ty.param)} -> ${showType(ty.ret)})`;
+    return "?";
   };
 
   // Literals return their types
@@ -811,6 +861,30 @@ const build$type = (in$: CoreInterpretOps): void => {
   $.boolean = () => BooleanType;
   ($ as any).null = () => NullType;
   ($ as any).undefined = () => UndefinedType;
+
+  // Index: look up field on type (for operator methods)
+  $.index = (obj: unknown, key: unknown) => {
+    if (typeof obj === "object" && obj !== null) {
+      return (obj as Record<string, unknown>)[key as string];
+    }
+    return undefined;
+  };
+
+  // Call: if fn is Arrow, check arg type and return result type
+  $.call = (fn: unknown, args: unknown[]) => {
+    if (typeof fn === "object" && fn !== null && (fn as any).kind === "arrow") {
+      const arrow = fn as { param: unknown; ret: unknown };
+      if (args.length > 0 && !typeEqual(args[0], arrow.param)) {
+        throw new Error(`Type error: expected ${showType(arrow.param)}, got ${showType(args[0])}`);
+      }
+      return arrow.ret;
+    }
+    throw new Error(`Type error: cannot call non-function type ${showType(fn)}`);
+  };
+
+  // Strict equality works on any types
+  ($ as any).strictEq = (_a: unknown, _b: unknown) => BooleanType;
+  ($ as any).strictNeq = (_a: unknown, _b: unknown) => BooleanType;
 
   $.assign = ($env: any, name: string, value: unknown) => {
     $env.mutate(name, value);
@@ -823,9 +897,7 @@ const build$type = (in$: CoreInterpretOps): void => {
       const annotationType = annotationThunk();
       // Check that value type matches annotation
       if (!typeEqual(valueType, annotationType)) {
-        const vt = (valueType as any)?.name ?? String(valueType);
-        const at = (annotationType as any)?.name ?? String(annotationType);
-        throw new Error(`Type error: expected ${at}, got ${vt}`);
+        throw new Error(`Type error: expected ${showType(annotationType)}, got ${showType(valueType)}`);
       }
       // Bind the annotation type (declared type takes precedence)
       $env.bind(name, annotationType);
