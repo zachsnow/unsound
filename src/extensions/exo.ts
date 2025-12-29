@@ -6,7 +6,7 @@
  */
 import { Expr, IfExpr, Name, Span, SpanExpr } from "../ast";
 import { CoreCompileOps } from "../compile";
-import { CoreInterpretOps } from "../interpret";
+import { build$interpret as buildCoreInterpret, CoreInterpretOps } from "../interpret";
 import { ir, IR } from "../ir";
 import { CoreParseOps, ParseResult, Parser } from "../parse";
 import { Extension } from "../types";
@@ -785,6 +785,10 @@ interface ExoTypeOps extends CoreInterpretOps {
 }
 
 const build$type = (in$: CoreInterpretOps): void => {
+  // Start with full interpreter - $type is a drop-in replacement
+  buildCoreInterpret(in$);
+  build$interpret(in$);
+
   const $ = in$ as unknown as ExoTypeOps;
 
   // Type constructors
@@ -796,6 +800,19 @@ const build$type = (in$: CoreInterpretOps): void => {
   const BooleanType: Record<string, unknown> = { kind: "type", name: "Boolean" };
   const NullType: Record<string, unknown> = { kind: "type", name: "Null" };
   const UndefinedType: Record<string, unknown> = { kind: "type", name: "Undefined" };
+
+  // Override env to bind type constructors as globals
+  const baseEnv = $.env;
+  $.env = () => {
+    const e = baseEnv();
+    e.bind("Number", NumberType);
+    e.bind("String", StringType);
+    e.bind("Boolean", BooleanType);
+    e.bind("Null", NullType);
+    e.bind("Undefined", UndefinedType);
+    e.bind("Arrow", Arrow);
+    return e;
+  };
 
   // Number operators: Num -> Num
   NumberType["op+"] = Arrow(NumberType, NumberType);

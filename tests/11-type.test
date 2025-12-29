@@ -1,0 +1,35 @@
+# usc -x core -x exo
+# Tests for $type phase (type checking)
+
+# =============================================================================
+# TYPE ERRORS - These should fail type checking
+# =============================================================================
+
+--- type error: number plus string
+1 + "hello"
+=== parse, compile, emit, interpret: $type, error
+Type error: expected Number, got String
+
+--- type error: string minus number
+"hello" - 1
+=== parse, compile, emit, interpret: $type, error
+Type error: cannot call non-function type undefined
+
+--- type error: boolean arithmetic
+true + 1
+=== parse, compile, emit, interpret: $type, error
+Type error: cannot call non-function type undefined
+
+# =============================================================================
+# TYPE ANNOTATIONS - Checking declared types
+# =============================================================================
+
+--- annotation mismatch error
+let x: String = 42; x
+=== parse, compile, emit, interpret: $type, error
+Type error: expected String, got Number
+
+--- annotation mismatch in block
+{ let x: Boolean = "hello"; x }
+=== parse, compile, emit, interpret: $type, error
+Type error: expected Boolean, got String
