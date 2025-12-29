@@ -787,9 +787,6 @@ interface ExoTypeOps extends CoreInterpretOps {
 const build$type = (in$: CoreInterpretOps): void => {
   const $ = in$ as unknown as ExoTypeOps;
 
-  // Type constructors
-  const Arrow = (param: unknown, ret: unknown) => ({ kind: "arrow", param, ret });
-
   // Type values - recursive objects with operator methods
   const NumberType: Record<string, unknown> = { kind: "type", name: "Number" };
   const StringType: Record<string, unknown> = { kind: "type", name: "String" };
@@ -797,38 +794,60 @@ const build$type = (in$: CoreInterpretOps): void => {
   const NullType: Record<string, unknown> = { kind: "type", name: "Null" };
   const UndefinedType: Record<string, unknown> = { kind: "type", name: "Undefined" };
 
-  // Number operators: Num -> Num
-  NumberType["op+"] = Arrow(NumberType, NumberType);
-  NumberType["op-"] = Arrow(NumberType, NumberType);
-  NumberType["op*"] = Arrow(NumberType, NumberType);
-  NumberType["op/"] = Arrow(NumberType, NumberType);
-  NumberType["op%"] = Arrow(NumberType, NumberType);
-  NumberType["opNeg"] = Arrow(UndefinedType, NumberType); // unary
-  // Number comparisons: Num -> Bool
-  NumberType["op<"] = Arrow(NumberType, BooleanType);
-  NumberType["op>"] = Arrow(NumberType, BooleanType);
-  NumberType["op<="] = Arrow(NumberType, BooleanType);
-  NumberType["op>="] = Arrow(NumberType, BooleanType);
-  NumberType["op=="] = Arrow(NumberType, BooleanType);
-  NumberType["op!="] = Arrow(NumberType, BooleanType);
+  // Arrow type constructor (for user type expressions)
+  const Arrow = (param: unknown, ret: unknown) => ({ kind: "arrow", param, ret });
+
+  // Type display helper (needed by typeOp)
+  const showType = (t: unknown): string => {
+    if (t === null) return "null";
+    if (typeof t !== "object") return String(t);
+    const ty = t as { kind?: string; name?: string };
+    if (ty.kind === "type") return ty.name ?? "?";
+    return "?";
+  };
+
+  // Helper: create a type-checking operator function
+  const typeOp = (expected: unknown, result: unknown) => (arg: unknown) => {
+    if (arg !== expected) {
+      throw new Error(`Type error: expected ${showType(expected)}, got ${showType(arg)}`);
+    }
+    return result;
+  };
+
+  // Helper: unary operator (no arg check)
+  const unaryOp = (result: unknown) => () => result;
+
+  // Number operators
+  NumberType["op+"] = typeOp(NumberType, NumberType);
+  NumberType["op-"] = typeOp(NumberType, NumberType);
+  NumberType["op*"] = typeOp(NumberType, NumberType);
+  NumberType["op/"] = typeOp(NumberType, NumberType);
+  NumberType["op%"] = typeOp(NumberType, NumberType);
+  NumberType["opNeg"] = unaryOp(NumberType);
+  NumberType["op<"] = typeOp(NumberType, BooleanType);
+  NumberType["op>"] = typeOp(NumberType, BooleanType);
+  NumberType["op<="] = typeOp(NumberType, BooleanType);
+  NumberType["op>="] = typeOp(NumberType, BooleanType);
+  NumberType["op=="] = typeOp(NumberType, BooleanType);
+  NumberType["op!="] = typeOp(NumberType, BooleanType);
 
   // String operators
-  StringType["op+"] = Arrow(StringType, StringType);
-  StringType["op=="] = Arrow(StringType, BooleanType);
-  StringType["op!="] = Arrow(StringType, BooleanType);
-  StringType["op<"] = Arrow(StringType, BooleanType);
-  StringType["op>"] = Arrow(StringType, BooleanType);
-  StringType["op<="] = Arrow(StringType, BooleanType);
-  StringType["op>="] = Arrow(StringType, BooleanType);
+  StringType["op+"] = typeOp(StringType, StringType);
+  StringType["op=="] = typeOp(StringType, BooleanType);
+  StringType["op!="] = typeOp(StringType, BooleanType);
+  StringType["op<"] = typeOp(StringType, BooleanType);
+  StringType["op>"] = typeOp(StringType, BooleanType);
+  StringType["op<="] = typeOp(StringType, BooleanType);
+  StringType["op>="] = typeOp(StringType, BooleanType);
 
   // Boolean operators
-  BooleanType["op!"] = Arrow(UndefinedType, BooleanType); // unary
-  BooleanType["op&&"] = Arrow(BooleanType, BooleanType);
-  BooleanType["op||"] = Arrow(BooleanType, BooleanType);
-  BooleanType["op=="] = Arrow(BooleanType, BooleanType);
-  BooleanType["op!="] = Arrow(BooleanType, BooleanType);
+  BooleanType["op!"] = unaryOp(BooleanType);
+  BooleanType["op&&"] = typeOp(BooleanType, BooleanType);
+  BooleanType["op||"] = typeOp(BooleanType, BooleanType);
+  BooleanType["op=="] = typeOp(BooleanType, BooleanType);
+  BooleanType["op!="] = typeOp(BooleanType, BooleanType);
 
-  // Type checking helpers
+  // Type equality helper
   const typeEqual = (a: unknown, b: unknown): boolean => {
     if (a === b) return true;
     if (typeof a === "object" && typeof b === "object" && a !== null && b !== null) {
@@ -837,22 +856,8 @@ const build$type = (in$: CoreInterpretOps): void => {
       if (ta.kind === "type" && tb.kind === "type") {
         return ta.name === tb.name;
       }
-      if (ta.kind === "arrow" && tb.kind === "arrow") {
-        const aa = a as { param: unknown; ret: unknown };
-        const ab = b as { param: unknown; ret: unknown };
-        return typeEqual(aa.param, ab.param) && typeEqual(aa.ret, ab.ret);
-      }
     }
     return false;
-  };
-
-  const showType = (t: unknown): string => {
-    if (t === null) return "null";
-    if (typeof t !== "object") return String(t);
-    const ty = t as { kind?: string; name?: string; param?: unknown; ret?: unknown };
-    if (ty.kind === "type") return ty.name ?? "?";
-    if (ty.kind === "arrow") return `(${showType(ty.param)} -> ${showType(ty.ret)})`;
-    return "?";
   };
 
   // === Environment ===
@@ -883,24 +888,19 @@ const build$type = (in$: CoreInterpretOps): void => {
   };
 
   // === Functions ===
+  // The "type" of a function IS a function: it takes argument types and returns result type
   $.lambda = ($env: any, params: string[], bodyFn: ($env: any) => unknown) => {
-    // Params are untyped for now - bind as Any
-    const AnyType = { kind: "type", name: "Any" };
-    const bindings: Record<string, unknown> = {};
-    params.forEach(p => { bindings[p] = AnyType; });
-    const child = $env.extend(bindings);
-    const retType = bodyFn(child);
-    const paramType = params.length === 1 ? AnyType : AnyType;
-    return Arrow(paramType, retType);
+    return (...argTypes: unknown[]) => {
+      const bindings: Record<string, unknown> = {};
+      params.forEach((p, i) => { bindings[p] = argTypes[i]; });
+      const child = $env.extend(bindings);
+      return bodyFn(child);
+    };
   };
 
   $.call = (fn: unknown, args: unknown[]) => {
-    if (typeof fn === "object" && fn !== null && (fn as any).kind === "arrow") {
-      const arrow = fn as { param: unknown; ret: unknown };
-      if (args.length > 0 && !typeEqual(args[0], arrow.param)) {
-        throw new Error(`Type error: expected ${showType(arrow.param)}, got ${showType(args[0])}`);
-      }
-      return arrow.ret;
+    if (typeof fn === "function") {
+      return (fn as Function)(...args);
     }
     throw new Error(`Type error: cannot call non-function type ${showType(fn)}`);
   };
