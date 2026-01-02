@@ -1367,3 +1367,27 @@ import point from "./fixtures/point.js"; point.x + point.y
 import answer from "./fixtures/answer.js"; import point from "./fixtures/point.js"; answer + point.x
 ===
 52
+
+# =============================================================================
+# SHORT-CIRCUIT OPERATORS
+# =============================================================================
+
+--- and short circuit prevents error
+let x = null; false && x.foo
+===
+false
+
+--- or short circuit prevents error  
+let x = null; true || x.foo
+===
+true
+
+--- and evaluates right when left true
+true && 42
+===
+42
+
+--- or evaluates right when left false
+false || 42
+===
+42

@@ -713,6 +713,15 @@ const build$compile = (in$: CoreCompileOps): void => {
       case "BinaryExpr": {
         const opDef = operators.binary[expr.op];
         const left = $.compileExpr(expr.left);
+
+        // Short-circuit operators: right side must be thunked
+        if (expr.op === "&&") {
+          return ir.$("and", left, ir.arrow([], $.compileExpr(expr.right)));
+        }
+        if (expr.op === "||") {
+          return ir.$("or", left, ir.arrow([], $.compileExpr(expr.right)));
+        }
+
         const right = $.compileExpr(expr.right);
 
         if (opDef.prim) {
@@ -720,7 +729,7 @@ const build$compile = (in$: CoreCompileOps): void => {
           return ir.$(opDef.prim, left, right);
         }
 
-        // Method call: $.index(left, "op+")(right) - use $.index for primitive member access
+        // Method call: $.index(left, "op+")(right)
         return ir.$("call", ir.$("index", left, ir.lit(opDef.method!)), ir.array(right));
       }
 
@@ -770,6 +779,10 @@ const build$interpret = (in$: CoreInterpretOps): void => {
     const child = $env.extend({});
     return bodyFn(child);
   };
+
+  // Short-circuit logical operators
+  $.and = (a: unknown, bThunk: () => unknown) => a ? bThunk() : a;
+  $.or = (a: unknown, bThunk: () => unknown) => a ? a : bThunk();
 };
 
 // ---------------------------------------------------------------------------
@@ -953,6 +966,16 @@ const build$type = (in$: CoreInterpretOps): void => {
   $.block = ($env: any, bodyFn: ($env: unknown) => unknown) => {
     const child = $env.extend({});
     return bodyFn(child);
+  };
+
+  // Short-circuit operators: check both sides, return Boolean
+  $.and = (a: unknown, bThunk: () => unknown) => {
+    bThunk(); // evaluate to check types
+    return BooleanType;
+  };
+  $.or = (a: unknown, bThunk: () => unknown) => {
+    bThunk(); // evaluate to check types
+    return BooleanType;
   };
 };
 
