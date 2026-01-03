@@ -87,3 +87,18 @@ true
 let orElse = (a, ~b) => if a then a else b() in orElse(false, 42)
 ===
 42
+
+--- cond function with lazy branches
+let cond = (test, ~a, ~b) => if test then a() else b() in cond(true, 1, null.error)
+===
+1
+
+--- cond function takes else branch
+let cond = (test, ~a, ~b) => if test then a() else b() in cond(false, null.error, 2)
+===
+2
+
+--- cond function with complex expressions
+let cond = (test, ~a, ~b) => if test then a() else b() in let x = 10 in cond(x > 5, x + 1, x - 1)
+===
+11
