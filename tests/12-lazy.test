@@ -102,3 +102,13 @@ let cond = (test, ~a, ~b) => if test then a() else b() in cond(false, null.error
 let cond = (test, ~a, ~b) => if test then a() else b() in let x = 10 in cond(x > 5, x + 1, x - 1)
 ===
 11
+
+--- cond proves else branch function not called
+let cond = (test, ~a, ~b) => if test then a() else b() in let bomb = () => null.explode in cond(true, 42, bomb())
+===
+42
+
+--- cond proves then branch function not called
+let cond = (test, ~a, ~b) => if test then a() else b() in let bomb = () => null.explode in cond(false, bomb(), 42)
+===
+42
