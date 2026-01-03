@@ -130,19 +130,13 @@ export const lazyExtension: Extension = {
     //
     // Like a normal lambda, but because we expect calls to wrap *all*
     // arguments in thunks, we need to *unwrap* eager arguments immediately.
-    // In order to that we self-assign eager arguments to their forced values.
-    //
-    // The result is that we compile to the same interpreter IR as normal lambdas.
+    // We emit $.force($env, "paramName") to look up the thunk and call it,
+    // mutating the binding to the forced value.
     $.compileLazyLambda = (expr) => {
       // Force all non-lazy parameters immediately.
       const forces: IR[] = expr.params.map((param) => {
         if (!param.lazy) {
-          return ir.assign(
-            param.name,
-
-            // TODO: only force if it's a function, for easier interop.
-            ir.call(ir.var(param.name)),
-          );
+          return ir.$("force", ir.var("$env"), ir.lit(param.name));
         }
       }).filter(p => p !== undefined);
 
@@ -189,6 +183,18 @@ export const lazyExtension: Extension = {
       }
 
       originalAnalyzeExpr(expr);
+    };
+  },
+
+  $interpret: (in$: any) => {
+    const $ = in$;
+
+    // Force a thunked parameter: look up the thunk, call it, mutate the binding.
+    $.force = ($env: any, name: string) => {
+      const thunk = $env.lookup(name);
+      const value = thunk();
+      $env.mutate(name, value);
+      return value;
     };
   },
 };

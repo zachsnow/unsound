@@ -45,7 +45,7 @@ let x = 10 in let f = () => x in f()
 # =============================================================================
 
 --- lazy param syntax parses
-let f = (~x) => x in f(42)
+let f = (~x) => x() in f(42)
 ===
 42
 
@@ -55,7 +55,7 @@ let f = (a, ~b) => a in f(1, 2)
 1
 
 --- lazy param multiple
-let f = (~a, ~b) => a in f(1, 2)
+let f = (~a, ~b) => a() in f(1, 2)
 ===
 1
 
@@ -74,16 +74,16 @@ let f = (~x) => 42 in f(null.foo)
 42
 
 --- lazy with if chooses branch
-let f = (~a, ~b) => if true then a else b in f(1, null.error)
+let f = (~a, ~b) => if true then a() else b() in f(1, null.error)
 ===
 1
 
 --- lazy or-like pattern
-let orElse = (a, ~b) => if a then a else b in orElse(true, null.error)
+let orElse = (a, ~b) => if a then a else b() in orElse(true, null.error)
 ===
 true
 
 --- lazy or-like pattern evaluates fallback
-let orElse = (a, ~b) => if a then a else b in orElse(false, 42)
+let orElse = (a, ~b) => if a then a else b() in orElse(false, 42)
 ===
 42
