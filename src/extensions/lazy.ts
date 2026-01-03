@@ -55,10 +55,6 @@ export const lazyExtension: Extension = {
   $parse: (in$: CoreParseOps) => {
     const $ = in$ as LazyParserOps;
 
-    // Always translate lambdas as lazy lambdas, so we never
-    // produce plain LambdaExpr nodes.
-    $.lambda = $.lazyLambda as any;
-
     // Actually parse lazy lambdas.
     $.lazyLambda = () => (input, pos) => {
       const ws = $.ws()(input, pos);
@@ -84,6 +80,10 @@ export const lazyExtension: Extension = {
         pos: body.pos,
       };
     };
+
+    // Always translate lambdas as lazy lambdas, so we never
+    // produce plain LambdaExpr nodes.
+    $.lambda = $.lazyLambda as any;
 
     $.lazyLambdaParam = () => (input, pos) => {
       // A lazy param starts with ~, e.g. (x, ~y) => ...
@@ -192,3 +192,5 @@ export const lazyExtension: Extension = {
     };
   },
 };
+
+export default lazyExtension;

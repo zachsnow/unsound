@@ -1,0 +1,89 @@
+# usc -x core -x meso -x lazy
+# Tests for lazy extension
+
+# =============================================================================
+# SANITY CHECKS - Core syntax should still work
+# =============================================================================
+
+--- sanity: literal number
+42
+===
+42
+
+--- sanity: arithmetic
+2 + 2
+===
+4
+
+--- sanity: string
+"hello"
+===
+"hello"
+
+--- sanity: let binding
+let x = 10 in x
+===
+10
+
+--- sanity: function call
+let f = (x) => x in f(42)
+===
+42
+
+--- sanity: multiple args
+let add = (a, b) => a + b in add(1, 2)
+===
+3
+
+--- sanity: closure
+let x = 10 in let f = () => x in f()
+===
+10
+
+# =============================================================================
+# LAZY LAMBDA SYNTAX - Basic parsing and execution
+# =============================================================================
+
+--- lazy param syntax parses
+let f = (~x) => x in f(42)
+===
+42
+
+--- lazy param with eager param
+let f = (a, ~b) => a in f(1, 2)
+===
+1
+
+--- lazy param multiple
+let f = (~a, ~b) => a in f(1, 2)
+===
+1
+
+--- lazy and eager mixed
+let f = (a, ~b, c) => a + c in f(1, 2, 3)
+===
+4
+
+# =============================================================================
+# LAZY SEMANTICS - Short-circuit and conditional evaluation
+# =============================================================================
+
+--- lazy prevents error on unused arg
+let f = (~x) => 42 in f(null.foo)
+===
+42
+
+--- lazy with if chooses branch
+let f = (~a, ~b) => if true then a else b in f(1, null.error)
+===
+1
+
+--- lazy or-like pattern
+let orElse = (a, ~b) => if a then a else b in orElse(true, null.error)
+===
+true
+
+--- lazy or-like pattern evaluates fallback
+let orElse = (a, ~b) => if a then a else b in orElse(false, 42)
+===
+42
