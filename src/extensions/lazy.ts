@@ -51,6 +51,7 @@ export const lazyExtension: Extension = {
   name: "lazy",
   description: "Adds lazy parameters to lambda expressions",
   version: "1.0.0",
+  requires: ["core"],
 
   $parse: (in$: CoreParseOps) => {
     const $ = in$ as LazyParserOps;

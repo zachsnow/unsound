@@ -34,7 +34,12 @@ The `lazy` extension adds lazy (call-by-name) parameters to lambda functions.
 ```
 //usc -x core -x meso -x lazy
 
-let cond = (test, ~a, ~b) => if test then a() else b() in
+let cond = (test, ~a, ~b) =>
+  if test then
+    a()
+  else
+    b()
+in
 cond(true, 1, null.explode)   // returns 1, doesn't evaluate null.explode
 ```
 

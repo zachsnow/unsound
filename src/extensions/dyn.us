@@ -101,6 +101,7 @@ in
 {
   name: "dyn",
   description: "Dynamic variable binding",
+  requires: ["core"],
   $parse: dynParseExtension,
   $compile: dynCompileExtension,
   $interpret: dynInterpretExtension
