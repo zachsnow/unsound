@@ -25,6 +25,8 @@
     <a href="/building/">Building</a>
     <a href="/usage/">Usage</a>
     <a href="/languages/">Languages</a>
+    <a href="/extensions/">Extensions</a>
+    <a href="/authoring/">Authoring</a>
     <a href="/lsp/">LSP</a>
     <a href="/testing/">Testing</a>
     <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
@@ -78,7 +80,7 @@ usual evaluation semantics this is essentially the identity</p>
 <li><code>$emit</code>: takes an IR; generally returns a <code>string</code> of code in the target language (that is -- JS).</li>
 </ul>
 <p>The result is a JS file that is parameterized by a <em>semantics</em> that can be applied to the output to produce
-an <em>interpretation</em>. The standard semantics is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
+an <em>interpretation</em>. The standard semantics is <code>$interpret</code>, a &quot;concrete interpretation&quot; of the program in the
 universe of JS values.</p>
 <p>One case also provide other semantics; for instance <code>$type</code> can implement an &quot;abstract interpretation&quot;
 in a universe of simple nominal types.</p>
@@ -107,10 +109,10 @@ numeric expression:</p>
     // Parse addition: term (('+' | '-') term)*
     $.parse = (s) =&gt; {
       let result = $.term(s);
-      while (s.peek() === '+' || s.peek() === '-') {
+      while (s.peek() === &quot;+&quot; || s.peek() === &quot;-&quot;) {
         let op = s.next();
         let right = $.term(s);
-        result = { type: op === '+' ? 'Add' : 'Sub', left: result, right };
+        result = { type: op === &quot;+&quot; ? &quot;Add&quot; : &quot;Sub&quot;, left: result, right };
       }
       return result;
     };
@@ -118,21 +120,21 @@ numeric expression:</p>
     // Parse multiplication: number (('*' | '/') number)*
     $.term = (s) =&gt; {
       let result = $.number(s);
-      while (s.peek() === '*' || s.peek() === '/') {
+      while (s.peek() === &quot;*&quot; || s.peek() === &quot;/&quot;) {
         let op = s.next();
         let right = $.number(s);
-        result = { type: op === '*' ? 'Mul' : 'Div', left: result, right };
+        result = { type: op === &quot;*&quot; ? &quot;Mul&quot; : &quot;Div&quot;, left: result, right };
       }
       return result;
     };
 
     // Parse a number literal
     $.number = (s) =&gt; {
-      let n = '';
-      while (s.peek() &gt;= '0' &amp;&amp; s.peek() &lt;= '9') n += s.next();
-      return { type: 'Num', value: parseInt(n) };
+      let n = &quot;&quot;;
+      while (s.peek() &gt;= &quot;0&quot; &amp;&amp; s.peek() &lt;= &quot;9&quot;) n += s.next();
+      return { type: &quot;Num&quot;, value: parseInt(n) };
     };
-  }
+  };
 }
 </code></pre>
 <p>A subsequent extension can override parsing to add exponentiation with higher precedence:</p>
@@ -144,22 +146,22 @@ numeric expression:</p>
     // Exponentiation: number ('^' exponent)*
     $.number = (s) =&gt; {
       let result = baseNumber(s);
-      while (s.peek() === '^') {
+      while (s.peek() === &quot;^&quot;) {
         s.next();
         let right = baseNumber(s);
-        result = { type: 'Exp', base: result, power: right };
+        result = { type: &quot;Exp&quot;, base: result, power: right };
       }
       return result;
     };
-  }
+  };
 }
 </code></pre>
 <p>Now <code>2^3*4+1</code> parses with the correct precedence: <code>((2^3)*4)+1</code>.</p>
 <h2>Languages</h2>
-<p>The Unsound framework comes with several language extensions, all building on the lowest level &quot;empty&quot; language
-extension, which does nothing and returns nothing.  That's not very useful, so Unsound also comes with the
-<code>core</code> language extension, written in Typescript, which actually implements a simple, untyped, expression-based
-programming language:</p>
+<p>The Unsound framework comes with several <a href="/languages/">languages</a> and <a href="/extensions/">language extensions</a>,
+all building on the lowest level &quot;empty&quot; language extension, which does nothing and returns nothing. That's
+not very useful, so Unsound also comes with the <code>core</code> language extension, written in Typescript,
+which actually implements a simple, untyped, expression-based programming language:</p>
 <ul>
 <li>Literals: <code>42</code>, <code>&quot;hello&quot;</code>, <code>true</code>, <code>false</code></li>
 <li>Let bindings: <code>let x = 1 in x</code></li>
@@ -177,37 +179,16 @@ operators, providing a more usable &quot;layer&quot; over <code>core</code>:</p>
 <li>Numerical operators: <code>42 * 21</code></li>
 <li>Boolean operators: <code>a &amp;&amp; !b</code></li>
 </ul>
-<p>Then <code>thermo</code> adds an imperative layer over <code>meso</code>:</p>
-<p>Finally, <code>exo</code> adds a type annotation syntax, along with a typechecking semantics:</p>
+<p>Then <code>thermo</code> adds an imperative, JS-like layer over <code>meso</code>:</p>
 <ul>
-<li>Let binding annotations: <code>let f: Number = 42; f * f</code></li>
+<li>Block statements: <code>{ e1; e2 }</code></li>
+<li>If statements: <code>if x { ... }</code></li>
+<li>Variable assignment: <code>x = 42;</code></li>
 </ul>
 <p>In addition, example extensions show how other programming features can be composed atop an existing language
 arbitrarily. For instance, <code>const</code> adds the classic <code>const x = y;</code> syntax, raising a parsing error for subsequent
 assignments to <code>x</code>. And <code>dyn</code> implements <em>dynamic scoping</em> for a language; note that <code>dyn</code> actually extends
 the <em>evaluation</em> semantics as well as the parsing and compilation phases.</p>
-<h3>Files</h3>
-<ul>
-<li><code>types.ts</code> - AST types (Expr, LetExpr, Lambda, etc.)</li>
-<li><code>parser.ts</code> - Combinator parser, exports <code>$parse</code></li>
-<li><code>compiler.ts</code> - AST to IR compiler, exports <code>$compile</code></li>
-<li><code>ir.ts</code> - JavaScript IR builders and emitters</li>
-<li><code>interpret.ts</code> - Base interpreter with primitives, exports <code>createInterpret</code></li>
-<li><code>extension.ts</code> - Extension composition, <code>createLanguage</code>, <code>applyExtension</code>, <code>run</code></li>
-<li><code>eval.ts</code> - Default <code>$eval</code> interpreter</li>
-<li><code>cli.ts</code> - Command-line interface</li>
-<li><code>test.ts</code> - Test runner</li>
-</ul>
-<h3>Extensions</h3>
-<p>Located in <code>extensions/</code>:</p>
-<ul>
-<li><code>core.ts</code> - Base implementations for all phases (parser, compiler, emitter, interpreter)</li>
-<li><code>meso.us</code> - Infix operators with precedence (the &quot;middle layer&quot;)</li>
-<li><code>thermo.us</code> - JS-like imperative features (assignment with body)</li>
-<li><code>const.us</code> - Constant bindings with compile-time checking</li>
-<li><code>trace.ts</code> - Tracing/debugging extension</li>
-<li><code>identity.us</code> - No-op extension (test)</li>
-</ul>
 
   </main>
 

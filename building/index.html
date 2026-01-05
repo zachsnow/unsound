@@ -25,6 +25,8 @@
     <a href="/building/">Building</a>
     <a href="/usage/">Usage</a>
     <a href="/languages/">Languages</a>
+    <a href="/extensions/">Extensions</a>
+    <a href="/authoring/">Authoring</a>
     <a href="/lsp/">LSP</a>
     <a href="/testing/">Testing</a>
     <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
@@ -57,24 +59,27 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
   <main>
     
 <h1>Building and installing</h1>
-<p>Bun and TypeScript are the only dependencies. Once <code>bun</code> is available:</p>
+<p>Bun and Typescript are the only dependencies for the core compiler. Once <code>bun</code> is available:</p>
 <pre><code class="language-bash">bun install
 </code></pre>
-<p>Now you can run the Unsound compiler directly, build a binary, or
-install the language server:</p>
-<pre><code class="language-bash">bun run usc         # Run the compiler directly
-bun run build       # Build a usc binary
-bun run install     # Build and install the language server and extension
-</code></pre>
+<p>This will:</p>
+<ol>
+<li>Build and install <code>usc</code>.</li>
+<li>Build and install <code>usc-language-server</code>.</li>
+<li>Build and install the VS Code extension.</li>
+</ol>
 <h2>Development</h2>
 <p>When developing locally you can run the TypeScript directly instead of recompiling <code>usc</code> every time:</p>
-<pre><code class="language-bash">bun run usc         # Run the compiler directly
-bun run types       # Check types
+<pre><code class="language-bash">bun run usc         # Run usc from source
 </code></pre>
-<p>Run TypeScript</p>
+<p>Other scripts include:</p>
+<pre><code class="language-bash">bun run types       # Type check only
+bun run test        # Run tests only
+bun run build       # Type check and run tests; builds the binary `dist/usc`
+</code></pre>
 <h2>Language Server</h2>
 <p>The Unsound language server provides IDE support for VS Code and other editors. To install:</p>
-<pre><code class="language-bash">bun run install
+<pre><code class="language-bash">cd editors/vscode &amp;&amp; bun install &amp;&amp; ./install.sh
 </code></pre>
 <p>This installs the VS Code extension from <code>editors/vscode/</code>.</p>
 

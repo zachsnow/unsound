@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview/">Overview</a>
+    <a href="/building/">Building</a>
+    <a href="/usage/">Usage</a>
+    <a href="/languages/">Languages</a>
+    <a href="/extensions/">Extensions</a>
+    <a href="/authoring/">Authoring</a>
+    <a href="/lsp/">LSP</a>
+    <a href="/testing/">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <aside>
+    <p>Unsound is an <strong>experimental</strong> framework for building extensible programming languages,
+created to explore first class type checking, language extensions, and
+inspired by the <a href="http://okmij.org/ftp/tagless-final/">tagless final</a> approach to
+language implementation. <a href="/try/">Try it out</a> or learn more about <a href="/overview/">how it works</a>.</p>
+
+  </aside>
+
+  <main>
+    
+<h1>Authoring Languages and Extensions</h1>
+<p>Writing Unsound languages to be easily extensible, and writing extensions to extend
+many languages (as opposed to just one specific one), is not straightforward. Here
+are a few techniques that make it easier.</p>
+<h2>Overview</h2>
+<p>An extension is a module that exports builder functions for one or more compiler phases:</p>
+<pre><code class="language-javascript">export default {
+  name: &quot;myext&quot;,
+  description: &quot;My extension&quot;,
+  requires: [&quot;core&quot;],
+
+  $parse: ($) =&gt; {
+    /* extend parsing */
+  },
+  $compile: ($) =&gt; {
+    /* extend compilation */
+  },
+  $interpret: ($) =&gt; {
+    /* extend interpretation */
+  },
+
+  // Less commonly extended:
+  $emit: ($) =&gt; {
+    /* extend emission */
+  },
+  $analyze: ($) =&gt; {
+    /* extend analysis */
+  },
+};
+</code></pre>
+<p>Each builder receives <code>$</code>, an object containing the current phase operations. Your builder mutates <code>$</code> to add or override operations. Extensions are applied in order, so later extensions can override earlier ones.</p>
+<h2>Parsing</h2>
+<p>The parser is built from small, composable pieces. When extending parsing, follow these principles:</p>
+<h3>Break parsing into small pieces</h3>
+<p>Define separate parser functions for each syntactic element, and expose them on <code>$</code>:</p>
+<pre><code class="language-javascript">$parse: ($) =&gt; {
+  // Bad: one big parser
+  $.myExpr = () =&gt; /* parses everything */;
+
+  // Good: composable pieces
+  $.myKeyword = () =&gt; $.keyword(&quot;mykw&quot;);
+  $.myParams = () =&gt; $.between($.token(&quot;(&quot;), $.sepBy($.ident(), $.token(&quot;,&quot;)), $.token(&quot;)&quot;));
+  $.myBody = () =&gt; $.expr();
+  $.myExpr = () =&gt; $.seq($.myKeyword(), $.myParams(), $.myBody(), (kw, params, body) =&gt; ({
+    type: &quot;MyExpr&quot;,
+    params,
+    body
+  }));
+}
+</code></pre>
+<p>This allows subsequent extensions to override just <code>$.myParams</code> or <code>$.myBody</code> without reimplementing the whole expression.</p>
+<h3>Expose constants on $</h3>
+<p>If your extension uses constants (keywords, operator precedences, etc.), expose them on <code>$</code> so other extensions can modify them:</p>
+<pre><code class="language-javascript">$parse: ($) =&gt; {
+  // Expose configuration
+  $.myKeywords = [&quot;mykw&quot;, &quot;myother&quot;];
+  $.myPrecedence = 5;
+
+  // Use the configuration
+  $.myExpr = () =&gt; {
+    const kw = $.myKeywords[0];
+    // ...
+  };
+};
+</code></pre>
+<p>Another extension can then do <code>$.myKeywords.push(&quot;extended&quot;)</code> or <code>$.myPrecedence = 10</code>.</p>
+<h3>Extend existing parsers carefully</h3>
+<p>When overriding an existing parser like <code>$.expr</code>, save the original and call it as a fallback:</p>
+<pre><code class="language-javascript">$parse: ($) =&gt; {
+  const baseExpr = $.expr;
+
+  $.expr = () =&gt;
+    $.alt(
+      $.lazy(() =&gt; $.myExpr()), // Try new syntax first
+      baseExpr() // Fall back to base
+    );
+};
+</code></pre>
+<h2>Compilation</h2>
+<p>The compiler transforms AST nodes into IR. Follow these principles:</p>
+<h3>Compile to existing IR when possible</h3>
+<p>Prefer compiling to IR constructs that <code>$emit</code> and <code>$interpret</code> already handle. This means your extension doesn't need to provide <code>$emit</code> or <code>$interpret</code> builders:</p>
+<pre><code class="language-javascript">$compile: ($) =&gt; {
+  $.compileMyExpr = (expr) =&gt; {
+    // Compile to existing $.let, $.lambda, $.call, etc.
+    return ir.$(
+      &quot;let&quot;,
+      ir.var(&quot;$env&quot;),
+      ir.lit(expr.name),
+      $.compileExpr(expr.value),
+      ir.arrow([&quot;$env&quot;], $.compileExpr(expr.body))
+    );
+  };
+};
+</code></pre>
+<p>If you compile to a new IR operation like <code>ir.$(&quot;myOp&quot;, ...)</code>, you'll need to provide <code>$interpret</code> (and possibly <code>$emit</code>) to handle it.</p>
+<h3>Handle extended expression types</h3>
+<p>When overriding <code>$.compileExpr</code>, your implementation may receive expression types from other extensions. Handle this by checking for your types and delegating others:</p>
+<pre><code class="language-javascript">$compile: ($) =&gt; {
+  const baseCompileExpr = $.compileExpr;
+
+  $.compileExpr = (expr) =&gt; {
+    if (expr.type === &quot;MyExpr&quot;) {
+      return $.compileMyExpr(expr);
+    }
+    // Delegate unknown types to base
+    return baseCompileExpr.call($, expr);
+  };
+};
+</code></pre>
+<h3>The Expr type limitation</h3>
+<p>TypeScript's <code>Expr</code> type is a union of known expression types. When you add a new expression type, TypeScript doesn't know about it. You'll often need casts:</p>
+<pre><code class="language-javascript">$compile: ($) =&gt; {
+  const baseCompileExpr = $.compileExpr;
+
+  $.compileExpr = (expr) =&gt; {
+    // Cast to access your extended type
+    const e = expr as MyExpr | Expr;
+    if (e.type === &quot;MyExpr&quot;) {
+      return $.compileMyExpr(e);
+    }
+    return baseCompileExpr.call($, expr);
+  };
+}
+</code></pre>
+<p>This is unfortunate but necessary given TypeScript's type system. The recursive nature of <code>Expr</code> makes it difficult to properly extend.</p>
+<h3>Extract helper functions</h3>
+<p>If your compilation logic is complex, extract helper functions and expose them on <code>$</code>:</p>
+<pre><code class="language-javascript">$compile: ($) =&gt; {
+  $.compileMyParams = (params) =&gt; /* ... */;
+  $.compileMyBody = (body) =&gt; /* ... */;
+
+  $.compileMyExpr = (expr) =&gt; {
+    const params = $.compileMyParams(expr.params);
+    const body = $.compileMyBody(expr.body);
+    // ...
+  };
+}
+</code></pre>
+<h2>Interpretation</h2>
+<p>The interpreter defines runtime semantics. When adding new operations:</p>
+<h3>Provide operations for new IR</h3>
+<p>If your compiler emits new IR operations, provide interpreter implementations:</p>
+<pre><code class="language-javascript">$interpret: ($) =&gt; {
+  $.myOp = ($env, arg1, arg2) =&gt; {
+    // Implement runtime behavior
+    return /* result */;
+  };
+};
+</code></pre>
+<h3>Match the signature expected by emit</h3>
+<p>The emitter generates code like <code>$.myOp($env, arg1, arg2)</code>. Your interpreter operation must match this signature.</p>
+<h3>Consider the environment</h3>
+<p>Many operations receive <code>$env</code> as the first argument. Use <code>$env.lookup(name)</code> to read variables, <code>$env.extend(bindings)</code> to create child scopes, and <code>$env.mutate(name, value)</code> to update existing bindings.</p>
+<h2>Testing</h2>
+<p>Write tests for your extension using the test file format:</p>
+<pre><code># usc -x core -x myext
+
+--- my feature works
+myexpr(1, 2)
+===
+3
+
+--- my feature handles errors
+myexpr(null)
+=== error
+expected number
+</code></pre>
+<p>Test both successful cases and error cases. Test interaction with other extensions when relevant.</p>
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
