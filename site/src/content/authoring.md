@@ -1,6 +1,8 @@
-# Authoring Extensions
+# Authoring Languages and Extensions
 
-This guide covers best practices for writing Unsound language extensions.
+Writing Unsound languages to be easily extensible, and writing extensions to extend
+many languages (as opposed to just one specific one), is not straightforward. Here
+are a few techniques that make it easier.
 
 ## Overview
 
@@ -10,15 +12,26 @@ An extension is a module that exports builder functions for one or more compiler
 export default {
   name: "myext",
   description: "My extension",
+  requires: ["core"],
 
-  $parse: ($) => { /* extend parsing */ },
-  $compile: ($) => { /* extend compilation */ },
-  $interpret: ($) => { /* extend interpretation */ },
+  $parse: ($) => {
+    /* extend parsing */
+  },
+  $compile: ($) => {
+    /* extend compilation */
+  },
+  $interpret: ($) => {
+    /* extend interpretation */
+  },
 
   // Less commonly extended:
-  $emit: ($) => { /* extend emission */ },
-  $analyze: ($) => { /* extend analysis */ },
-}
+  $emit: ($) => {
+    /* extend emission */
+  },
+  $analyze: ($) => {
+    /* extend analysis */
+  },
+};
 ```
 
 Each builder receives `$`, an object containing the current phase operations. Your builder mutates `$` to add or override operations. Extensions are applied in order, so later extensions can override earlier ones.
@@ -65,7 +78,7 @@ $parse: ($) => {
     const kw = $.myKeywords[0];
     // ...
   };
-}
+};
 ```
 
 Another extension can then do `$.myKeywords.push("extended")` or `$.myPrecedence = 10`.
@@ -78,11 +91,12 @@ When overriding an existing parser like `$.expr`, save the original and call it 
 $parse: ($) => {
   const baseExpr = $.expr;
 
-  $.expr = () => $.alt(
-    $.lazy(() => $.myExpr()),  // Try new syntax first
-    baseExpr()                  // Fall back to base
-  );
-}
+  $.expr = () =>
+    $.alt(
+      $.lazy(() => $.myExpr()), // Try new syntax first
+      baseExpr() // Fall back to base
+    );
+};
 ```
 
 ## Compilation
@@ -97,12 +111,15 @@ Prefer compiling to IR constructs that `$emit` and `$interpret` already handle. 
 $compile: ($) => {
   $.compileMyExpr = (expr) => {
     // Compile to existing $.let, $.lambda, $.call, etc.
-    return ir.$("let", ir.var("$env"), ir.lit(expr.name),
+    return ir.$(
+      "let",
+      ir.var("$env"),
+      ir.lit(expr.name),
       $.compileExpr(expr.value),
       ir.arrow(["$env"], $.compileExpr(expr.body))
     );
   };
-}
+};
 ```
 
 If you compile to a new IR operation like `ir.$("myOp", ...)`, you'll need to provide `$interpret` (and possibly `$emit`) to handle it.
@@ -122,7 +139,7 @@ $compile: ($) => {
     // Delegate unknown types to base
     return baseCompileExpr.call($, expr);
   };
-}
+};
 ```
 
 ### The Expr type limitation
@@ -177,7 +194,7 @@ $interpret: ($) => {
     // Implement runtime behavior
     return /* result */;
   };
-}
+};
 ```
 
 ### Match the signature expected by emit

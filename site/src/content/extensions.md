@@ -59,4 +59,4 @@ structures that would be impossible with strict (eager) evaluation.
 
 ---
 
-For guidance on writing your own extensions, see [Authoring Extensions](/authoring/).
+For more on writing your own extensions, see [Authoring Languages and Extensions](/authoring/).

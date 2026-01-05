@@ -1,37 +1,39 @@
 # Building and installing
 
-Bun and TypeScript are the only dependencies. Once `bun` is available:
+Bun and Typescript are the only dependencies for the core compiler. Once `bun` is available:
 
 ```bash
 bun install
 ```
 
-Now you can run the Unsound compiler directly, build a binary, or
-install the language server:
+This will:
 
-```bash
-bun run usc         # Run the compiler directly
-bun run build       # Build a usc binary
-bun run install     # Build and install the language server and extension
-```
+1. Build and install `usc`.
+2. Build and install `usc-language-server`.
+3. Build and install the VS Code extension.
 
 ## Development
 
 When developing locally you can run the TypeScript directly instead of recompiling `usc` every time:
 
 ```bash
-bun run usc         # Run the compiler directly
-bun run types       # Check types
+bun run usc         # Run usc from source
 ```
 
-Run TypeScript
+Other scripts include:
+
+```bash
+bun run types       # Type check only
+bun run test        # Run tests only
+bun run build       # Type check and run tests; builds the binary `dist/usc`
+```
 
 ## Language Server
 
 The Unsound language server provides IDE support for VS Code and other editors. To install:
 
 ```bash
-bun run install
+cd editors/vscode && bun install && ./install.sh
 ```
 
 This installs the VS Code extension from `editors/vscode/`.

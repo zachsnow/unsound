@@ -1,16 +1,16 @@
 ## Architecture
 
 Unsound is at its core a framework for implementing programming languages whose syntax and semantics
-are *extensible*. Its design is one in which multiple language *extensions* are composed to produce a
+are _extensible_. Its design is one in which multiple language _extensions_ are composed to produce a
 more or less traditional (though simplified) compiler pipeline:
 
-* parsing a language to an abstract syntax tree (AST)
-* compiling that AST to an intermediate representation (IR)
-* emitting that IR to a target language
+- parsing a language to an abstract syntax tree (AST)
+- compiling that AST to an intermediate representation (IR)
+- emitting that IR to a target language
 
 Extensions can extend each step in that pipeline.
 
-Beyond allowing the extension of the compiler, Unsound allows extending the *runtime semantics* of programs.
+Beyond allowing the extension of the compiler, Unsound allows extending the _runtime semantics_ of programs.
 The style of code that languages developed with Unsound compile to is one in which the evaluation of the
 compiled program is parameterized by a "semantics" that defines what evaluation actually "is". In the
 usual evaluation semantics this is essentially the identity
@@ -19,12 +19,12 @@ usual evaluation semantics this is essentially the identity
 
 The core built-in compilation phases are:
 
-* `$parse`: takes a string to parse; generally returns an AST.
-* `$compile`: takes an AST; generally returns an IR.
-* `$emit`: takes an IR; generally returns a `string` of code in the target language (that is -- JS).
+- `$parse`: takes a string to parse; generally returns an AST.
+- `$compile`: takes an AST; generally returns an IR.
+- `$emit`: takes an IR; generally returns a `string` of code in the target language (that is -- JS).
 
-The result is a JS file that is parameterized by a *semantics* that can be applied to the output to produce
-an *interpretation*. The standard semantics is `$eval`, a "concrete interpretation" of the program in the
+The result is a JS file that is parameterized by a _semantics_ that can be applied to the output to produce
+an _interpretation_. The standard semantics is `$interpret`, a "concrete interpretation" of the program in the
 universe of JS values.
 
 One case also provide other semantics; for instance `$type` can implement an "abstract interpretation"
@@ -35,7 +35,6 @@ in a universe of simple nominal types.
 Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.
 The key idea allowing extension is to implement the various phases (parsing, compilation, evaluation) with
 a similar "open-recursive" approach.
-
 
 Extensions have the following form:
 
@@ -63,10 +62,10 @@ numeric expression:
     // Parse addition: term (('+' | '-') term)*
     $.parse = (s) => {
       let result = $.term(s);
-      while (s.peek() === '+' || s.peek() === '-') {
+      while (s.peek() === "+" || s.peek() === "-") {
         let op = s.next();
         let right = $.term(s);
-        result = { type: op === '+' ? 'Add' : 'Sub', left: result, right };
+        result = { type: op === "+" ? "Add" : "Sub", left: result, right };
       }
       return result;
     };
@@ -74,21 +73,21 @@ numeric expression:
     // Parse multiplication: number (('*' | '/') number)*
     $.term = (s) => {
       let result = $.number(s);
-      while (s.peek() === '*' || s.peek() === '/') {
+      while (s.peek() === "*" || s.peek() === "/") {
         let op = s.next();
         let right = $.number(s);
-        result = { type: op === '*' ? 'Mul' : 'Div', left: result, right };
+        result = { type: op === "*" ? "Mul" : "Div", left: result, right };
       }
       return result;
     };
 
     // Parse a number literal
     $.number = (s) => {
-      let n = '';
-      while (s.peek() >= '0' && s.peek() <= '9') n += s.next();
-      return { type: 'Num', value: parseInt(n) };
+      let n = "";
+      while (s.peek() >= "0" && s.peek() <= "9") n += s.next();
+      return { type: "Num", value: parseInt(n) };
     };
-  }
+  };
 }
 ```
 
@@ -103,27 +102,25 @@ A subsequent extension can override parsing to add exponentiation with higher pr
     // Exponentiation: number ('^' exponent)*
     $.number = (s) => {
       let result = baseNumber(s);
-      while (s.peek() === '^') {
+      while (s.peek() === "^") {
         s.next();
         let right = baseNumber(s);
-        result = { type: 'Exp', base: result, power: right };
+        result = { type: "Exp", base: result, power: right };
       }
       return result;
     };
-  }
+  };
 }
 ```
 
 Now `2^3*4+1` parses with the correct precedence: `((2^3)*4)+1`.
 
-
-
 ## Languages
 
-The Unsound framework comes with several language extensions, all building on the lowest level "empty" language
-extension, which does nothing and returns nothing.  That's not very useful, so Unsound also comes with the
-`core` language extension, written in Typescript, which actually implements a simple, untyped, expression-based
-programming language:
+The Unsound framework comes with several [languages](/languages/) and [language extensions](/extensions/),
+all building on the lowest level "empty" language extension, which does nothing and returns nothing. That's
+not very useful, so Unsound also comes with the `core` language extension, written in Typescript,
+which actually implements a simple, untyped, expression-based programming language:
 
 - Literals: `42`, `"hello"`, `true`, `false`
 - Let bindings: `let x = 1 in x`
@@ -141,37 +138,13 @@ operators, providing a more usable "layer" over `core`:
 - Numerical operators: `42 * 21`
 - Boolean operators: `a && !b`
 
-Then `thermo` adds an imperative layer over `meso`:
+Then `thermo` adds an imperative, JS-like layer over `meso`:
 
-Finally, `exo` adds a type annotation syntax, along with a typechecking semantics:
-
-- Let binding annotations: `let f: Number = 42; f * f`
+- Block statements: `{ e1; e2 }`
+- If statements: `if x { ... }`
+- Variable assignment: `x = 42;`
 
 In addition, example extensions show how other programming features can be composed atop an existing language
 arbitrarily. For instance, `const` adds the classic `const x = y;` syntax, raising a parsing error for subsequent
-assignments to `x`. And `dyn` implements *dynamic scoping* for a language; note that `dyn` actually extends
-the *evaluation* semantics as well as the parsing and compilation phases.
-
-
-### Files
-
-- `types.ts` - AST types (Expr, LetExpr, Lambda, etc.)
-- `parser.ts` - Combinator parser, exports `$parse`
-- `compiler.ts` - AST to IR compiler, exports `$compile`
-- `ir.ts` - JavaScript IR builders and emitters
-- `interpret.ts` - Base interpreter with primitives, exports `createInterpret`
-- `extension.ts` - Extension composition, `createLanguage`, `applyExtension`, `run`
-- `eval.ts` - Default `$eval` interpreter
-- `cli.ts` - Command-line interface
-- `test.ts` - Test runner
-
-### Extensions
-
-Located in `extensions/`:
-
-- `core.ts` - Base implementations for all phases (parser, compiler, emitter, interpreter)
-- `meso.us` - Infix operators with precedence (the "middle layer")
-- `thermo.us` - JS-like imperative features (assignment with body)
-- `const.us` - Constant bindings with compile-time checking
-- `trace.ts` - Tracing/debugging extension
-- `identity.us` - No-op extension (test)
+assignments to `x`. And `dyn` implements _dynamic scoping_ for a language; note that `dyn` actually extends
+the _evaluation_ semantics as well as the parsing and compilation phases.

@@ -66,3 +66,7 @@ let x: T = value;
 We first evaluate `T` using the default `$interpret` semantics to determine the type. Then we evaluate `value`
 using the `$type` semantics, and compare the results using `op==` on `T` to determine whether `value` is assignable
 to `x`.
+
+---
+
+For more on writing your own languages, see [Authoring Languages and Extensions](/authoring/).
