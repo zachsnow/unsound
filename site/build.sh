@@ -30,22 +30,17 @@ cp "${INPUT_DIRECTORY}"/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 # Build index page
 echo "Building index..."
 bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
-bunx commonmark "${INPUT_DIRECTORY}/content/pitch.md" > "/tmp/pitch.html"
 
-# Build each content page
+# Template layout.html (resolves pitch markdown, creates injection target)
+echo "Templating layout..."
+bunx saladplate "${INPUT_DIRECTORY}/layout.html" > "${INPUT_DIRECTORY}/.layout.html"
+
+# Build each content page (uses injection into templated layout)
 echo "Building pages..."
-PAGES="overview building usage lsp testing languages"
+PAGES="overview building usage lsp testing languages extensions"
 for page in $PAGES; do
     mkdir -p "${OUTPUT_DIRECTORY}/${page}"
-    # Generate content from markdown to temp file
-    bunx saladplate "${INPUT_DIRECTORY}/pages/${page}.html" > "/tmp/${page}_content.html"
-    # Inject into layout
-    bun -e "
-      const layout = await Bun.file('${INPUT_DIRECTORY}/layout.html').text();
-      const content = await Bun.file('/tmp/${page}_content.html').text();
-      const pitch = await Bun.file('/tmp/pitch.html').text();
-      console.log(layout.replace('{{CONTENT}}', content).replace('{{PITCH}}', pitch));
-    " > "${OUTPUT_DIRECTORY}/${page}/index.html"
+    bunx saladplate "${INPUT_DIRECTORY}/pages/${page}.html" > "${OUTPUT_DIRECTORY}/${page}/index.html"
 done
 
 echo "Done."

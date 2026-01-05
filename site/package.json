@@ -10,6 +10,6 @@
   },
   "devDependencies": {
     "commonmark": "^0.31.0",
-    "saladplate": "^0.1.3"
+    "saladplate": "^0.2.0"
   }
 }
