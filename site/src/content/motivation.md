@@ -9,13 +9,13 @@ I wanted to write types in something more like JavaScript, not in an ad hoc, pur
 
 - Value: `if (cond) a else b` vs Type: `Cond extends true ? A : B`
 - Value: `items.map(f)` vs Type: `{ [K in keyof T]: F<T[K]> }`
-- Value: `str.split('.')` vs Type: ``S extends `${infer H}.${infer T}` ``
+- Value: `str.split('.')` vs Type: `` S extends `${infer H}.${infer T}`  ``
 
-Sure, you get nice things intuitive (well) and powerful inference. But what else can try?
+Sure, you get nice things -- intuitive (well) and powerful inference. But what else can we try?
 
 ## Implementing types in the language
 
-More than just writing types in the value language, I wanted to *implement* typing rules in the language, too.
+More than just writing types in the value language, I wanted to _implement_ typing rules in the language, too.
 How does member access work at the type level? How does function application propagate types? I wanted
 to define that behavior in the language itself.
 
@@ -25,24 +25,24 @@ effective way to implement it?
 
 ## Extensible semantics
 
-I explored a number of strategies, frequently revisiting an interesting observation: *evaluation and typechecking
-share a lot of structure*. I found myself reimplementing similar folds over abstract syntax trees, etc. Eventually
+I explored a number of strategies, frequently revisiting an interesting observation: _evaluation and typechecking
+share a lot of structure_. I found myself reimplementing similar folds over abstract syntax trees, etc. Eventually
 I arrived at compiling to something like the following, code parameterized over a semantics object `$`, so that
 I could implement evaluation and typing separately:
 
 ```javascript
 // "42 + 1" compiles to:
-($) => $.add($.number(42), $.number(1))
+($) => $.add($.number(42), $.number(1));
 ```
 
 The meaning comes from which `$` we pass in:
 
 ```javascript
 const $eval = { number: (n) => n, add: (a, b) => a + b };
-program($eval);  // => 43
+program($eval); // => 43
 
 const $type = { number: (n) => "Num", add: (a, b) => checkAdd(a, b) };
-program($type);  // => "Num"
+program($type); // => "Num"
 ```
 
 Claude kindly pointed out the similarity to Oleg Kiselyov's **tagless final** style. A visit to Oleg's website
@@ -51,16 +51,16 @@ of functional programming -- explores this topic in depth, and was elucidating.
 
 <aside>
 
-* To make binding more customizable, we only make partial use of higher-order abstract syntax (HOAS).
-* We aren't trying to achieve type safety in the target language via type safety in the meta-language (TypeScript),
-  so that hasn't been a focus of the implementaiton. Many of the type-safe extensibility techniques Oleg describes
+- To make binding more customizable, we only make partial use of higher-order abstract syntax (HOAS).
+- We aren't trying to achieve type safety in the target language via type safety in the meta-language (TypeScript),
+  so that hasn't been a focus of the implementation. Many of the type-safe extensibility techniques Oleg describes
   don't translate well to TypeScript, anyway.
 
 </aside>
 
 ## Extensible syntax
 
-Parameterized semantics gives us extensible interpretation, one that can power both evaluation *and* type checking or
+Parameterized semantics gives us extensible interpretation, one that can power both evaluation _and_ type checking or
 inference... but once you have extensible semantics, you want extensible parsing! What good is adding a new typing
 rule if you can't add the syntax for it?
 
@@ -68,9 +68,11 @@ So I built an open recursive pipeline: parsing, compilation, and code emission, 
 
 <aside>
 
-Instead of relying on a hierarchy of classes to allow for extension, I used a prototypal approach, for 2 reasons:
-* Language extensions do not need access to the source of other language extensions that they extend
-* Target languages don't need to understand JS classes in order to write further language extensions *in the target*
+Instead of relying on a hierarchy of classes to allow for extension, I used a simpler imperative approach,
+for 2 reasons:
+
+- Language extensions do not need access to the source of other language extensions that they extend
+- Target languages don't need to understand JS classes in order to write further language extensions _in the target_
   language, which I wanted to do (primarily for fun).
 
 </aside>
