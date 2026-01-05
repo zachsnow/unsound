@@ -31,11 +31,7 @@ cp "${INPUT_DIRECTORY}"/js/lib/* "${OUTPUT_DIRECTORY}/js/lib/"
 echo "Building index..."
 bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}"
 
-# Template layout.html (resolves pitch markdown, creates injection target)
-echo "Templating layout..."
-bunx saladplate "${INPUT_DIRECTORY}/layout.html" > "${INPUT_DIRECTORY}/.layout.html"
-
-# Build each content page (uses injection into templated layout)
+# Build each content page (uses $^(( )) injection into layout)
 echo "Building pages..."
 PAGES="overview building usage lsp testing languages extensions"
 for page in $PAGES; do

@@ -6,7 +6,7 @@
       "name": "unsound-site",
       "devDependencies": {
         "commonmark": "^0.31.0",
-        "saladplate": "^0.2.0",
+        "saladplate": "^0.2.1",
       },
     },
   },
@@ -19,6 +19,6 @@
 
     "minimist": ["minimist@1.2.8", "", {}, "sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA=="],
 
-    "saladplate": ["saladplate@0.2.0", "", { "bin": { "saladplate": "dist/bin/saladplate.js" } }, "sha512-QfSsH74HOMCC3jWhOk/kuwwiIH6/0phuVojmqqatkTji9rNY1dr4LinJkyL999YTlvVh35oBb19K3/ZKtVJKxA=="],
+    "saladplate": ["saladplate@0.2.1", "", { "bin": { "saladplate": "dist/bin/saladplate.js" } }, "sha512-zJBZ6dkKdnhuCpSNDOpi8TCTigMNyHKuISJ+z/jQXreGGxcKbTGkwpzSsKWsdtmNPxNrytw+sQb1zWQViKy8kg=="],
   }
 }
