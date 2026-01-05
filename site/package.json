@@ -5,7 +5,7 @@
   "author": "Zach Snow",
   "scripts": {
     "build": "./build.sh",
-    "watch": "./watch.sh",
+    "watch": "bun bin/watch.js",
     "deploy": "./deploy.sh"
   },
   "devDependencies": {

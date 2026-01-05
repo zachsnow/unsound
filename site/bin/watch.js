@@ -1,7 +1,11 @@
 import { watch } from 'fs';
-import { spawn } from 'child_process';
+import { spawnSync, spawn } from 'child_process';
+
+// Initial build
+spawnSync('./build.sh', [], { stdio: 'inherit' });
 
 // Start server
+console.log('Starting server at http://localhost:8000');
 Bun.serve({
   hostname: '0.0.0.0',
   port: 8000,
