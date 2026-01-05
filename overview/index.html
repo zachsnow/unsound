@@ -55,7 +55,8 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
   </aside>
 
   <main>
-    <h2>Architecture</h2>
+    
+<h2>Architecture</h2>
 <p>Unsound is at its core a framework for implementing programming languages whose syntax and semantics
 are <em>extensible</em>. Its design is one in which multiple language <em>extensions</em> are composed to produce a
 more or less traditional (though simplified) compiler pipeline:</p>
@@ -72,11 +73,9 @@ usual evaluation semantics this is essentially the identity</p>
 <h3>Phases</h3>
 <p>The core built-in compilation phases are:</p>
 <ul>
-<li><code>$pre</code>: takes a filename of the program to be compiled; generally returns <code>string</code>.</li>
 <li><code>$parse</code>: takes a string to parse; generally returns an AST.</li>
 <li><code>$compile</code>: takes an AST; generally returns an IR.</li>
 <li><code>$emit</code>: takes an IR; generally returns a <code>string</code> of code in the target language (that is -- JS).</li>
-<li><code>$post</code>: takes a string of target language code and a filename; writes it to file.</li>
 </ul>
 <p>The result is a JS file that is parameterized by a <em>semantics</em> that can be applied to the output to produce
 an <em>interpretation</em>. The standard semantics is <code>$eval</code>, a &quot;concrete interpretation&quot; of the program in the
@@ -100,7 +99,7 @@ a similar &quot;open-recursive&quot; approach.</p>
 <p>All hooks mutate <code>$</code>, adding functionality extension by extension (and initially starting with the &quot;empty&quot;
 language's implementation -- generally <code>() =&gt; {}</code>). To see how this plays out, consider parsing. The framework
 expects that, after all extensions have been loaded, the <code>$parse</code> phase will result in an object <code>$</code> that
-exports a function <code>$.parse</code> that takes the result of the <code>$pre</code> phase and outputs a value that the next phase,
+exports a function <code>$.parse</code> that takes the contents of a file and outputs a value that the next phase,
 <code>$compile</code>, will understand. A simple language might implement <code>$.parse</code> as, for example, parsing a simple
 numeric expression:</p>
 <pre><code class="language-javascript">{
@@ -210,7 +209,6 @@ the <em>evaluation</em> semantics as well as the parsing and compilation phases.
 <li><code>identity.us</code> - No-op extension (test)</li>
 </ul>
 
-
   </main>
 
   <footer>
@@ -223,4 +221,3 @@ the <em>evaluation</em> semantics as well as the parsing and compilation phases.
   <script type="text/javascript" src="/js/app.js"></script>
 </body>
 </html>
-

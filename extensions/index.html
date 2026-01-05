@@ -56,46 +56,45 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
 
   <main>
     
-<p>First make sure you've <a href="/building/">installed</a> the Unsound binary <code>usc</code> in your path; if you don't want
-to do that, you can always run Unsound via bun; replace <code>usc</code> with <code>bun run usc</code> in the following to run
-the TypeScript source directly.</p>
-<h2>Running Programs</h2>
-<pre><code class="language-bash"># Run a program
-usc program.us
+<h1>Extensions</h1>
+<p>In addition to implementing &quot;whole languages&quot;, Unsound can be used to develop language extensions that
+can extend arbitrary languages.</p>
+<h2>Dynamic scope</h2>
+<p>The <code>dyn</code> extension adds dynamic variable binding to languages built on <code>core</code>.</p>
+<pre><code>//usc -x core -x meso -x dyn
 
-# With extensions
-usc -x full.ts program.us
-usc -x extensions/meso.us program.us
+dyn x = 42 in f()
+</code></pre>
+<p>Unlike <code>let</code> (lexical scoping), <code>dyn</code> binds dynamically — the binding is visible to any code called
+from the body, even functions defined elsewhere:</p>
+<pre><code class="language-unsound">let f = () =&gt; x in    // x is not in lexical scope here
+dyn x = 10 in f()     // but f() sees x = 10 via dynamic scope
+</code></pre>
+<p>This is useful for implicit context like the current user, transaction, or logging configuration
+that would otherwise need to be threaded through every function call.</p>
+<p>For fun the extension is implemented in Unsound itself (<code>dyn.us</code>).</p>
+<h2>Lazy function arguments</h2>
+<p>The <code>lazy</code> extension adds lazy (call-by-name) parameters to lambda functions.</p>
+<pre><code class="language-unsound">//usc -x core -x meso -x lazy
 
-# Chain extensions (applied in order)
-usc -x ext1.us -x ext2.us program.us
+let cond = (test, ~a, ~b) =&gt;
+  if test then
+    a()
+  else
+    b()
+in
+cond(true, 1, null.explode)   // returns 1, doesn't evaluate null.explode
 </code></pre>
-<h2>Interpreters</h2>
-<p>By default, programs are evaluated using the <code>$interpret</code> semantics. You can select a different interpreter:</p>
-<pre><code class="language-bash"># Select interpreter (default: interpret)
-usc -x simply-typed.us --interpret type program.us
+<p>A tilde (<code>~</code>) before a parameter name marks it as lazy. When calling a function, all arguments
+are wrapped in thunks. Eager parameters are forced immediately upon function entry, while lazy
+parameters remain as thunks until explicitly called.</p>
+<p>To use a lazy parameter's value, call it as a function: <code>x()</code>. This allows the function author
+to control exactly when (and whether) each argument is evaluated.</p>
+<pre><code class="language-unsound">let orElse = (a, ~b) =&gt; if a then a else b() in
+orElse(true, expensiveComputation())   // skips the expensive computation
 </code></pre>
-<h2>Output Modes</h2>
-<p>Unsound supports several output modes. These are:</p>
-<ul>
-<li><code>run</code>: compile and then immediately interpret</li>
-<li><code>module</code>: compile to a JS module exporting a function <code>($) =&gt; { ... }</code></li>
-<li><code>standalone</code>: compile to standalone JS program</li>
-<li><code>binary</code>: produce a standlone binary program from the standalone JS program</li>
-</ul>
-<pre><code class="language-bash"># Output modes
-usc -m run -o app.js program.us           # Run immediately
-usc -m module -o mod.js program.us        # Module exporting function
-usc -m standalone -o prog.js program.us   # Self-contained JS program
-usc -m binary -o prog program.us          # Standalone binary
-</code></pre>
-<p>Currently the <code>binary</code> option produces an executable using the bun <code>--compile</code> option,
-which bundles the entire bun runtime. This makes for quite large binaries.</p>
-<h2>Debugging</h2>
-<p>Unsound supports printing the values produced by the various phases:</p>
-<pre><code class="language-bash"># Debug output
-usc --ast --ir --js program.us
-</code></pre>
+<p>This enables patterns like short-circuit evaluation, conditional computation, and infinite data
+structures that would be impossible with strict (eager) evaluation.</p>
 
   </main>
 

@@ -55,11 +55,12 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
   </aside>
 
   <main>
-    <h1>Testing</h1>
+    
+<h1>Testing</h1>
 <p>Most of the tests for Unsound amount to testing the result of parsing, compiling, emitting, and interpreting languages composed of various extensions. To this end tests can be defined in custom <code>*.test</code> files that allow easily specifying which language extensions to use, and which phases to run.</p>
 <h2>Test File Format</h2>
 <p>Each file is comprised of a <code>usc</code>-directive indicating how to invoke <code>usc</code>, usually specifying the extensions needed to run the tests.</p>
-<pre><code># usc -x meso -x thermo
+<pre><code># usc -x core -x meso -x thermo
 </code></pre>
 <p>Then there are several tests, each consisting of a title, input, and multiple expected outputs. For each output we define which phases of the framework should be executed, using the extensions defined in the <code>usc</code>-comment.</p>
 <pre><code>--- test name
@@ -82,7 +83,7 @@ expected output
 </code></pre>
 <h2>Multiple Pipelines</h2>
 <p>You can define multiple <code>===</code> blocks, each with their own pipeline:</p>
-<pre><code># usc -x meso.ts
+<pre><code># usc -x core -x meso
 
 --- parse test
 let x = 1 in x
@@ -123,7 +124,6 @@ some bad code
 </code></pre>
 <p>This runs all <code>*.test</code> files in the project.</p>
 
-
   </main>
 
   <footer>
@@ -136,4 +136,3 @@ some bad code
   <script type="text/javascript" src="/js/app.js"></script>
 </body>
 </html>
-

@@ -105,6 +105,14 @@ don't translate well to TypeScript, anyway.</li>
 inference... but once you have extensible semantics, you want extensible parsing! What good is adding a new typing
 rule if you can't add the syntax for it?</p>
 <p>So I built an open recursive pipeline: parsing, compilation, and code emission, all extensible via the same mechanism.</p>
+<aside>
+<p>Instead of relying on a hierarchy of classes to allow for extension, I used a prototypal approach, for 2 reasons:</p>
+<ul>
+<li>Language extensions do not need access to the source of other language extensions that they extend</li>
+<li>Target languages don't need to understand JS classes in order to write further language extensions <em>in the target</em>
+language, which I wanted to do (primarily for fun).</li>
+</ul>
+</aside>
 <h2>Therefore ∴</h2>
 <p>At long last we can answer what it means to implement types in the language itself - tightly integrated, without implementing multiple fixed interpretations. With the <code>exo</code> extension, Unsound supports type annotations:</p>
 <pre><code class="language-unsound">let x : Num = 42;

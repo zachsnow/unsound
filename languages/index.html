@@ -55,7 +55,9 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
   </aside>
 
   <main>
-    <p>Unsound provides several language extensions that build on each other:</p>
+    
+<p>Unsound provides several language extensions that build on each other.</p>
+<h1>Layers</h1>
 <h2>Core</h2>
 <p>The base language - a simple expression-oriented language:</p>
 <pre><code class="language-unsound">let x = 42 in x
@@ -78,10 +80,25 @@ let y = 2;
   x * 2
 }
 </code></pre>
-<h2>Exo</h2>
-<p>Exo adds type annotation syntax, along with typechecking semantics:</p>
-<pre><code class="language-unsound">let x : Num = 42;
+<h1>Programmable Types</h1>
+<p>Exo adds type annotation syntax, along with typechecking semantics.</p>
+<pre><code class="language-unsound">let x : Number = 42;
+let f: (n: Number) =&gt; Number = (n) =&gt; n + 1;
+f(x)
 </code></pre>
+<aside>
+<p>In the interest of not spending more time building space elevator, Exo is
+implemented in TS directly on Core.</p>
+</aside>
+<p>The interesting thing about Exo is <em>how</em> types and typechecking are implemented. Specifically,
+each type annotation is an Exo <em>expression</em> -- a value -- that is itself evaluated before performing
+type checking.</p>
+<p>In addition, when interpreting a binding's value</p>
+<pre><code class="language-unsound">let x: T = value;
+</code></pre>
+<p>We first evaluate <code>T</code> using the default <code>$interpret</code> semantics to determine the type. Then we evaluate <code>value</code>
+using the <code>$type</code> semantics, and compare the results using <code>op==</code> on <code>T</code> to determine whether <code>value</code> is assignable
+to <code>x</code>.</p>
 
   </main>
 
@@ -95,4 +112,3 @@ let y = 2;
   <script type="text/javascript" src="/js/app.js"></script>
 </body>
 </html>
-
