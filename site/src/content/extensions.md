@@ -56,3 +56,7 @@ orElse(true, expensiveComputation())   // skips the expensive computation
 
 This enables patterns like short-circuit evaluation, conditional computation, and infinite data
 structures that would be impossible with strict (eager) evaluation.
+
+---
+
+For guidance on writing your own extensions, see [Authoring Extensions](/authoring/).

@@ -33,7 +33,7 @@ bunx saladplate "${INPUT_DIRECTORY}/index.html" --directory "${OUTPUT_DIRECTORY}
 
 # Build each content page (uses $^(( )) injection into layout)
 echo "Building pages..."
-PAGES="overview building usage lsp testing languages extensions"
+PAGES="overview building usage lsp testing languages extensions authoring"
 for page in $PAGES; do
     mkdir -p "${OUTPUT_DIRECTORY}/${page}"
     bunx saladplate "${INPUT_DIRECTORY}/pages/${page}.html" > "${OUTPUT_DIRECTORY}/${page}/index.html"
