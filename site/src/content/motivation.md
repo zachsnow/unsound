@@ -79,28 +79,46 @@ for 2 reasons:
 
 ## Therefore &there4;
 
-At long last we can answer what it means to implement types in the language itself - tightly integrated, without implementing multiple fixed interpretations. With the `exo` extension, Unsound supports type annotations:
+At long last we can answer what it means to implement types in the language itself - tightly integrated, without implementing multiple fixed interpretations. The key insight: **the type of a function is itself a function**.
+
+When you write:
 
 ```unsound
-let x : Num = 42;
-let f : Arrow(Num, Num) = (x) => x + 1;
+let f = (x) => x + 1;
+f(42)
 ```
 
-Type expressions are regular Unsound code. `Arrow` is a function, `Num` is a value:
+Under `$eval`, this creates a function and calls it with `42`, returning `43`.
+
+Under `$type`, the _same compiled code_ creates a function that takes a type and returns a type. When "called" with `NumberType`, it binds `x` to `NumberType`, evaluates `x + 1` in the type semantics (which checks that `+` is valid on numbers and returns `NumberType`), and returns `NumberType`.
+
+Function application at the type level is just... function application. The type checker literally calls your function with types as arguments.
+
+This is the payoff of tagless final: we don't need a separate type language. Types are values, type-level functions are functions, and type checking is evaluation with a different semantics object.
+
+With the `exo` extension, Unsound supports type annotations:
 
 ```unsound
-let Num = { kind: "num" };
-let Arrow = (param, ret) => { kind: "arrow", param: param, ret: ret };
+let x : Number = 42;
+let f : Arrow(Number, Number) = (x) => x + 1;
 ```
+
+Type expressions are regular Unsound code. `Number` is a value with operator methods that check argument types:
+
+```unsound
+Number["op+"]  // a function: (other) => other === Number ? Number : TypeError
+```
+
+And `Arrow` is just a constructor for arrow type descriptors. But the actual function type - the thing that computes return types from argument types - is the function itself, interpreted under `$type`.
 
 Type-level functions are just functions:
 
 ```unsound
-let Pair = (a, b) => Record({ fst: a, snd: b });
-let p : Pair(Num, Str) = { fst: 42, snd: "hello" };
+let Pair = (a, b) => { fst: a, snd: b };
+let p : Pair(Number, String) = { fst: 42, snd: "hello" };
 ```
 
-No conditional types, no mapped types, no template literal types - just functions.
+No conditional types, no mapped types, no template literal types - just functions, evaluated with type semantics.
 
 ## What Unsound is
 
