@@ -4,7 +4,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "Building site..."
-./build.sh
+bun run build
 
 echo "Deploying to gh-pages..."
 cd dist
