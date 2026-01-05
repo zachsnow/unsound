@@ -25,10 +25,12 @@ The following scripts are available:
 bun run build       # Type check and run tests; builds the binary `dist/usc`
 bun run test        # Run tests only
 bun run types       # Type check only
-bun run usc --help  # CLI help
+bun run usc         # Run usc from source
 ```
 
 ## Usage
+
+Once `usc` is installed:
 
 ```bash
 # Run a program
@@ -65,7 +67,7 @@ bun run usc
 
 ## Language server + VS Code Extension
 
-Building `usc` also builds the language server, `usc-language-server. You can use the language server
+Building `usc` also builds the language server, `usc-language-server`. You can use the language server
 with VS Code by installing the extension:
 
 ```bash
@@ -133,6 +135,6 @@ with the error described in the block:
 ```
 --- error test
 let let = 1
-=== parse: $parse
+=== parse: $parse error
 error: identifier
 ```

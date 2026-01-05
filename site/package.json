@@ -8,7 +8,7 @@
     "watch": "./watch.sh",
     "deploy": "./deploy.sh"
   },
-  "dependencies": {
+  "devDependencies": {
     "commonmark": "^0.31.0",
     "saladplate": "^0.1.3"
   }
