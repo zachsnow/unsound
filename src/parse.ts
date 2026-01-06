@@ -84,11 +84,11 @@ export interface CoreParseOps extends ParseOps<string, Expr> {
   letBody: () => Parser<Expr>; // body expression
 
   // Lambda expressions - broken into pieces
-  lambda: () => Parser<LambdaExpr>;
+  lambda: (opts?: { noAssign?: boolean }) => Parser<LambdaExpr>;
   lambdaParams: () => Parser<Name[]>; // (x, y, z)
   lambdaParam: () => Parser<Name>; // single param
   lambdaArrow: () => Parser<string>; // "=>"
-  lambdaBody: () => Parser<Expr>; // body expression
+  lambdaBody: (opts?: { noAssign?: boolean }) => Parser<Expr>; // body expression
 
   // If expressions - broken into pieces
   ifExpr: () => Parser<IfExpr>;
@@ -809,9 +809,11 @@ export function build$parse(in$: ParseOps): void {
 
   $.lambdaArrow = () => $.token("=>");
 
-  $.lambdaBody = () => $.lazy(() => $.expr());
+  // noAssign option is used by extensions (like exo) to parse lambda bodies
+  // that stop before `=` (for type annotations). Base parser ignores it.
+  $.lambdaBody = (_opts?: { noAssign?: boolean }) => $.lazy(() => $.expr());
 
-  $.lambda = () => (input, pos) => {
+  $.lambda = (opts?: { noAssign?: boolean }) => (input, pos) => {
     const ws = $.ws()(input, pos);
     const start = ws.pos;
 
@@ -825,7 +827,7 @@ export function build$parse(in$: ParseOps): void {
       return arrow;
     }
 
-    const body = $.lambdaBody()(input, arrow.pos);
+    const body = $.lambdaBody(opts)(input, arrow.pos);
     if (!body.ok) {
       return body;
     }
