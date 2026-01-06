@@ -1244,9 +1244,13 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (isType(cond) && cond[TYPE_TAG] !== "Boolean" && cond[TYPE_TAG] !== "Any") {
       throw new Error(`Type error: condition must be Boolean, got ${showType(cond)}`);
     }
+    // If condition is a dependent boolean with known value, only return relevant branch
+    if (isType(cond) && cond[TYPE_TAG] === "Boolean" && cond.value !== undefined) {
+      return cond.value ? thenFn($env) : elseFn($env);
+    }
+    // Otherwise return SetType of both branches
     const thenType = thenFn($env);
     const elseType = elseFn($env);
-    // Return SetType of both branches
     return makeSetType([thenType as Type, elseType as Type]);
   };
 
