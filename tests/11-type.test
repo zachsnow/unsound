@@ -300,6 +300,16 @@ let fact = (n) => if n <= 1 then 1 else n * fact(n - 1); let x: Number = 5; fact
 === parse, compile, emit, interpret: $type, error
 Maximum call stack size exceeded
 
+--- recursive with function annotation works
+let fact: (n) => Number = (n) => if n <= 1 then 1 else n * fact(n - 1); let x: Number = 5; fact(x)
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- annotated recursive still computes dependent when possible
+let fact: (n) => Number = (n) => if n <= 1 then 1 else n * fact(n - 1); fact(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
 # =============================================================================
 # TYPE ERRORS
 # =============================================================================

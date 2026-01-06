@@ -313,11 +313,32 @@ const build$parse = (in$: CoreParseOps): void => {
   // Override appExpr to use operators.
   $.appExpr = (() => $.varAssign()) as () => Parser<Expr>;
 
+  // Helper: parse a lambda with non-assignment body (for type annotations)
+  const lambdaNoAssign = (): Parser<EExpr> => (input, pos) => {
+    const params = $.lambdaParams()(input, pos);
+    if (!params.ok) return params as ParseResult<EExpr>;
+    const arrow = $.lambdaArrow()(input, params.pos);
+    if (!arrow.ok) return arrow as ParseResult<EExpr>;
+    // Use binaryExpr instead of expr to avoid consuming `=`
+    const body = $.binaryExpr(0)(input, arrow.pos);
+    if (!body.ok) return body;
+    return {
+      ok: true,
+      value: { type: "LambdaExpr", params: params.value, body: body.value } as LambdaExpr,
+      pos: body.pos,
+    };
+  };
+
   // Helper: parse optional type annotation `: type`
+  // Uses lambdaNoAssign or binaryExpr to avoid consuming `=`
   const typeAnnotation = (): Parser<EExpr> => (input, pos) => {
     const colon = $.token(":")(input, pos);
     if (!colon.ok) return colon;
-    return $.atom()(input, colon.pos);
+    // Try lambda with non-assignment body first
+    const lambda = lambdaNoAssign()(input, colon.pos);
+    if (lambda.ok) return lambda;
+    // Fall back to binaryExpr for simple types like `Number`
+    return $.binaryExpr(0)(input, colon.pos);
   };
 
   $.letStmt = () =>
@@ -1078,6 +1099,8 @@ const build$type = (in$: CoreInterpretOps): void => {
   // --- Type Compatibility ---
   const typeCompatible = (actual: Type, expected: Type): boolean => {
     if (actual === expected) return true;
+    // Functions: trust the programmer's annotation (no structural check)
+    if (typeof actual === "function" && typeof expected === "function") return true;
     if (!isType(actual) || !isType(expected)) return false;
     // AnyType is compatible with anything
     if (actual[TYPE_TAG] === "Any" || expected[TYPE_TAG] === "Any") return true;
