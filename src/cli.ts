@@ -242,17 +242,17 @@ Examples:
 async function generateStandalone(
   lang: Language,
   program: string,
-  interpretKey: PhaseKey,
+  interpret: string,
   sourceFile?: string,
   printResult: boolean = false
 ): Promise<string> {
-  return getProgramModule(lang, program, sourceFile, printResult, interpretKey);
+  return getProgramModule(lang, program, sourceFile, printResult, interpret);
 }
 
 async function generateBinary(
   lang: Language,
   program: string,
-  interpretKey: PhaseKey,
+  interpret: string,
   outputPath: string,
   sourceFile?: string
 ): Promise<void> {
@@ -469,7 +469,7 @@ async function main() {
     case "standalone":
       // Generate standalone JS from the program module.
       logger.debug(`generating standalone module to ${opts.output}...`);
-      output = await generateStandalone(language, input, interpretKey, sourceFile, false);
+      output = await generateStandalone(language, input, interpret, sourceFile, false);
       break;
 
     case "binary":
@@ -482,7 +482,7 @@ async function main() {
 
       // We rely on bun to compile, so we don't need to write output.
       logger.debug(`generating binary to ${opts.output}...`);
-      await generateBinary(language, input, interpretKey, opts.output);
+      await generateBinary(language, input, interpret, opts.output);
       break;
 
     case "run":

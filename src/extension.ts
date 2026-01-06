@@ -416,8 +416,7 @@ function compileUsToJs(
       parseResult.expected
     );
     throw new Error(
-      `Parse error in ${sourceFile ? basename(sourceFile) : "input"
-      }: \n${formatted} `
+      `Parse error in ${sourceFile ? basename(sourceFile) : "input"}: \n${formatted}`
     );
   }
 
@@ -506,15 +505,15 @@ export async function run(
       parseResult.pos,
       parseResult.expected
     );
-    throw new Error(`Parse error: \n${formatted} `);
+    throw new Error(`Parse error: \n${formatted}`);
   }
 
   const ir = lang.$compile.compileProgram(parseResult.value);
   const closure = lang.$emit.programClosure(ir)({});
 
-  const interpreter = lang[`$${interpretKey} `] as InterpretOps | undefined;
+  const interpreter = lang[`$${interpretKey}`] as InterpretOps | undefined;
   if (!interpreter) {
-    throw new Error(`No interpreter found for key: ${interpretKey} `);
+    throw new Error(`No interpreter found for key: ${interpretKey}`);
   }
 
   return await closure(interpreter);
@@ -534,7 +533,7 @@ export function compileToJS(lang: Language, source: string): string {
       parseResult.pos,
       parseResult.expected
     );
-    throw new Error(`Parse error: \n${formatted} `);
+    throw new Error(`Parse error: \n${formatted}`);
   }
 
   const ir = lang.$compile.compileProgram(parseResult.value);

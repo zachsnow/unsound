@@ -800,73 +800,393 @@ interface ExoTypeOps extends CoreInterpretOps {
 const build$type = (in$: CoreInterpretOps): void => {
   const $ = in$ as unknown as ExoTypeOps;
 
-  // Type values - recursive objects with operator methods
-  const NumberType: Record<string, unknown> = { type: "Number" };
-  const StringType: Record<string, unknown> = { type: "String" };
-  const BooleanType: Record<string, unknown> = { type: "Boolean" };
-  const NullType: Record<string, unknown> = { type: "Null" };
-  const UndefinedType: Record<string, unknown> = { type: "Undefined" };
+  // ==========================================================================
+  // TYPE SYSTEM INFRASTRUCTURE
+  // ==========================================================================
+  //
+  // Types are objects with a $type tag. Dependent types have a known `value`.
+  // SetType wraps multiple types and forwards operations to each.
+  // AnyType is an escape hatch for interop.
+  //
+  // Type hierarchy:
+  //   NumberType(value?) - number, optionally with known value
+  //   StringType(value?) - string, optionally with known value
+  //   BooleanType(value?) - boolean, optionally with known value
+  //   NullType, UndefinedType - singleton types
+  //   ArrayType(elements | elementType) - tuple or array
+  //   ObjectType(props | valueType) - object with known props or record
+  //   FunctionType(fn, isUnsound) - tagged function type
+  //   SetType(types[]) - union type
+  //   AnyType - escape hatch
+  // ==========================================================================
 
-  // Type display helper (needed by typeOp)
+  const TYPE_TAG = Symbol("$type");
+
+  // Type constructors
+  interface Type {
+    [TYPE_TAG]: string;
+    value?: unknown;
+  }
+
+  const isType = (t: unknown): t is Type =>
+    typeof t === "object" && t !== null && TYPE_TAG in t;
+
+  // --- Primitive Types ---
+  const makeNumberType = (value?: number): Type & Record<string, unknown> => {
+    const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Number" };
+    if (value !== undefined) t.value = value;
+    // Operators return dependent types when both operands have known values
+    t["op+"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeNumberType((t.value as number) + (other.value as number));
+      }
+      return NumberType;
+    };
+    t["op-"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeNumberType((t.value as number) - (other.value as number));
+      }
+      return NumberType;
+    };
+    t["op*"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeNumberType((t.value as number) * (other.value as number));
+      }
+      return NumberType;
+    };
+    t["op/"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeNumberType((t.value as number) / (other.value as number));
+      }
+      return NumberType;
+    };
+    t["op%"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeNumberType((t.value as number) % (other.value as number));
+      }
+      return NumberType;
+    };
+    t["opNeg"] = () => {
+      if (t.value !== undefined) return makeNumberType(-(t.value as number));
+      return NumberType;
+    };
+    // Comparison operators return BooleanType (with known value if both known)
+    t["op<"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) < (other.value as number));
+      }
+      return BooleanType;
+    };
+    t["op>"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) > (other.value as number));
+      }
+      return BooleanType;
+    };
+    t["op<="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) <= (other.value as number));
+      }
+      return BooleanType;
+    };
+    t["op>="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) >= (other.value as number));
+      }
+      return BooleanType;
+    };
+    t["op=="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) === (other.value as number));
+      }
+      return BooleanType;
+    };
+    t["op!="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        throw new Error(`Type error: expected Number, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as number) !== (other.value as number));
+      }
+      return BooleanType;
+    };
+    return t;
+  };
+
+  const makeStringType = (value?: string): Type & Record<string, unknown> => {
+    const t: Type & Record<string, unknown> = { [TYPE_TAG]: "String" };
+    if (value !== undefined) t.value = value;
+    t["op+"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeStringType((t.value as string) + (other.value as string));
+      }
+      return StringType;
+    };
+    t["op=="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as string) === (other.value as string));
+      }
+      return BooleanType;
+    };
+    t["op!="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      if (t.value !== undefined && other.value !== undefined) {
+        return makeBooleanType((t.value as string) !== (other.value as string));
+      }
+      return BooleanType;
+    };
+    t["op<"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op>"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op<="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op>="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "String") {
+        throw new Error(`Type error: expected String, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    // String length
+    t["length"] = value !== undefined ? makeNumberType(value.length) : NumberType;
+    return t;
+  };
+
+  const makeBooleanType = (value?: boolean): Type & Record<string, unknown> => {
+    const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Boolean" };
+    if (value !== undefined) t.value = value;
+    t["op!"] = () => {
+      if (t.value !== undefined) return makeBooleanType(!t.value);
+      return BooleanType;
+    };
+    t["op&&"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
+        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op||"] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
+        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op=="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
+        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    t["op!="] = (other: unknown) => {
+      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
+        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
+      }
+      return BooleanType;
+    };
+    return t;
+  };
+
+  // Singleton types
+  const NullType: Type = { [TYPE_TAG]: "null" };
+  const UndefinedType: Type = { [TYPE_TAG]: "undefined" };
+  const AnyType: Type & Record<string, unknown> = { [TYPE_TAG]: "Any" };
+
+  // AnyType returns itself for any operation
+  const anyHandler = {
+    get(_target: any, prop: string) {
+      if (prop === TYPE_TAG) return "Any";
+      // Any operation on Any returns Any
+      return (..._args: unknown[]) => AnyType;
+    }
+  };
+  const AnyTypeProxy = new Proxy(AnyType, anyHandler);
+
+  // Generic (non-dependent) types
+  const NumberType = makeNumberType();
+  const StringType = makeStringType();
+  const BooleanType = makeBooleanType();
+
+  // --- SetType ---
+  // Union of multiple types, forwards operations to each member
+  const makeSetType = (types: Type[]): Type => {
+    // Flatten nested SetTypes
+    const flatTypes: Type[] = [];
+    for (const t of types) {
+      if (isType(t) && t[TYPE_TAG] === "Set") {
+        flatTypes.push(...(t as any).types);
+      } else {
+        flatTypes.push(t);
+      }
+    }
+    // Deduplicate (simple reference equality for now)
+    const uniqueTypes = [...new Set(flatTypes)];
+    // If only one type, return it directly
+    if (uniqueTypes.length === 1) return uniqueTypes[0];
+    // If any is AnyType, return AnyType
+    if (uniqueTypes.some(t => isType(t) && t[TYPE_TAG] === "Any")) return AnyTypeProxy;
+
+    const setType: Type & { types: Type[] } & Record<string, unknown> = {
+      [TYPE_TAG]: "Set",
+      types: uniqueTypes,
+    };
+
+    // Forward property access to all types
+    return new Proxy(setType, {
+      get(target, prop) {
+        if (prop === TYPE_TAG) return "Set";
+        if (prop === "types") return target.types;
+        if (prop === "value") return undefined; // SetTypes don't have a single value
+        // Forward to each type and collect results
+        const results: Type[] = [];
+        for (const t of target.types) {
+          const val = (t as any)[prop];
+          if (val !== undefined) {
+            if (typeof val === "function") {
+              // Wrap function to forward calls
+              results.push(val);
+            } else {
+              results.push(val);
+            }
+          }
+        }
+        if (results.length === 0) return undefined;
+        // If all results are functions, return a function that calls each
+        if (results.every(r => typeof r === "function")) {
+          return (...args: unknown[]) => {
+            const callResults = results.map(fn => (fn as Function)(...args));
+            return makeSetType(callResults as Type[]);
+          };
+        }
+        return makeSetType(results as Type[]);
+      }
+    });
+  };
+
+  // --- Array Types ---
+  // Tuple: known elements, Array: shared element type
+  const makeArrayType = (elementsOrType: Type[] | Type): Type & Record<string, unknown> => {
+    const isTuple = Array.isArray(elementsOrType);
+    const t: Type & Record<string, unknown> = {
+      [TYPE_TAG]: "Array",
+      elements: isTuple ? elementsOrType : undefined,
+      elementType: isTuple ? undefined : elementsOrType,
+    };
+    // Length is dependent for tuples
+    t["length"] = isTuple
+      ? makeNumberType(elementsOrType.length)
+      : NumberType;
+    return t;
+  };
+
+  // --- Object Types ---
+  // Object with known props, or record with shared value type
+  const makeObjectType = (propsOrValueType: Record<string, Type> | Type, knownProps = true): Type & Record<string, unknown> => {
+    const t: Type & Record<string, unknown> = {
+      [TYPE_TAG]: "Object",
+      props: knownProps ? propsOrValueType as Record<string, Type> : undefined,
+      valueType: knownProps ? undefined : propsOrValueType as Type,
+    };
+    return t;
+  };
+
+  // --- Function Type ---
+  // Tagged to distinguish Unsound functions from JS interop
+  const UNSOUND_FN_TAG = Symbol("unsound-fn");
+  const makeFunctionType = (fn: Function): Function => {
+    (fn as any)[UNSOUND_FN_TAG] = true;
+    return fn;
+  };
+  const isUnsoundFunction = (fn: unknown): boolean =>
+    typeof fn === "function" && (fn as any)[UNSOUND_FN_TAG] === true;
+
+  // --- Type Display ---
   const showType = (t: unknown): string => {
     if (t === null) return "null";
-    if (typeof t !== "object") return String(t);
-    return (t as any).type ?? "?";
-  };
-
-  // Helper: create a type-checking operator function; exact equality only.
-  const typeOp = (expected: unknown, result: unknown) => (arg: unknown) => {
-    if (arg !== expected) {
-      throw new Error(`Type error: expected ${showType(expected)}, got ${showType(arg)}`);
+    if (typeof t === "function") return "<function>";
+    if (!isType(t)) return String(t);
+    const tag = t[TYPE_TAG];
+    if (tag === "Set") {
+      return `(${(t as any).types.map(showType).join(" | ")})`;
     }
-    return result;
+    if (t.value !== undefined) {
+      return `${tag}(${JSON.stringify(t.value)})`;
+    }
+    return tag;
   };
 
-  // Helper: unary operator (no arg check)
-  const unaryOp = (result: unknown) => () => result;
-
-  // Number operators
-  NumberType["op+"] = typeOp(NumberType, NumberType);
-  NumberType["op-"] = typeOp(NumberType, NumberType);
-  NumberType["op*"] = typeOp(NumberType, NumberType);
-  NumberType["op/"] = typeOp(NumberType, NumberType);
-  NumberType["op%"] = typeOp(NumberType, NumberType);
-  NumberType["opNeg"] = unaryOp(NumberType);
-  NumberType["op<"] = typeOp(NumberType, BooleanType);
-  NumberType["op>"] = typeOp(NumberType, BooleanType);
-  NumberType["op<="] = typeOp(NumberType, BooleanType);
-  NumberType["op>="] = typeOp(NumberType, BooleanType);
-  NumberType["op=="] = typeOp(NumberType, BooleanType);
-  NumberType["op!="] = typeOp(NumberType, BooleanType);
-
-  // String operators
-  StringType["op+"] = typeOp(StringType, StringType);
-  StringType["op=="] = typeOp(StringType, BooleanType);
-  StringType["op!="] = typeOp(StringType, BooleanType);
-  StringType["op<"] = typeOp(StringType, BooleanType);
-  StringType["op>"] = typeOp(StringType, BooleanType);
-  StringType["op<="] = typeOp(StringType, BooleanType);
-  StringType["op>="] = typeOp(StringType, BooleanType);
-
-  // Boolean operators
-  BooleanType["op!"] = unaryOp(BooleanType);
-  BooleanType["op&&"] = typeOp(BooleanType, BooleanType);
-  BooleanType["op||"] = typeOp(BooleanType, BooleanType);
-  BooleanType["op=="] = typeOp(BooleanType, BooleanType);
-  BooleanType["op!="] = typeOp(BooleanType, BooleanType);
-
-  // Type equality helper
-  const typeEqual = (a: unknown, b: unknown): boolean => {
-    if (a === b) return true;
-    if (typeof a === "object" && typeof b === "object" && a !== null && b !== null) {
-      const ta = a as { kind?: string; name?: string };
-      const tb = b as { kind?: string; name?: string };
-      if (ta.kind === "type" && tb.kind === "type") {
-        return ta.name === tb.name;
-      }
+  // --- Type Compatibility ---
+  const typeCompatible = (actual: Type, expected: Type): boolean => {
+    if (actual === expected) return true;
+    if (!isType(actual) || !isType(expected)) return false;
+    // AnyType is compatible with anything
+    if (actual[TYPE_TAG] === "Any" || expected[TYPE_TAG] === "Any") return true;
+    // Same base type
+    if (actual[TYPE_TAG] === expected[TYPE_TAG]) {
+      // If expected has no value constraint, any value is ok
+      if (expected.value === undefined) return true;
+      // If expected has value, actual must match
+      return actual.value === expected.value;
+    }
+    // SetType: check if all types in set are compatible
+    if (actual[TYPE_TAG] === "Set") {
+      return (actual as any).types.every((t: Type) => typeCompatible(t, expected));
     }
     return false;
   };
+
+  // ==========================================================================
+  // INTERPRETER OPERATIONS
+  // ==========================================================================
 
   // === Environment ===
   $.env = () => createEnv({
@@ -875,12 +1195,13 @@ const build$type = (in$: CoreInterpretOps): void => {
     Boolean: BooleanType,
     Null: NullType,
     Undefined: UndefinedType,
+    Any: AnyTypeProxy,
   });
 
-  // === Literals ===
-  $.number = () => NumberType;
-  $.string = () => StringType;
-  $.boolean = () => BooleanType;
+  // === Literals (return dependent types with known values) ===
+  $.number = (n: number) => makeNumberType(n);
+  $.string = (s: string) => makeStringType(s);
+  $.boolean = (b: boolean) => makeBooleanType(b);
   ($ as any).null = () => NullType;
   ($ as any).undefined = () => UndefinedType;
 
@@ -895,44 +1216,124 @@ const build$type = (in$: CoreInterpretOps): void => {
   };
 
   // === Functions ===
-  // The "type" of a function IS a function: it takes argument types and returns result type
+  // Functions are tagged Unsound functions that compute return types from arg types
   $.lambda = ($env: any, params: string[], bodyFn: ($env: any) => unknown) => {
-    return (...argTypes: unknown[]) => {
+    return makeFunctionType((...argTypes: unknown[]) => {
       const bindings: Record<string, unknown> = {};
-      params.forEach((p, i) => { bindings[p] = argTypes[i]; });
+      params.forEach((p, i) => { bindings[p] = argTypes[i] ?? AnyTypeProxy; });
       const child = $env.extend(bindings);
       return bodyFn(child);
-    };
+    });
   };
 
   $.call = (fn: unknown, args: unknown[]) => {
     if (typeof fn === "function") {
-      return (fn as Function)(...args);
+      // Call any function - tagged Unsound functions compute types,
+      // operator methods compute types, JS interop returns AnyType
+      const result = fn(...args);
+      // If the function returns a type, use it; otherwise treat as interop
+      if (isType(result)) return result;
+      return AnyTypeProxy;
     }
-    throw new Error(`Type error: cannot call non-function type ${showType(fn)}`);
+    throw new Error(`Type error: cannot call non-function type ${showType(fn as Type)}`);
   };
 
   // === Control ===
   $.if = (cond: unknown, thenFn: ($env: any) => unknown, elseFn: ($env: any) => unknown, $env: any) => {
-    if (!typeEqual(cond, BooleanType)) {
-      throw new Error(`Type error: expected condition of type Boolean, got ${showType(cond)}`);
+    // Condition must be boolean-compatible
+    if (isType(cond) && cond[TYPE_TAG] !== "Boolean" && cond[TYPE_TAG] !== "Any") {
+      throw new Error(`Type error: condition must be Boolean, got ${showType(cond)}`);
     }
     const thenType = thenFn($env);
     const elseType = elseFn($env);
-    // TODO: check thenType equals elseType
-    return thenType;
+    // Return SetType of both branches
+    return makeSetType([thenType as Type, elseType as Type]);
   };
 
-  // === Objects/Arrays ===
-  $.object = (props: Record<string, unknown>) => props;
-  $.array = (elems: unknown[]) => elems;
-  $.index = (obj: unknown, key: unknown) => {
-    if (typeof obj === "object" && obj !== null) {
-      return (obj as Record<string, unknown>)[key as string];
+  // === Objects ===
+  $.object = (props: Record<string, unknown>) => {
+    const typeProps: Record<string, Type> = {};
+    for (const [k, v] of Object.entries(props)) {
+      typeProps[k] = v as Type;
     }
-    return undefined;
+    return makeObjectType(typeProps);
   };
-  $.assignIndex = (_obj: unknown, _key: unknown, value: unknown) => value;
+
+  // === Arrays ===
+  $.array = (elems: unknown[]) => {
+    return makeArrayType(elems as Type[]);
+  };
+
+  // === Indexing ===
+  $.index = (obj: unknown, key: unknown) => {
+    if (!isType(obj)) return AnyTypeProxy;
+
+    // Handle AnyType
+    if (obj[TYPE_TAG] === "Any") return AnyTypeProxy;
+
+    // Handle Object types
+    if (obj[TYPE_TAG] === "Object") {
+      const objType = obj as Type & { props?: Record<string, Type>; valueType?: Type };
+      if (objType.props) {
+        // Known props: use dependent string key if available
+        if (isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined) {
+          const prop = objType.props[key.value as string];
+          if (prop !== undefined) return prop;
+          // Unknown key returns SetType including UndefinedType
+          return makeSetType([...Object.values(objType.props), UndefinedType]);
+        }
+        // Non-dependent key: return SetType of all possible values + Undefined
+        return makeSetType([...Object.values(objType.props), UndefinedType]);
+      }
+      // Record type: return valueType or Undefined
+      if (objType.valueType) {
+        return makeSetType([objType.valueType, UndefinedType]);
+      }
+    }
+
+    // Handle Array types
+    if (obj[TYPE_TAG] === "Array") {
+      const arrType = obj as Type & { elements?: Type[]; elementType?: Type };
+      if (arrType.elements) {
+        // Tuple: use dependent number key if available
+        if (isType(key) && key[TYPE_TAG] === "Number" && key.value !== undefined) {
+          const idx = key.value as number;
+          if (idx >= 0 && idx < arrType.elements.length) {
+            return arrType.elements[idx];
+          }
+          return UndefinedType;
+        }
+        // Non-dependent key: return SetType of all elements + Undefined
+        return makeSetType([...arrType.elements, UndefinedType]);
+      }
+      // Array type: return element type or Undefined
+      if (arrType.elementType) {
+        return makeSetType([arrType.elementType, UndefinedType]);
+      }
+    }
+
+    // Handle SetType: forward to each type
+    if (obj[TYPE_TAG] === "Set") {
+      const setType = obj as Type & { types: Type[] };
+      const results = setType.types.map(t => $.index(t, key));
+      return makeSetType(results as Type[]);
+    }
+
+    // Direct property access (for operators, etc.)
+    // Extract string value from key if it's a StringType
+    const keyStr = isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined
+      ? key.value as string
+      : String(key);
+    const val = (obj as any)[keyStr];
+    if (val !== undefined) return val;
+
+    return UndefinedType;
+  };
+
+  $.assignIndex = (obj: unknown, key: unknown, value: unknown) => {
+    // TODO: track mutations to object types
+    return value;
+  };
 
   // === Strict equality (works on any types) ===
   ($ as any).strictEq = () => BooleanType;
@@ -940,14 +1341,20 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   // === Exo extensions ===
   $.assign = ($env: any, name: string, value: unknown) => {
-    $env.mutate(name, value);
+    const current = $env.lookup(name);
+    if (current !== undefined && isType(current) && isType(value as Type)) {
+      // Merge types via SetType
+      $env.mutate(name, makeSetType([current, value as Type]));
+    } else {
+      $env.mutate(name, value);
+    }
     return value;
   };
 
   $.letBind = ($env: any, name: string, valueType: unknown, annotationThunk: (() => unknown) | null) => {
     if (annotationThunk) {
-      const annotationType = annotationThunk();
-      if (!typeEqual(valueType, annotationType)) {
+      const annotationType = annotationThunk() as Type;
+      if (!typeCompatible(valueType as Type, annotationType)) {
         throw new Error(`Type error: expected ${showType(annotationType)}, got ${showType(valueType)}`);
       }
       $env.bind(name, annotationType);
@@ -962,15 +1369,20 @@ const build$type = (in$: CoreInterpretOps): void => {
     return bodyFn(child);
   };
 
-  // Short-circuit operators: check both sides, return Boolean
+  // Short-circuit operators: evaluate both, return SetType of possible results
   $.and = (a: unknown, bThunk: () => unknown) => {
-    bThunk(); // evaluate to check types
-    return BooleanType;
+    const b = bThunk();
+    // && can return either operand depending on truthiness
+    return makeSetType([a as Type, b as Type]);
   };
   $.or = (a: unknown, bThunk: () => unknown) => {
-    bThunk(); // evaluate to check types
-    return BooleanType;
+    const b = bThunk();
+    // || can return either operand depending on truthiness
+    return makeSetType([a as Type, b as Type]);
   };
+
+  // === Import returns AnyType ===
+  $.import = async () => AnyTypeProxy;
 };
 
 export const exoExtension: Extension = {
