@@ -801,25 +801,20 @@ const build$type = (in$: CoreInterpretOps): void => {
   const $ = in$ as unknown as ExoTypeOps;
 
   // Type values - recursive objects with operator methods
-  const NumberType: Record<string, unknown> = { kind: "type", name: "Number" };
-  const StringType: Record<string, unknown> = { kind: "type", name: "String" };
-  const BooleanType: Record<string, unknown> = { kind: "type", name: "Boolean" };
-  const NullType: Record<string, unknown> = { kind: "type", name: "Null" };
-  const UndefinedType: Record<string, unknown> = { kind: "type", name: "Undefined" };
-
-  // Arrow type constructor (for user type expressions)
-  const Arrow = (param: unknown, ret: unknown) => ({ kind: "arrow", param, ret });
+  const NumberType: Record<string, unknown> = { type: "Number" };
+  const StringType: Record<string, unknown> = { type: "String" };
+  const BooleanType: Record<string, unknown> = { type: "Boolean" };
+  const NullType: Record<string, unknown> = { type: "Null" };
+  const UndefinedType: Record<string, unknown> = { type: "Undefined" };
 
   // Type display helper (needed by typeOp)
   const showType = (t: unknown): string => {
     if (t === null) return "null";
     if (typeof t !== "object") return String(t);
-    const ty = t as { kind?: string; name?: string };
-    if (ty.kind === "type") return ty.name ?? "?";
-    return "?";
+    return (t as any).type ?? "?";
   };
 
-  // Helper: create a type-checking operator function
+  // Helper: create a type-checking operator function; exact equality only.
   const typeOp = (expected: unknown, result: unknown) => (arg: unknown) => {
     if (arg !== expected) {
       throw new Error(`Type error: expected ${showType(expected)}, got ${showType(arg)}`);
@@ -880,7 +875,6 @@ const build$type = (in$: CoreInterpretOps): void => {
     Boolean: BooleanType,
     Null: NullType,
     Undefined: UndefinedType,
-    Arrow,
   });
 
   // === Literals ===
@@ -920,6 +914,9 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   // === Control ===
   $.if = (cond: unknown, thenFn: ($env: any) => unknown, elseFn: ($env: any) => unknown, $env: any) => {
+    if (!typeEqual(cond, BooleanType)) {
+      throw new Error(`Type error: expected condition of type Boolean, got ${showType(cond)}`);
+    }
     const thenType = thenFn($env);
     const elseType = elseFn($env);
     // TODO: check thenType equals elseType
@@ -927,11 +924,8 @@ const build$type = (in$: CoreInterpretOps): void => {
   };
 
   // === Objects/Arrays ===
-  $.object = (props: Record<string, unknown>) => ({ kind: "record", fields: props });
-  $.array = (elems: unknown[]) => {
-    const elemType = elems.length > 0 ? elems[0] : { kind: "type", name: "Any" };
-    return { kind: "array", elem: elemType };
-  };
+  $.object = (props: Record<string, unknown>) => props;
+  $.array = (elems: unknown[]) => elems;
   $.index = (obj: unknown, key: unknown) => {
     if (typeof obj === "object" && obj !== null) {
       return (obj as Record<string, unknown>)[key as string];
