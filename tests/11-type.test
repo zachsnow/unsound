@@ -1,38 +1,308 @@
 # usc -x core -x exo
 # Tests for $type phase (type checking)
 
-#
-# Valid types - dependent types preserve known values
-#
+# =============================================================================
+# LITERALS - dependent types preserve known values
+# =============================================================================
 
 --- number literal
 1
 === parse, compile, emit, interpret: $type
 {"type": "Number", "value": 1}
 
---- number addition
-2 + 3
+--- number zero
+0
 === parse, compile, emit, interpret: $type
-{"type": "Number", "value": 5}
+{"type": "Number", "value": 0}
+
+--- number negative
+-5
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": -5}
 
 --- string literal
 "hello"
 === parse, compile, emit, interpret: $type
 {"type": "String", "value": "hello"}
 
---- boolean literal
+--- string empty
+""
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": ""}
+
+--- boolean true
 true
 === parse, compile, emit, interpret: $type
 {"type": "Boolean", "value": true}
 
---- comparison
+--- boolean false
+false
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- null literal
+null
+=== parse, compile, emit, interpret: $type
+{"type": "null"}
+
+--- undefined literal
+undefined
+=== parse, compile, emit, interpret: $type
+{"type": "undefined"}
+
+# =============================================================================
+# ARITHMETIC OPERATORS - preserve dependent values
+# =============================================================================
+
+--- addition
+2 + 3
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- subtraction
+10 - 4
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 6}
+
+--- multiplication
+3 * 4
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 12}
+
+--- division
+15 / 3
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- modulo
+17 % 5
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 2}
+
+--- chained arithmetic
+1 + 2 + 3
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 6}
+
+--- mixed arithmetic
+2 + 3 * 4
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 14}
+
+--- negation
+-(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": -5}
+
+# =============================================================================
+# COMPARISON OPERATORS - return dependent booleans
+# =============================================================================
+
+--- less than true
+3 < 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- less than false
+5 < 3
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- greater than true
 5 > 3
 === parse, compile, emit, interpret: $type
 {"type": "Boolean", "value": true}
 
-#
-# Type errors
-#
+--- less than or equal
+3 <= 3
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- greater than or equal
+5 >= 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- equality true
+5 == 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- equality false
+5 == 6
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- inequality
+5 != 6
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- string equality
+"foo" == "foo"
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- string inequality
+"foo" != "bar"
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+# =============================================================================
+# LOGICAL OPERATORS
+# =============================================================================
+
+--- logical not true
+!false
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- logical not false
+!true
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- double negation
+!!true
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+# =============================================================================
+# STRING OPERATORS
+# =============================================================================
+
+--- string concat
+"hello" + " world"
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "hello world"}
+
+--- string concat empty
+"" + "foo"
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "foo"}
+
+# =============================================================================
+# CONDITIONALS - dependent booleans enable branch pruning
+# =============================================================================
+
+--- if true takes then branch
+if true then 1 else 2
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- if false takes else branch
+if false then 1 else 2
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 2}
+
+--- if computed true
+if 5 > 3 then "yes" else "no"
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "yes"}
+
+--- if computed false
+if 3 > 5 then "yes" else "no"
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "no"}
+
+--- if avoids error in unused branch
+if true then 42 else null.explode
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+--- if avoids error in then branch
+if false then null.explode else 42
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+# =============================================================================
+# LET BINDINGS
+# =============================================================================
+
+--- let preserves dependent type
+let x = 5; x
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- let with arithmetic
+let x = 2; let y = 3; x + y
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- let shadowing
+let x = 1; let x = 2; x
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 2}
+
+# =============================================================================
+# FUNCTIONS
+# =============================================================================
+
+--- identity function
+let id = (x) => x; id(42)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+--- constant function
+let k = (x) => 1; k("ignored")
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- two arg function
+let add = (a, b) => a + b; add(2, 3)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+# =============================================================================
+# OBJECTS
+# =============================================================================
+
+--- empty object
+({})
+=== parse, compile, emit, interpret: $type
+{"props": {}, "type": "Object"}
+
+--- object with props
+({x: 1, y: 2})
+=== parse, compile, emit, interpret: $type
+{"props": {"x": {"type": "Number", "value": 1}, "y": {"type": "Number", "value": 2}}, "type": "Object"}
+
+# =============================================================================
+# ARRAYS
+# =============================================================================
+
+--- empty array
+[]
+=== parse, compile, emit, interpret: $type
+{"elements": [], "type": "Array"}
+
+--- array of numbers
+[1, 2, 3]
+=== parse, compile, emit, interpret: $type
+{"elements": [{"type": "Number", "value": 1}, {"type": "Number", "value": 2}, {"type": "Number", "value": 3}], "type": "Array"}
+
+# =============================================================================
+# RECURSION - dependent values enable termination
+# =============================================================================
+
+--- recursive with dependent input works
+let fact = (n) => if n <= 1 then 1 else n * fact(n - 1); fact(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 120}
+
+--- recursive with dependent zero
+let fact = (n) => if n <= 1 then 1 else n * fact(n - 1); fact(0)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- recursive with non-dependent input causes stack overflow
+let fact = (n) => if n <= 1 then 1 else n * fact(n - 1); let x: Number = 5; fact(x)
+=== parse, compile, emit, interpret: $type, error
+Maximum call stack size exceeded
+
+# =============================================================================
+# TYPE ERRORS
+# =============================================================================
 
 --- type error: number plus string
 1 + "hello"

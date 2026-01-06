@@ -1297,7 +1297,10 @@ const build$type = (in$: CoreInterpretOps): void => {
   };
 
   // === Import returns AnyType ===
-  $.import = async () => AnyTypeProxy;
+  $.import = async ($env: any, name: string, _modulePath: string) => {
+    $env.bind(name, AnyTypeProxy);
+    return AnyTypeProxy;
+  };
 };
 
 export const exoExtension: Extension = {
