@@ -239,6 +239,11 @@ function formatOutput(value: unknown): string {
     return value.string;
   }
 
+  // Check for toJSON method (used by type checker results, etc.)
+  if (value !== null && typeof value === 'object' && 'toJSON' in value && typeof (value as any).toJSON === 'function') {
+    return prettyPrint((value as any).toJSON(), "auto");
+  }
+
   // Use prettyPrint for deterministic output (sorted keys, cycle-safe)
   // 'auto' mode uses multi-line for AST/IR (objects with type/tag)
   return prettyPrint(value, "auto");

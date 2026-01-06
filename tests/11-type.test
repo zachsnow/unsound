@@ -1,9 +1,38 @@
 # usc -x core -x exo
 # Tests for $type phase (type checking)
 
-# =============================================================================
-# TYPE ERRORS - These should fail type checking
-# =============================================================================
+#
+# Valid types - dependent types preserve known values
+#
+
+--- number literal
+1
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- number addition
+2 + 3
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- string literal
+"hello"
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "hello"}
+
+--- boolean literal
+true
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- comparison
+5 > 3
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+#
+# Type errors
+#
 
 --- type error: number plus string
 1 + "hello"
@@ -20,9 +49,23 @@ true + 1
 === parse, compile, emit, interpret: $type, error
 Type error: cannot call non-function type undefined
 
-# =============================================================================
-# TYPE ANNOTATIONS - Checking declared types
-# =============================================================================
+#
+# Type annotations
+#
+
+--- simple annotation
+let x: Number = 42; x
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- annotation widens to non-dependent
+let x: Number = 42; x + 1
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+#
+# Type annotation errors
+#
 
 --- annotation mismatch error
 let x: String = 42; x

@@ -884,6 +884,7 @@ const build$type = (in$: CoreInterpretOps): void => {
   const makeNumberType = (value?: number): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Number" };
     if (value !== undefined) t.value = value;
+    t.toJSON = () => value !== undefined ? { type: "Number", value } : { type: "Number" };
     const { num, cmp } = ops(t);
 
     t["op+"] = num((a, b) => a + b);
@@ -893,12 +894,12 @@ const build$type = (in$: CoreInterpretOps): void => {
     t["op%"] = num((a, b) => a % b);
     t["opNeg"] = tagFn(() => t.value !== undefined ? makeNumberType(-(t.value as number)) : NumberType);
 
+    t["op=="] = cmp("Number", (a, b) => a === b);
+    t["op!="] = cmp("Number", (a, b) => a !== b);
     t["op<"] = cmp("Number", (a, b) => a < b);
     t["op>"] = cmp("Number", (a, b) => a > b);
     t["op<="] = cmp("Number", (a, b) => a <= b);
     t["op>="] = cmp("Number", (a, b) => a >= b);
-    t["op=="] = cmp("Number", (a, b) => a === b);
-    t["op!="] = cmp("Number", (a, b) => a !== b);
 
     return t;
   };
@@ -906,15 +907,16 @@ const build$type = (in$: CoreInterpretOps): void => {
   const makeStringType = (value?: string): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "String" };
     if (value !== undefined) t.value = value;
+    t.toJSON = () => value !== undefined ? { type: "String", value } : { type: "String" };
     const { str, cmp } = ops(t);
 
     t["op+"] = str((a, b) => a + b);
     t["op=="] = cmp("String", (a, b) => a === b);
     t["op!="] = cmp("String", (a, b) => a !== b);
-    t["op<"] = cmp("String");  // No dependent value for string ordering
-    t["op>"] = cmp("String");
-    t["op<="] = cmp("String");
-    t["op>="] = cmp("String");
+    t["op<"] = cmp("String", (a, b) => a < b);
+    t["op>"] = cmp("String", (a, b) => a > b);
+    t["op<="] = cmp("String", (a, b) => a <= b);
+    t["op>="] = cmp("String", (a, b) => a >= b);
 
     t["length"] = value !== undefined ? makeNumberType(value.length) : NumberType;
     return t;
@@ -923,6 +925,7 @@ const build$type = (in$: CoreInterpretOps): void => {
   const makeBooleanType = (value?: boolean): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Boolean" };
     if (value !== undefined) t.value = value;
+    t.toJSON = () => value !== undefined ? { type: "Boolean", value } : { type: "Boolean" };
     const { cmp } = ops(t);
 
     t["op!"] = tagFn(() => t.value !== undefined ? makeBooleanType(!t.value) : BooleanType);
@@ -934,15 +937,16 @@ const build$type = (in$: CoreInterpretOps): void => {
     return t;
   };
 
-  // Singleton types
-  const NullType: Type = { [TYPE_TAG]: "null" };
-  const UndefinedType: Type = { [TYPE_TAG]: "undefined" };
-  const AnyType: Type & Record<string, unknown> = { [TYPE_TAG]: "Any" };
+  // Singleton types (with toJSON for test serialization)
+  const NullType: Type & { toJSON: () => unknown } = { [TYPE_TAG]: "null", toJSON: () => ({ type: "null" }) };
+  const UndefinedType: Type & { toJSON: () => unknown } = { [TYPE_TAG]: "undefined", toJSON: () => ({ type: "undefined" }) };
+  const AnyType: Type & Record<string, unknown> = { [TYPE_TAG]: "Any", toJSON: () => ({ type: "Any" }) };
 
   // AnyType returns itself for any operation
   const anyHandler = {
     get(_target: any, prop: string | symbol | number) {
       if (prop === TYPE_TAG) return "Any";
+      if (prop === "toJSON") return () => ({ type: "Any" });
       // Any operation on Any returns Any
       return (..._args: unknown[]) => AnyType;
     }
@@ -984,6 +988,10 @@ const build$type = (in$: CoreInterpretOps): void => {
         if (prop === TYPE_TAG) return "Set";
         if (prop === "types") return target.types;
         if (prop === "value") return undefined; // SetTypes don't have a single value
+        if (prop === "toJSON") return () => ({
+          type: "Set",
+          types: target.types.map(t => (t as any).toJSON ? (t as any).toJSON() : t)
+        });
         // Forward to each type and collect results
         const results: Type[] = [];
         for (const t of target.types) {
@@ -1019,6 +1027,9 @@ const build$type = (in$: CoreInterpretOps): void => {
       elements: isTuple ? elementsOrType : undefined,
       elementType: isTuple ? undefined : elementsOrType,
     };
+    t.toJSON = () => isTuple
+      ? { type: "Array", elements: elementsOrType.map(e => (e as any).toJSON ? (e as any).toJSON() : e) }
+      : { type: "Array", elementType: (elementsOrType as any).toJSON ? (elementsOrType as any).toJSON() : elementsOrType };
     // Length is dependent for tuples
     t["length"] = isTuple
       ? makeNumberType(elementsOrType.length)
@@ -1033,6 +1044,18 @@ const build$type = (in$: CoreInterpretOps): void => {
       [TYPE_TAG]: "Object",
       props: knownProps ? propsOrValueType as Record<string, Type> : undefined,
       valueType: knownProps ? undefined : propsOrValueType as Type,
+    };
+    t.toJSON = () => {
+      if (knownProps) {
+        const props = propsOrValueType as Record<string, Type>;
+        const jsonProps: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(props)) {
+          jsonProps[k] = (v as any).toJSON ? (v as any).toJSON() : v;
+        }
+        return { type: "Object", props: jsonProps };
+      }
+      const vt = propsOrValueType as Type;
+      return { type: "Object", valueType: (vt as any).toJSON ? (vt as any).toJSON() : vt };
     };
     return t;
   };
