@@ -840,173 +840,82 @@ const build$type = (in$: CoreInterpretOps): void => {
   const isUnsoundFunction = (fn: unknown): boolean =>
     typeof fn === "function" && (fn as any)[UNSOUND_FN_TAG] === true;
 
+  // --- Operator Helpers ---
+  // Factory that creates operator methods bound to a type instance
+  const ops = (t: Type) => ({
+    // Binary numeric op: Number × Number → Number
+    num: (op: (a: number, b: number) => number) =>
+      tagFn((other: unknown) => {
+        if (!isType(other) || other[TYPE_TAG] !== "Number") {
+          throw new Error(`Type error: expected Number, got ${showType(other)}`);
+        }
+        if (t.value !== undefined && other.value !== undefined) {
+          return makeNumberType(op(t.value as number, other.value as number));
+        }
+        return NumberType;
+      }),
+
+    // Binary string op: String × String → String
+    str: (op: (a: string, b: string) => string) =>
+      tagFn((other: unknown) => {
+        if (!isType(other) || other[TYPE_TAG] !== "String") {
+          throw new Error(`Type error: expected String, got ${showType(other)}`);
+        }
+        if (t.value !== undefined && other.value !== undefined) {
+          return makeStringType(op(t.value as string, other.value as string));
+        }
+        return StringType;
+      }),
+
+    // Comparison: T × T → Boolean (op optional for type-check-only)
+    cmp: (expectedType: string, op?: (a: any, b: any) => boolean) =>
+      tagFn((other: unknown) => {
+        if (!isType(other) || other[TYPE_TAG] !== expectedType) {
+          throw new Error(`Type error: expected ${expectedType}, got ${showType(other)}`);
+        }
+        if (op && t.value !== undefined && other.value !== undefined) {
+          return makeBooleanType(op(t.value, other.value));
+        }
+        return BooleanType;
+      }),
+  });
+
   // --- Primitive Types ---
   const makeNumberType = (value?: number): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Number" };
     if (value !== undefined) t.value = value;
-    // Operators return dependent types when both operands have known values
-    t["op+"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeNumberType((t.value as number) + (other.value as number));
-      }
-      return NumberType;
-    });
-    t["op-"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeNumberType((t.value as number) - (other.value as number));
-      }
-      return NumberType;
-    });
-    t["op*"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeNumberType((t.value as number) * (other.value as number));
-      }
-      return NumberType;
-    });
-    t["op/"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeNumberType((t.value as number) / (other.value as number));
-      }
-      return NumberType;
-    });
-    t["op%"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeNumberType((t.value as number) % (other.value as number));
-      }
-      return NumberType;
-    });
-    t["opNeg"] = tagFn(() => {
-      if (t.value !== undefined) return makeNumberType(-(t.value as number));
-      return NumberType;
-    });
-    // Comparison operators return BooleanType (with known value if both known)
-    t["op<"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) < (other.value as number));
-      }
-      return BooleanType;
-    });
-    t["op>"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) > (other.value as number));
-      }
-      return BooleanType;
-    });
-    t["op<="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) <= (other.value as number));
-      }
-      return BooleanType;
-    });
-    t["op>="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) >= (other.value as number));
-      }
-      return BooleanType;
-    });
-    t["op=="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) === (other.value as number));
-      }
-      return BooleanType;
-    });
-    t["op!="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Number") {
-        throw new Error(`Type error: expected Number, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as number) !== (other.value as number));
-      }
-      return BooleanType;
-    });
+    const { num, cmp } = ops(t);
+
+    t["op+"] = num((a, b) => a + b);
+    t["op-"] = num((a, b) => a - b);
+    t["op*"] = num((a, b) => a * b);
+    t["op/"] = num((a, b) => a / b);
+    t["op%"] = num((a, b) => a % b);
+    t["opNeg"] = tagFn(() => t.value !== undefined ? makeNumberType(-(t.value as number)) : NumberType);
+
+    t["op<"] = cmp("Number", (a, b) => a < b);
+    t["op>"] = cmp("Number", (a, b) => a > b);
+    t["op<="] = cmp("Number", (a, b) => a <= b);
+    t["op>="] = cmp("Number", (a, b) => a >= b);
+    t["op=="] = cmp("Number", (a, b) => a === b);
+    t["op!="] = cmp("Number", (a, b) => a !== b);
+
     return t;
   };
 
   const makeStringType = (value?: string): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "String" };
     if (value !== undefined) t.value = value;
-    t["op+"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeStringType((t.value as string) + (other.value as string));
-      }
-      return StringType;
-    });
-    t["op=="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as string) === (other.value as string));
-      }
-      return BooleanType;
-    });
-    t["op!="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      if (t.value !== undefined && other.value !== undefined) {
-        return makeBooleanType((t.value as string) !== (other.value as string));
-      }
-      return BooleanType;
-    });
-    t["op<"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op>"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op<="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op>="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "String") {
-        throw new Error(`Type error: expected String, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    // String length
+    const { str, cmp } = ops(t);
+
+    t["op+"] = str((a, b) => a + b);
+    t["op=="] = cmp("String", (a, b) => a === b);
+    t["op!="] = cmp("String", (a, b) => a !== b);
+    t["op<"] = cmp("String");  // No dependent value for string ordering
+    t["op>"] = cmp("String");
+    t["op<="] = cmp("String");
+    t["op>="] = cmp("String");
+
     t["length"] = value !== undefined ? makeNumberType(value.length) : NumberType;
     return t;
   };
@@ -1014,34 +923,14 @@ const build$type = (in$: CoreInterpretOps): void => {
   const makeBooleanType = (value?: boolean): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Boolean" };
     if (value !== undefined) t.value = value;
-    t["op!"] = tagFn(() => {
-      if (t.value !== undefined) return makeBooleanType(!t.value);
-      return BooleanType;
-    });
-    t["op&&"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
-        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op||"] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
-        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op=="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
-        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
-    t["op!="] = tagFn((other: unknown) => {
-      if (!isType(other) || other[TYPE_TAG] !== "Boolean") {
-        throw new Error(`Type error: expected Boolean, got ${showType(other)}`);
-      }
-      return BooleanType;
-    });
+    const { cmp } = ops(t);
+
+    t["op!"] = tagFn(() => t.value !== undefined ? makeBooleanType(!t.value) : BooleanType);
+    t["op&&"] = cmp("Boolean");
+    t["op||"] = cmp("Boolean");
+    t["op=="] = cmp("Boolean");
+    t["op!="] = cmp("Boolean");
+
     return t;
   };
 
@@ -1052,7 +941,7 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   // AnyType returns itself for any operation
   const anyHandler = {
-    get(_target: any, prop: string) {
+    get(_target: any, prop: string | symbol | number) {
       if (prop === TYPE_TAG) return "Any";
       // Any operation on Any returns Any
       return (..._args: unknown[]) => AnyType;
