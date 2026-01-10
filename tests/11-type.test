@@ -305,7 +305,7 @@ let fact: (n) => Number = (n) => if n <= 1 then 1 else n * fact(n - 1); let x: N
 === parse, compile, emit, interpret: $type
 {"type": "Number"}
 
---- annotated recursive still computes dependent when possible
+--- annotated also works with dependent number
 let fact: (n) => Number = (n) => if n <= 1 then 1 else n * fact(n - 1); fact(5)
 === parse, compile, emit, interpret: $type
 {"type": "Number"}
@@ -356,3 +356,222 @@ Type error: expected String, got Number
 { let x: Boolean = "hello"; x }
 === parse, compile, emit, interpret: $type, error
 Type error: expected Boolean, got String
+
+# =============================================================================
+# BLOCKS
+# =============================================================================
+
+--- block returns last expression
+{ 1; 2; 3 }
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 3}
+
+--- block with let
+{ let x = 1; x + 1 }
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 2}
+
+--- nested blocks
+{ let x = 1; { let y = 2; x + y } }
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 3}
+
+# =============================================================================
+# STRING LENGTH
+# =============================================================================
+
+--- string length dependent
+"hello".length
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- empty string length
+"".length
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 0}
+
+--- string length non-dependent
+let s: String = "hello"; s.length
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+# =============================================================================
+# ARRAY LENGTH
+# =============================================================================
+
+--- array length dependent
+[1, 2, 3].length
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 3}
+
+--- empty array length
+[].length
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 0}
+
+# =============================================================================
+# ARRAY INDEXING
+# =============================================================================
+
+--- array index dependent
+[10, 20, 30][1]
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 20}
+
+--- array index zero
+[10, 20, 30][0]
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 10}
+
+--- array index out of bounds
+[10, 20, 30][5]
+=== parse, compile, emit, interpret: $type
+{"type": "undefined"}
+
+--- array index non-dependent returns set with undefined
+let i: Number = 0; [10, 20, 30][i]
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 10}, {"type": "Number", "value": 20}, {"type": "Number", "value": 30}, {"type": "undefined"}]}
+
+# =============================================================================
+# OBJECT INDEXING
+# =============================================================================
+
+--- object index dependent string
+({x: 1, y: 2})["x"]
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- object dot access
+({x: 1, y: 2}).y
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 2}
+
+--- object index missing key
+({x: 1})["z"]
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "undefined"}]}
+
+--- object index non-dependent returns set with undefined
+let k: String = "x"; ({x: 1, y: 2})[k]
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "Number", "value": 2}, {"type": "undefined"}]}
+
+# =============================================================================
+# SETTYPE FROM ASSIGNMENT
+# =============================================================================
+
+--- assignment creates set type
+let x = 1; x = "foo"; x
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "String", "value": "foo"}]}
+
+--- multiple assignments accumulate
+let x = 1; x = 2; x = 3; x
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "Number", "value": 2}, {"type": "Number", "value": 3}]}
+
+# =============================================================================
+# SETTYPE FORWARDING
+# =============================================================================
+
+--- settype forwards operators
+let x = 1; x = 2; x + 10
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 11}, {"type": "Number", "value": 12}]}
+
+--- settype forwards comparison
+let x = 1; x = 5; x > 3
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Boolean", "value": false}, {"type": "Boolean", "value": true}]}
+
+# =============================================================================
+# NON-DEPENDENT CONDITIONALS
+# =============================================================================
+
+--- if non-dependent condition returns set
+let b: Boolean = true; if b then 1 else 2
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "Number", "value": 2}]}
+
+--- if non-dependent mixed types
+let b: Boolean = true; if b then "yes" else 42
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "String", "value": "yes"}, {"type": "Number", "value": 42}]}
+
+# =============================================================================
+# LOGICAL AND / OR
+# =============================================================================
+
+--- logical and returns set
+true && false
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Boolean", "value": true}, {"type": "Boolean", "value": false}]}
+
+--- logical or returns set
+true || false
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Boolean", "value": true}, {"type": "Boolean", "value": false}]}
+
+--- and with non-boolean
+1 && "hello"
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 1}, {"type": "String", "value": "hello"}]}
+
+--- or with non-boolean
+null || 42
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "null"}, {"type": "Number", "value": 42}]}
+
+# =============================================================================
+# STRICT EQUALITY
+# =============================================================================
+
+--- strict equality same type
+5 === 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean"}
+
+--- strict equality different types
+5 === "5"
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean"}
+
+--- strict inequality
+5 !== 6
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean"}
+
+# =============================================================================
+# ANYTYPE
+# =============================================================================
+
+--- any type from environment
+Any
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- any property access returns any
+Any.foo
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- any chained access returns any
+Any.foo.bar.baz
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- any call returns any
+Any!
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- any indexed returns any
+Any["key"]
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- any in arithmetic returns any
+Any + 1
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}

@@ -956,6 +956,9 @@ const build$type = (in$: CoreInterpretOps): void => {
     get(_target: any, prop: string | symbol | number) {
       if (prop === TYPE_TAG) return "Any";
       if (prop === "toJSON") return () => ({ type: "Any" });
+      // Don't implement .then - otherwise JS treats this as a thenable
+      // and async functions will hang when returning AnyTypeProxy
+      if (prop === "then") return undefined;
       // Any operation on Any returns Any
       return (..._args: unknown[]) => AnyType;
     }
@@ -986,9 +989,13 @@ const build$type = (in$: CoreInterpretOps): void => {
     // If any is AnyType, return AnyType
     if (uniqueTypes.some(t => isType(t) && t[TYPE_TAG] === "Any")) return AnyTypeProxy;
 
-    const setType: Type & { types: Type[] } & Record<string, unknown> = {
+    const setType: Type & { types: Type[]; toJSON: () => unknown } & Record<string, unknown> = {
       [TYPE_TAG]: "Set",
       types: uniqueTypes,
+      toJSON: () => ({
+        type: "Set",
+        types: uniqueTypes.map(t => (t as any).toJSON ? (t as any).toJSON() : t)
+      }),
     };
 
     // Forward property access to all types
@@ -997,10 +1004,7 @@ const build$type = (in$: CoreInterpretOps): void => {
         if (prop === TYPE_TAG) return "Set";
         if (prop === "types") return target.types;
         if (prop === "value") return undefined; // SetTypes don't have a single value
-        if (prop === "toJSON") return () => ({
-          type: "Set",
-          types: target.types.map(t => (t as any).toJSON ? (t as any).toJSON() : t)
-        });
+        if (prop === "toJSON") return target.toJSON;
         // Forward to each type and collect results
         const results: Type[] = [];
         for (const t of target.types) {
@@ -1017,10 +1021,10 @@ const build$type = (in$: CoreInterpretOps): void => {
         if (results.length === 0) return undefined;
         // If all results are functions, return a function that calls each
         if (results.every(r => typeof r === "function")) {
-          return (...args: unknown[]) => {
+          return tagFn((...args: unknown[]) => {
             const callResults = results.map(fn => (fn as Function)(...args));
             return makeSetType(callResults as Type[]);
-          };
+          });
         }
         return makeSetType(results as Type[]);
       }
@@ -1157,6 +1161,10 @@ const build$type = (in$: CoreInterpretOps): void => {
       }
       return fn(...args);
     }
+    // AnyType is callable and returns AnyType
+    if (isType(fn) && fn[TYPE_TAG] === "Any") {
+      return AnyTypeProxy;
+    }
     throw new Error(`Type error: cannot call non-function type ${showType(fn as Type)}`);
   };
 
@@ -1219,7 +1227,16 @@ const build$type = (in$: CoreInterpretOps): void => {
 
     // Handle Array types
     if (obj[TYPE_TAG] === "Array") {
-      const arrType = obj as Type & { elements?: Type[]; elementType?: Type };
+      const arrType = obj as Type & { elements?: Type[]; elementType?: Type; length?: Type };
+      // Check for property access (e.g., .length) before element indexing
+      const keyStr = isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined
+        ? key.value as string
+        : null;
+      if (keyStr !== null) {
+        const prop = (arrType as any)[keyStr];
+        if (prop !== undefined) return prop;
+      }
+      // Element indexing
       if (arrType.elements) {
         // Tuple: use dependent number key if available
         if (isType(key) && key[TYPE_TAG] === "Number" && key.value !== undefined) {
@@ -1242,6 +1259,13 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (obj[TYPE_TAG] === "Set") {
       const setType = obj as Type & { types: Type[] };
       const results = setType.types.map(t => $.index(t, key));
+      // If all results are functions, return a tagged wrapper that calls each
+      if (results.every(r => typeof r === "function")) {
+        return tagFn((...args: unknown[]) => {
+          const callResults = results.map(fn => (fn as Function)(...args));
+          return makeSetType(callResults as Type[]);
+        });
+      }
       return makeSetType(results as Type[]);
     }
 
