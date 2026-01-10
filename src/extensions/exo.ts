@@ -831,31 +831,65 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   const TYPE_TAG = Symbol("$type");
 
-  // Type constructors
+  // ---------------------------------------------------------------------------
+  // Type Interface & Helpers
+  // ---------------------------------------------------------------------------
+
   interface Type {
     [TYPE_TAG]: string;
     value?: unknown;
+    toJSON?: () => unknown;
   }
 
+  /** Check if value is a Type object */
   const isType = (t: unknown): t is Type =>
     typeof t === "object" && t !== null && TYPE_TAG in t;
 
-  // Tag for type-safe functions (Unsound lambdas and operator methods)
+  /** Check if value is a Type with specific tag */
+  const hasTag = (t: unknown, tag: string): t is Type =>
+    isType(t) && t[TYPE_TAG] === tag;
+
+  /** Convert type to JSON, using toJSON if available */
+  const typeToJSON = (t: unknown): unknown =>
+    isType(t) && t.toJSON ? t.toJSON() : t;
+
+  /** Extract string value from a dependent StringType, or null */
+  const getStringValue = (t: unknown): string | null =>
+    hasTag(t, "String") && t.value !== undefined ? t.value as string : null;
+
+  /** Extract number value from a dependent NumberType, or null */
+  const getNumberValue = (t: unknown): number | null =>
+    hasTag(t, "Number") && t.value !== undefined ? t.value as number : null;
+
+  // ---------------------------------------------------------------------------
+  // Function Tagging
+  // ---------------------------------------------------------------------------
+
   const UNSOUND_FN_TAG = Symbol("unsound-fn");
+
+  /** Tag a function as an Unsound type-level function */
   const tagFn = <T extends Function>(fn: T): T => {
     (fn as any)[UNSOUND_FN_TAG] = true;
     return fn;
   };
-  const isUnsoundFunction = (fn: unknown): boolean =>
+
+  /** Check if function is tagged as Unsound */
+  const isUnsoundFn = (fn: unknown): boolean =>
     typeof fn === "function" && (fn as any)[UNSOUND_FN_TAG] === true;
 
-  // --- Operator Helpers ---
-  // Factory that creates operator methods bound to a type instance
+  // ---------------------------------------------------------------------------
+  // Operator Method Factory
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Factory that creates operator methods bound to a type instance.
+   * Used by primitive types to implement +, -, ==, <, etc.
+   */
   const ops = (t: Type) => ({
-    // Binary numeric op: Number × Number → Number
+    /** Binary numeric op: Number × Number → Number */
     num: (op: (a: number, b: number) => number) =>
       tagFn((other: unknown) => {
-        if (!isType(other) || other[TYPE_TAG] !== "Number") {
+        if (!hasTag(other, "Number")) {
           throw new Error(`Type error: expected Number, got ${showType(other)}`);
         }
         if (t.value !== undefined && other.value !== undefined) {
@@ -864,10 +898,10 @@ const build$type = (in$: CoreInterpretOps): void => {
         return NumberType;
       }),
 
-    // Binary string op: String × String → String
+    /** Binary string op: String × String → String */
     str: (op: (a: string, b: string) => string) =>
       tagFn((other: unknown) => {
-        if (!isType(other) || other[TYPE_TAG] !== "String") {
+        if (!hasTag(other, "String")) {
           throw new Error(`Type error: expected String, got ${showType(other)}`);
         }
         if (t.value !== undefined && other.value !== undefined) {
@@ -876,11 +910,11 @@ const build$type = (in$: CoreInterpretOps): void => {
         return StringType;
       }),
 
-    // Comparison: T × T → Boolean (op optional for type-check-only)
-    cmp: (expectedType: string, op?: (a: any, b: any) => boolean) =>
+    /** Comparison op: T × T → Boolean (op computes value if both operands known) */
+    cmp: (expectedTag: string, op?: (a: any, b: any) => boolean) =>
       tagFn((other: unknown) => {
-        if (!isType(other) || other[TYPE_TAG] !== expectedType) {
-          throw new Error(`Type error: expected ${expectedType}, got ${showType(other)}`);
+        if (!hasTag(other, expectedTag)) {
+          throw new Error(`Type error: expected ${expectedTag}, got ${showType(other)}`);
         }
         if (op && t.value !== undefined && other.value !== undefined) {
           return makeBooleanType(op(t.value, other.value));
@@ -889,36 +923,37 @@ const build$type = (in$: CoreInterpretOps): void => {
       }),
   });
 
-  // --- Primitive Types ---
+  // ---------------------------------------------------------------------------
+  // Primitive Types
+  // ---------------------------------------------------------------------------
+
   const makeNumberType = (value?: number): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Number" };
-    if (value !== undefined) t.value = value;
+    if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "Number", value } : { type: "Number" };
-    const { num, cmp } = ops(t);
 
+    const { num, cmp } = ops(t);
     t["op+"] = num((a, b) => a + b);
     t["op-"] = num((a, b) => a - b);
     t["op*"] = num((a, b) => a * b);
     t["op/"] = num((a, b) => a / b);
     t["op%"] = num((a, b) => a % b);
-    t["opNeg"] = tagFn(() => t.value !== undefined ? makeNumberType(-(t.value as number)) : NumberType);
-
+    t["opNeg"] = tagFn(() => value !== undefined ? makeNumberType(-value) : NumberType);
     t["op=="] = cmp("Number", (a, b) => a === b);
     t["op!="] = cmp("Number", (a, b) => a !== b);
     t["op<"] = cmp("Number", (a, b) => a < b);
     t["op>"] = cmp("Number", (a, b) => a > b);
     t["op<="] = cmp("Number", (a, b) => a <= b);
     t["op>="] = cmp("Number", (a, b) => a >= b);
-
     return t;
   };
 
   const makeStringType = (value?: string): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "String" };
-    if (value !== undefined) t.value = value;
+    if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "String", value } : { type: "String" };
-    const { str, cmp } = ops(t);
 
+    const { str, cmp } = ops(t);
     t["op+"] = str((a, b) => a + b);
     t["op=="] = cmp("String", (a, b) => a === b);
     t["op!="] = cmp("String", (a, b) => a !== b);
@@ -926,161 +961,178 @@ const build$type = (in$: CoreInterpretOps): void => {
     t["op>"] = cmp("String", (a, b) => a > b);
     t["op<="] = cmp("String", (a, b) => a <= b);
     t["op>="] = cmp("String", (a, b) => a >= b);
-
     t["length"] = value !== undefined ? makeNumberType(value.length) : NumberType;
     return t;
   };
 
   const makeBooleanType = (value?: boolean): Type & Record<string, unknown> => {
     const t: Type & Record<string, unknown> = { [TYPE_TAG]: "Boolean" };
-    if (value !== undefined) t.value = value;
+    if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "Boolean", value } : { type: "Boolean" };
-    const { cmp } = ops(t);
 
-    t["op!"] = tagFn(() => t.value !== undefined ? makeBooleanType(!t.value) : BooleanType);
+    const { cmp } = ops(t);
+    t["op!"] = tagFn(() => value !== undefined ? makeBooleanType(!value) : BooleanType);
     t["op&&"] = cmp("Boolean");
     t["op||"] = cmp("Boolean");
     t["op=="] = cmp("Boolean");
     t["op!="] = cmp("Boolean");
-
     return t;
   };
 
-  // Singleton types (with toJSON for test serialization)
-  const NullType: Type & { toJSON: () => unknown } = { [TYPE_TAG]: "null", toJSON: () => ({ type: "null" }) };
-  const UndefinedType: Type & { toJSON: () => unknown } = { [TYPE_TAG]: "undefined", toJSON: () => ({ type: "undefined" }) };
-  const AnyType: Type & Record<string, unknown> = { [TYPE_TAG]: "Any", toJSON: () => ({ type: "Any" }) };
+  // Singleton types
+  const NullType: Type = { [TYPE_TAG]: "null", toJSON: () => ({ type: "null" }) };
+  const UndefinedType: Type = { [TYPE_TAG]: "undefined", toJSON: () => ({ type: "undefined" }) };
 
-  // AnyType returns itself for any operation
-  const anyHandler = {
-    get(_target: any, prop: string | symbol | number) {
-      if (prop === TYPE_TAG) return "Any";
-      if (prop === "toJSON") return () => ({ type: "Any" });
-      // Don't implement .then - otherwise JS treats this as a thenable
-      // and async functions will hang when returning AnyTypeProxy
-      if (prop === "then") return undefined;
-      // Any operation on Any returns Any
-      return (..._args: unknown[]) => AnyType;
-    }
-  };
-  const AnyTypeProxy = new Proxy(AnyType, anyHandler);
-
-  // Generic (non-dependent) types
+  // Generic (non-dependent) primitive types
   const NumberType = makeNumberType();
   const StringType = makeStringType();
   const BooleanType = makeBooleanType();
 
-  // --- SetType ---
-  // Union of multiple types, forwards operations to each member
+  // ---------------------------------------------------------------------------
+  // AnyType - Escape Hatch
+  // ---------------------------------------------------------------------------
+  // AnyType is a proxy that returns itself for any operation, allowing
+  // interop with untyped JS code. It's like TypeScript's `any`.
+
+  const AnyType: Type = { [TYPE_TAG]: "Any", toJSON: () => ({ type: "Any" }) };
+
+  // Create proxy that returns itself for all operations
+  // Note: Must not implement .then or JS will treat it as a thenable,
+  // causing async functions to hang when returning AnyTypeProxy.
+  const AnyTypeProxy: Type = new Proxy(AnyType, {
+    get(target, prop) {
+      if (prop === TYPE_TAG) return "Any";
+      if (prop === "toJSON") return target.toJSON;
+      if (prop === "then") return undefined;
+      // Any operation returns the proxy itself
+      return (..._args: unknown[]) => AnyTypeProxy;
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // SetType - Union Types
+  // ---------------------------------------------------------------------------
+  // SetType represents a union of possible types. When you access a property
+  // or call a method, it forwards to each member type and collects results.
+
+  interface SetType extends Type {
+    types: Type[];
+  }
+
   const makeSetType = (types: Type[]): Type => {
     // Flatten nested SetTypes
     const flatTypes: Type[] = [];
     for (const t of types) {
-      if (isType(t) && t[TYPE_TAG] === "Set") {
-        flatTypes.push(...(t as any).types);
+      if (hasTag(t, "Set")) {
+        flatTypes.push(...(t as SetType).types);
       } else {
         flatTypes.push(t);
       }
     }
-    // Deduplicate (simple reference equality for now)
-    const uniqueTypes = [...new Set(flatTypes)];
-    // If only one type, return it directly
-    if (uniqueTypes.length === 1) return uniqueTypes[0];
-    // If any is AnyType, return AnyType
-    if (uniqueTypes.some(t => isType(t) && t[TYPE_TAG] === "Any")) return AnyTypeProxy;
 
-    const setType: Type & { types: Type[]; toJSON: () => unknown } & Record<string, unknown> = {
+    // Deduplicate by reference
+    const uniqueTypes = [...new Set(flatTypes)];
+
+    // Simplify: single type doesn't need wrapping
+    if (uniqueTypes.length === 1) { return uniqueTypes[0]; }
+
+    // Simplify: Any absorbs everything
+    if (uniqueTypes.some(t => hasTag(t, "Any"))) { return AnyTypeProxy; }
+
+    const setType: SetType = {
       [TYPE_TAG]: "Set",
       types: uniqueTypes,
-      toJSON: () => ({
-        type: "Set",
-        types: uniqueTypes.map(t => (t as any).toJSON ? (t as any).toJSON() : t)
-      }),
+      toJSON: () => ({ type: "Set", types: uniqueTypes.map(typeToJSON) }),
     };
 
-    // Forward property access to all types
+    // Proxy forwards property access to all member types
     return new Proxy(setType, {
       get(target, prop) {
-        if (prop === TYPE_TAG) return "Set";
-        if (prop === "types") return target.types;
-        if (prop === "value") return undefined; // SetTypes don't have a single value
-        if (prop === "toJSON") return target.toJSON;
-        // Forward to each type and collect results
-        const results: Type[] = [];
+        // Direct properties
+        if (prop === TYPE_TAG) { return "Set"; }
+        if (prop === "types") { return target.types; }
+        if (prop === "toJSON") { return target.toJSON; }
+        if (prop === "value") { return undefined; }
+
+        // Collect property from each member type
+        const results: unknown[] = [];
         for (const t of target.types) {
           const val = (t as any)[prop];
           if (val !== undefined) {
-            if (typeof val === "function") {
-              // Wrap function to forward calls
-              results.push(val);
-            } else {
-              results.push(val);
-            }
+            results.push(val);
           }
         }
-        if (results.length === 0) return undefined;
-        // If all results are functions, return a function that calls each
+        if (results.length === 0) { return undefined; }
+
+        // If all are functions, return wrapper that calls each
         if (results.every(r => typeof r === "function")) {
           return tagFn((...args: unknown[]) => {
             const callResults = results.map(fn => (fn as Function)(...args));
             return makeSetType(callResults as Type[]);
           });
         }
+
         return makeSetType(results as Type[]);
       }
     });
   };
 
-  // --- Array Types ---
-  // Tuple: known elements, Array: shared element type
-  const makeArrayType = (elementsOrType: Type[] | Type): Type & Record<string, unknown> => {
+  // ---------------------------------------------------------------------------
+  // Compound Types: Array and Object
+  // ---------------------------------------------------------------------------
+
+  interface ArrayType extends Type {
+    elements?: Type[];      // Tuple: known element types
+    elementType?: Type;     // Array: shared element type
+    length: Type;
+  }
+
+  const makeArrayType = (elementsOrType: Type[] | Type): ArrayType => {
     const isTuple = Array.isArray(elementsOrType);
-    const t: Type & Record<string, unknown> = {
+    const elements = isTuple ? elementsOrType : undefined;
+    const elementType = isTuple ? undefined : elementsOrType;
+
+    return {
       [TYPE_TAG]: "Array",
-      elements: isTuple ? elementsOrType : undefined,
-      elementType: isTuple ? undefined : elementsOrType,
+      elements,
+      elementType,
+      length: isTuple ? makeNumberType(elementsOrType.length) : NumberType,
+      toJSON: () => isTuple
+        ? { type: "Array", elements: elementsOrType.map(typeToJSON) }
+        : { type: "Array", elementType: typeToJSON(elementsOrType) },
     };
-    t.toJSON = () => isTuple
-      ? { type: "Array", elements: elementsOrType.map(e => (e as any).toJSON ? (e as any).toJSON() : e) }
-      : { type: "Array", elementType: (elementsOrType as any).toJSON ? (elementsOrType as any).toJSON() : elementsOrType };
-    // Length is dependent for tuples
-    t["length"] = isTuple
-      ? makeNumberType(elementsOrType.length)
-      : NumberType;
-    return t;
   };
 
-  // --- Object Types ---
-  // Object with known props, or record with shared value type
-  const makeObjectType = (propsOrValueType: Record<string, Type> | Type, knownProps = true): Type & Record<string, unknown> => {
-    const t: Type & Record<string, unknown> = {
+  interface ObjectType extends Type {
+    props?: Record<string, Type>;  // Object: known property types
+    valueType?: Type;              // Record: shared value type
+  }
+
+  const makeObjectType = (props: Record<string, Type>): ObjectType => {
+    const jsonProps: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(props)) {
+      jsonProps[k] = typeToJSON(v);
+    }
+    return {
       [TYPE_TAG]: "Object",
-      props: knownProps ? propsOrValueType as Record<string, Type> : undefined,
-      valueType: knownProps ? undefined : propsOrValueType as Type,
+      props,
+      toJSON: () => ({ type: "Object", props: jsonProps }),
     };
-    t.toJSON = () => {
-      if (knownProps) {
-        const props = propsOrValueType as Record<string, Type>;
-        const jsonProps: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(props)) {
-          jsonProps[k] = (v as any).toJSON ? (v as any).toJSON() : v;
-        }
-        return { type: "Object", props: jsonProps };
-      }
-      const vt = propsOrValueType as Type;
-      return { type: "Object", valueType: (vt as any).toJSON ? (vt as any).toJSON() : vt };
-    };
-    return t;
   };
 
-  // --- Type Display ---
+  // ---------------------------------------------------------------------------
+  // Type Display & Compatibility
+  // ---------------------------------------------------------------------------
+
+  /** Format a type for error messages */
   const showType = (t: unknown): string => {
-    if (t === null) return "null";
-    if (typeof t === "function") return "<function>";
-    if (!isType(t)) return String(t);
+    if (t === null) { return "null"; }
+    if (typeof t === "function") { return "<function>"; }
+    if (!isType(t)) { return String(t); }
+
     const tag = t[TYPE_TAG];
     if (tag === "Set") {
-      return `(${(t as any).types.map(showType).join(" | ")})`;
+      return `(${(t as SetType).types.map(showType).join(" | ")})`;
     }
     if (t.value !== undefined) {
       return `${tag}(${JSON.stringify(t.value)})`;
@@ -1088,25 +1140,32 @@ const build$type = (in$: CoreInterpretOps): void => {
     return tag;
   };
 
-  // --- Type Compatibility ---
+  /** Check if actual type is compatible with expected type */
   const typeCompatible = (actual: Type, expected: Type): boolean => {
-    if (actual === expected) return true;
-    // Functions: trust the programmer's annotation (no structural check)
-    if (typeof actual === "function" && typeof expected === "function") return true;
-    if (!isType(actual) || !isType(expected)) return false;
-    // AnyType is compatible with anything
-    if (actual[TYPE_TAG] === "Any" || expected[TYPE_TAG] === "Any") return true;
-    // Same base type
+    // Same reference
+    if (actual === expected) { return true; }
+
+    // Functions: trust programmer's annotation (no structural check)
+    if (typeof actual === "function" && typeof expected === "function") { return true; }
+
+    if (!isType(actual) || !isType(expected)) { return false; }
+
+    // Any is compatible with everything
+    if (hasTag(actual, "Any") || hasTag(expected, "Any")) { return true; }
+
+    // Same base type: check value constraints
     if (actual[TYPE_TAG] === expected[TYPE_TAG]) {
-      // If expected has no value constraint, any value is ok
-      if (expected.value === undefined) return true;
-      // If expected has value, actual must match
+      // No value constraint on expected = any value is ok
+      if (expected.value === undefined) { return true; }
+      // Otherwise must match exactly
       return actual.value === expected.value;
     }
-    // SetType: check if all types in set are compatible
-    if (actual[TYPE_TAG] === "Set") {
-      return (actual as any).types.every((t: Type) => typeCompatible(t, expected));
+
+    // SetType: all members must be compatible
+    if (hasTag(actual, "Set")) {
+      return (actual as SetType).types.every(t => typeCompatible(t, expected));
     }
+
     return false;
   };
 
@@ -1154,112 +1213,87 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   $.call = (fn: unknown, args: unknown[]) => {
     if (typeof fn === "function") {
-      // Only call tagged functions (Unsound lambdas and operator methods)
-      // Raw JS functions (from imports) would fail with type objects as args
-      if (!isUnsoundFunction(fn)) {
-        return AnyTypeProxy;
-      }
+      // Only call Unsound-tagged functions; raw JS functions return Any
+      if (!isUnsoundFn(fn)) { return AnyTypeProxy; }
       return fn(...args);
     }
-    // AnyType is callable and returns AnyType
-    if (isType(fn) && fn[TYPE_TAG] === "Any") {
-      return AnyTypeProxy;
-    }
-    throw new Error(`Type error: cannot call non-function type ${showType(fn as Type)}`);
+    // AnyType is callable
+    if (hasTag(fn, "Any")) { return AnyTypeProxy; }
+    throw new Error(`Type error: cannot call non-function type ${showType(fn)}`);
   };
 
   // === Control ===
   $.if = (cond: unknown, thenFn: ($env: any) => unknown, elseFn: ($env: any) => unknown, $env: any) => {
-    // Condition must be boolean-compatible
-    if (isType(cond) && cond[TYPE_TAG] !== "Boolean" && cond[TYPE_TAG] !== "Any") {
+    // Condition must be boolean (or Any)
+    if (isType(cond) && !hasTag(cond, "Boolean") && !hasTag(cond, "Any")) {
       throw new Error(`Type error: condition must be Boolean, got ${showType(cond)}`);
     }
-    // If condition is a dependent boolean with known value, only return relevant branch
-    if (isType(cond) && cond[TYPE_TAG] === "Boolean" && cond.value !== undefined) {
+    // Dependent boolean: only evaluate relevant branch
+    if (hasTag(cond, "Boolean") && cond.value !== undefined) {
       return cond.value ? thenFn($env) : elseFn($env);
     }
-    // Otherwise return SetType of both branches
-    const thenType = thenFn($env);
-    const elseType = elseFn($env);
-    return makeSetType([thenType as Type, elseType as Type]);
+    // Non-dependent: return set of both branches
+    return makeSetType([thenFn($env) as Type, elseFn($env) as Type]);
   };
 
-  // === Objects ===
-  $.object = (props: Record<string, unknown>) => {
-    const typeProps: Record<string, Type> = {};
-    for (const [k, v] of Object.entries(props)) {
-      typeProps[k] = v as Type;
-    }
-    return makeObjectType(typeProps);
-  };
-
-  // === Arrays ===
-  $.array = (elems: unknown[]) => {
-    return makeArrayType(elems as Type[]);
-  };
+  // === Data Structures ===
+  $.object = (props: Record<string, unknown>) => makeObjectType(props as Record<string, Type>);
+  $.array = (elems: unknown[]) => makeArrayType(elems as Type[]);
 
   // === Indexing ===
   $.index = (obj: unknown, key: unknown) => {
-    if (!isType(obj)) return AnyTypeProxy;
+    if (!isType(obj)) { return AnyTypeProxy; }
+    if (hasTag(obj, "Any")) { return AnyTypeProxy; }
 
-    // Handle AnyType
-    if (obj[TYPE_TAG] === "Any") return AnyTypeProxy;
-
-    // Handle Object types
-    if (obj[TYPE_TAG] === "Object") {
-      const objType = obj as Type & { props?: Record<string, Type>; valueType?: Type };
+    // Object: look up property by key
+    if (hasTag(obj, "Object")) {
+      const objType = obj as ObjectType;
       if (objType.props) {
-        // Known props: use dependent string key if available
-        if (isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined) {
-          const prop = objType.props[key.value as string];
-          if (prop !== undefined) return prop;
-          // Unknown key returns SetType including UndefinedType
-          return makeSetType([...Object.values(objType.props), UndefinedType]);
+        const keyStr = getStringValue(key);
+        if (keyStr !== null) {
+          const prop = objType.props[keyStr];
+          if (prop !== undefined) { return prop; }
         }
-        // Non-dependent key: return SetType of all possible values + Undefined
+        // Unknown or non-dependent key: could be any prop or undefined
         return makeSetType([...Object.values(objType.props), UndefinedType]);
       }
-      // Record type: return valueType or Undefined
       if (objType.valueType) {
         return makeSetType([objType.valueType, UndefinedType]);
       }
     }
 
-    // Handle Array types
-    if (obj[TYPE_TAG] === "Array") {
-      const arrType = obj as Type & { elements?: Type[]; elementType?: Type; length?: Type };
-      // Check for property access (e.g., .length) before element indexing
-      const keyStr = isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined
-        ? key.value as string
-        : null;
+    // Array: property access or element indexing
+    if (hasTag(obj, "Array")) {
+      const arrType = obj as ArrayType;
+
+      // Property access (e.g., .length)
+      const keyStr = getStringValue(key);
       if (keyStr !== null) {
         const prop = (arrType as any)[keyStr];
-        if (prop !== undefined) return prop;
+        if (prop !== undefined) { return prop; }
       }
+
       // Element indexing
       if (arrType.elements) {
-        // Tuple: use dependent number key if available
-        if (isType(key) && key[TYPE_TAG] === "Number" && key.value !== undefined) {
-          const idx = key.value as number;
+        const idx = getNumberValue(key);
+        if (idx !== null) {
           if (idx >= 0 && idx < arrType.elements.length) {
             return arrType.elements[idx];
           }
           return UndefinedType;
         }
-        // Non-dependent key: return SetType of all elements + Undefined
+        // Non-dependent index: could be any element or undefined
         return makeSetType([...arrType.elements, UndefinedType]);
       }
-      // Array type: return element type or Undefined
       if (arrType.elementType) {
         return makeSetType([arrType.elementType, UndefinedType]);
       }
     }
 
-    // Handle SetType: forward to each type
-    if (obj[TYPE_TAG] === "Set") {
-      const setType = obj as Type & { types: Type[] };
-      const results = setType.types.map(t => $.index(t, key));
-      // If all results are functions, return a tagged wrapper that calls each
+    // SetType: forward to each member
+    if (hasTag(obj, "Set")) {
+      const results = (obj as SetType).types.map(t => $.index(t, key));
+      // If all results are functions, wrap them
       if (results.every(r => typeof r === "function")) {
         return tagFn((...args: unknown[]) => {
           const callResults = results.map(fn => (fn as Function)(...args));
@@ -1269,31 +1303,33 @@ const build$type = (in$: CoreInterpretOps): void => {
       return makeSetType(results as Type[]);
     }
 
-    // Direct property access (for operators, etc.)
-    // Extract string value from key if it's a StringType
-    const keyStr = isType(key) && key[TYPE_TAG] === "String" && key.value !== undefined
-      ? key.value as string
-      : String(key);
+    // Fallback: direct property access (for operators, etc.)
+    const keyStr = getStringValue(key) ?? String(key);
     const val = (obj as any)[keyStr];
-    if (val !== undefined) return val;
+    if (val !== undefined) { return val; }
 
     return UndefinedType;
   };
 
-  $.assignIndex = (obj: unknown, key: unknown, value: unknown) => {
+  $.assignIndex = (_obj: unknown, _key: unknown, value: unknown) => {
     // TODO: track mutations to object types
     return value;
   };
 
-  // === Strict equality (works on any types) ===
+  // === Operators ===
   ($ as any).strictEq = () => BooleanType;
   ($ as any).strictNeq = () => BooleanType;
 
-  // === Exo extensions ===
+  // Short-circuit: both paths evaluated, return union of possible results
+  $.and = (a: unknown, bThunk: () => unknown) => makeSetType([a as Type, bThunk() as Type]);
+  $.or = (a: unknown, bThunk: () => unknown) => makeSetType([a as Type, bThunk() as Type]);
+
+  // === Exo Statement Extensions ===
+
   $.assign = ($env: any, name: string, value: unknown) => {
     const current = $env.lookup(name);
+    // Merge with existing type if both are types
     if (current !== undefined && isType(current) && isType(value as Type)) {
-      // Merge types via SetType
       $env.mutate(name, makeSetType([current, value as Type]));
     } else {
       $env.mutate(name, value);
@@ -1315,23 +1351,10 @@ const build$type = (in$: CoreInterpretOps): void => {
   };
 
   $.block = ($env: any, bodyFn: ($env: unknown) => unknown) => {
-    const child = $env.extend({});
-    return bodyFn(child);
+    return bodyFn($env.extend({}));
   };
 
-  // Short-circuit operators: evaluate both, return SetType of possible results
-  $.and = (a: unknown, bThunk: () => unknown) => {
-    const b = bThunk();
-    // && can return either operand depending on truthiness
-    return makeSetType([a as Type, b as Type]);
-  };
-  $.or = (a: unknown, bThunk: () => unknown) => {
-    const b = bThunk();
-    // || can return either operand depending on truthiness
-    return makeSetType([a as Type, b as Type]);
-  };
-
-  // === Import returns AnyType ===
+  // === Interop ===
   $.import = async ($env: any, name: string, _modulePath: string) => {
     $env.bind(name, AnyTypeProxy);
     return AnyTypeProxy;
