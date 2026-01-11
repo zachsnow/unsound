@@ -575,3 +575,195 @@ Any["key"]
 Any + 1
 === parse, compile, emit, interpret: $type
 {"type": "Any"}
+
+# =============================================================================
+# COOL DEPENDENT TYPES - stuff that's hard in TypeScript
+# =============================================================================
+
+# In TS, this requires complex conditional types with Subtract/Add utility types
+# built from tuple manipulation. Here it's just... math.
+
+--- fibonacci at type level
+let fib = (n) => if n <= 1 then n else fib(n - 1) + fib(n - 2); fib(10)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 55}
+
+--- power of 2 at type level
+let pow2 = (n) => if n == 0 then 1 else 2 * pow2(n - 1); pow2(8)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 256}
+
+# TS FizzBuzz types require nested conditional types:
+# type FizzBuzz<N> = N extends ... ? "FizzBuzz" : N extends ... ? "Fizz" : ...
+# Here it's just if/else.
+
+--- fizzbuzz at type level
+let fizzbuzz = (n) =>
+  if n % 15 == 0 then "FizzBuzz"
+  else if n % 3 == 0 then "Fizz"
+  else if n % 5 == 0 then "Buzz"
+  else n;
+fizzbuzz(15)
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "FizzBuzz"}
+
+--- fizzbuzz fizz
+let fizzbuzz = (n) =>
+  if n % 15 == 0 then "FizzBuzz"
+  else if n % 3 == 0 then "Fizz"
+  else if n % 5 == 0 then "Buzz"
+  else n;
+fizzbuzz(9)
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "Fizz"}
+
+--- fizzbuzz buzz
+let fizzbuzz = (n) =>
+  if n % 15 == 0 then "FizzBuzz"
+  else if n % 3 == 0 then "Fizz"
+  else if n % 5 == 0 then "Buzz"
+  else n;
+fizzbuzz(10)
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "Buzz"}
+
+--- fizzbuzz number
+let fizzbuzz = (n) =>
+  if n % 15 == 0 then "FizzBuzz"
+  else if n % 3 == 0 then "Fizz"
+  else if n % 5 == 0 then "Buzz"
+  else n;
+fizzbuzz(7)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 7}
+
+# TS would need: type GCD<A, B> = B extends 0 ? A : GCD<B, Mod<A, B>>
+# with Mod requiring tuple gymnastics. Here it's recursive with real modulo.
+
+--- gcd at type level
+let gcd = (a, b) => if b == 0 then a else gcd(b, a % b); gcd(48, 18)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 6}
+
+--- gcd coprime
+let gcd = (a, b) => if b == 0 then a else gcd(b, a % b); gcd(17, 13)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+# Vector length checking - in TS you'd use tuple lengths and conditional types
+# with complex inference. Here we just compare .length directly.
+
+--- vectors same length check
+let samelen = (a, b) => a.length == b.length;
+samelen([1,2,3], [4,5,6])
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- vectors different length check
+let samelen = (a, b) => a.length == b.length;
+samelen([1,2], [4,5,6])
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- conditional on array lengths
+let zipOrError = (a, b) =>
+  if a.length == b.length then "ok" else "length mismatch";
+zipOrError([1,2,3], [4,5,6])
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "ok"}
+
+--- conditional on array lengths mismatch
+let zipOrError = (a, b) =>
+  if a.length == b.length then "ok" else "length mismatch";
+zipOrError([1,2], [4,5,6])
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "length mismatch"}
+
+# String length arithmetic - TS template literal types can't do arithmetic
+# on string lengths without tuple hacks.
+
+--- string length arithmetic
+let longerThan = (s, n) => s.length > n;
+longerThan("hello", 3)
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- string length comparison
+"hello".length + "world".length
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 10}
+
+# Absolute value - trivial here, requires conditional type in TS
+
+--- absolute value
+let abs = (n) => if n < 0 then -n else n; abs(-42)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+--- absolute value positive
+let abs = (n) => if n < 0 then -n else n; abs(42)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+# Clamp - two conditions, in TS needs nested conditionals
+
+--- clamp value
+let clamp = (n, lo, hi) => if n < lo then lo else if n > hi then hi else n;
+clamp(50, 0, 100)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 50}
+
+--- clamp below min
+let clamp = (n, lo, hi) => if n < lo then lo else if n > hi then hi else n;
+clamp(-10, 0, 100)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 0}
+
+--- clamp above max
+let clamp = (n, lo, hi) => if n < lo then lo else if n > hi then hi else n;
+clamp(150, 0, 100)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 100}
+
+# Collatz conjecture step - mix of conditionals and arithmetic
+
+--- collatz step even
+let collatz = (n) => if n % 2 == 0 then n / 2 else 3 * n + 1;
+collatz(16)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 8}
+
+--- collatz step odd
+let collatz = (n) => if n % 2 == 0 then n / 2 else 3 * n + 1;
+collatz(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 16}
+
+# isPrime - loop-like recursion, very hard in TS type system
+
+--- primality check prime
+let isPrime = (n) => {
+  let check = (n, d) => if d * d > n then true else if n % d == 0 then false else check(n, d + 1);
+  if n < 2 then false else check(n, 2)
+};
+isPrime(17)
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- primality check composite
+let isPrime = (n) => {
+  let check = (n, d) => if d * d > n then true else if n % d == 0 then false else check(n, d + 1);
+  if n < 2 then false else check(n, 2)
+};
+isPrime(15)
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- primality check small
+let isPrime = (n) => {
+  let check = (n, d) => if d * d > n then true else if n % d == 0 then false else check(n, d + 1);
+  if n < 2 then false else check(n, 2)
+};
+isPrime(2)
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
