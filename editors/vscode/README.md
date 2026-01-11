@@ -1,6 +1,6 @@
 # Unsound VS Code Extension
 
-Full language support for the Unsound programming language.
+Language support for the Unsound programming languages framework.
 
 ## Installation
 
@@ -12,7 +12,8 @@ Then reload VS Code (Cmd+Shift+P > "Developer: Reload Window").
 
 ## Features
 
-- **Syntax highlighting** - TextMate grammar for generic `.us` files
+- **Syntax highlighting** - LSP support via `usc-language-server`, with
+  a TextMate grammar fallback for generic `.us` files
 - **Diagnostics** - Parse errors and undefined variable warnings
 - **Go to Definition** - Jump to where a symbol is defined (F12)
 - **Hover** - See symbol information on hover
@@ -22,12 +23,12 @@ Then reload VS Code (Cmd+Shift+P > "Developer: Reload Window").
 
 ## Requirements
 
-- [Bun](https://bun.sh/) must be installed and available in PATH
-- The extension runs the language server using `bun`
+- [Bun](https://bun.sh/) must be installed and available in `PATH`
 
 ## Development
 
 After making changes:
+
 1. Rebuild: `bun run build`
 2. Run `./install.sh` to copy to VS Code extensions
 3. Reload VS Code (Cmd+Shift+P > "Developer: Reload Window")

@@ -2,7 +2,7 @@
   "name": "unsound",
   "version": "0.2.0",
   "description": "Extensible programming language framework for building custom languages through composition",
-  "keywords": ["compiler", "language", "extensible", "metaprogramming", "lsp"],
+  "keywords": ["compiler", "language", "extensible", "meta-programming", "lsp"],
   "license": "MIT",
   "author": "Zach Snow",
   "repository": {
