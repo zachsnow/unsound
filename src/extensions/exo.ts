@@ -163,54 +163,30 @@ const build$parse = (in$: CoreParseOps): void => {
 
   $.operators = operators;
 
-  // ---------------------------------------------------------------------------
-  // Operator Parsing
-  // ---------------------------------------------------------------------------
+  // Helper: create a parser that matches operators from a table (longest first)
+  const makeOpParser = (
+    getTable: () => Record<string, unknown>,
+    label: string
+  ): (() => Parser<{ op: string; start: number }>) =>
+    () => (input, pos) => {
+      const ws = $.ws()(input, pos);
+      const p = ws.pos;
 
-  // Try to parse an N-char binary operator
-  const tryBinaryN = (input: string, p: number, n: number): ParseResult<{ op: string; start: number }> => {
-    const chars = input.slice(p, p + n);
-    const def = $.operators.binary[chars];
-    if (def) {
-      return { ok: true, value: { op: chars, start: p }, pos: p + n };
-    }
-    return { ok: false, expected: "binary operator", pos: p };
-  };
+      // Sort by length descending (table may be modified by operator declarations)
+      const ops = Object.keys(getTable()).sort((a, b) => b.length - a.length);
 
-  $.binaryOp = () => (input, pos) => {
-    const ws = $.ws()(input, pos);
-    const p = ws.pos;
-    // Try 3-char, then 2-char, then 1-char
-    const r3 = tryBinaryN(input, p, 3);
-    if (r3.ok) return r3;
-    const r2 = tryBinaryN(input, p, 2);
-    if (r2.ok) return r2;
-    return tryBinaryN(input, p, 1);
-  };
-
-  $.prefixOp = () => (input, pos) => {
-    const ws = $.ws()(input, pos);
-    const p = ws.pos;
-    const ch = input[p];
-    if ($.operators.prefix[ch]) {
-      return { ok: true, value: { op: ch, start: p }, pos: p + 1 };
-    }
-    return { ok: false, expected: "prefix operator", pos: p };
-  };
-
-  $.postfixOp = () => (input, pos) => {
-    const ws = $.ws()(input, pos);
-    const p = ws.pos;
-    const ch = input[p];
-    if ($.operators.postfix[ch]) {
-      // Don't match ! if followed by = (that's != or !==)
-      if (ch === "!" && input[p + 1] === "=") {
-        return { ok: false, expected: "postfix operator", pos: p };
+      for (const op of ops) {
+        if (input.startsWith(op, p)) {
+          return { ok: true, value: { op, start: p }, pos: p + op.length };
+        }
       }
-      return { ok: true, value: { op: ch, start: p }, pos: p + 1 };
-    }
-    return { ok: false, expected: "postfix operator", pos: p };
-  };
+
+      return { ok: false, expected: label, pos: p };
+    };
+
+  $.binaryOp = makeOpParser(() => $.operators.binary, "binary operator");
+  $.prefixOp = makeOpParser(() => $.operators.prefix, "prefix operator");
+  $.postfixOp = makeOpParser(() => $.operators.postfix, "postfix operator");
 
   // Pratt parser: unified handling of prefix, postfix, and binary operators
   const baseAppExpr = $.appExpr;
