@@ -260,7 +260,7 @@ async function generateBinary(
   const standaloneJs = await generateStandalone(
     lang,
     program,
-    interpretKey,
+    interpret,
     sourceFile,
     true
   );

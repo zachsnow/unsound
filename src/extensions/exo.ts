@@ -290,8 +290,8 @@ const build$parse = (in$: CoreParseOps): void => {
   $.appExpr = (() => $.varAssign()) as () => Parser<Expr>;
 
   // Override lambdaBody to support noAssign option (for type annotations)
-  $.lambdaBody = (opts?: { noAssign?: boolean }) =>
-    opts?.noAssign ? $.binaryExpr(0) : $.lazy(() => $.expr());
+  $.lambdaBody = ((opts?: { noAssign?: boolean }) =>
+    opts?.noAssign ? $.binaryExpr(0) : $.lazy(() => $.expr())) as typeof $.lambdaBody;
 
   // Helper: parse optional type annotation `: type`
   // Uses lambda({ noAssign: true }) or binaryExpr to avoid consuming `=`
@@ -1132,9 +1132,10 @@ const build$type = (in$: CoreInterpretOps): void => {
     // Same base type: check value constraints
     if (actual[TYPE_TAG] === expected[TYPE_TAG]) {
       // No value constraint on expected = any value is ok
-      if (expected.value === undefined) { return true; }
+      // (casts needed due to TypeScript narrowing limitation with symbol keys)
+      if ((expected as Type).value === undefined) { return true; }
       // Otherwise must match exactly
-      return actual.value === expected.value;
+      return (actual as Type).value === (expected as Type).value;
     }
 
     // SetType: all members must be compatible
