@@ -767,3 +767,150 @@ let isPrime = (n) => {
 isPrime(2)
 === parse, compile, emit, interpret: $type
 {"type": "Boolean", "value": true}
+
+# =============================================================================
+# GENERICS - polymorphic functions without dependent values
+# =============================================================================
+
+--- generic identity
+let id = (x) => x;
+let n: Number = id(42);
+n
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- generic identity string
+let id = (x) => x;
+let s: String = id("hello");
+s
+=== parse, compile, emit, interpret: $type
+{"type": "String"}
+
+--- generic constant
+let const = (x, y) => x;
+let n: Number = const(1, "ignored");
+n
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- generic flip
+let flip = (f) => (a, b) => f(b, a);
+let sub = (x, y) => x - y;
+flip(sub)(3, 10)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 7}
+
+--- generic compose
+let compose = (f, g) => (x) => f(g(x));
+let double = (x) => x * 2;
+let inc = (x) => x + 1;
+compose(double, inc)(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 12}
+
+--- generic apply
+let apply = (f, x) => f(x);
+let square = (x) => x * x;
+apply(square, 4)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 16}
+
+--- generic twice
+let twice = (f) => (x) => f(f(x));
+let inc = (x) => x + 1;
+twice(inc)(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 7}
+
+--- generic pair fst
+let pair = (a, b) => (f) => f(a, b);
+let fst = (a, b) => a;
+let p = pair(1, "hello");
+p(fst)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 1}
+
+--- generic pair snd
+let pair = (a, b) => (f) => f(a, b);
+let snd = (a, b) => b;
+let p = pair(1, "hello");
+p(snd)
+=== parse, compile, emit, interpret: $type
+{"type": "String", "value": "hello"}
+
+--- generic either left
+let left = (x) => (onLeft, onRight) => onLeft(x);
+let right = (x) => (onLeft, onRight) => onRight(x);
+let e = left(42);
+e((n) => n + 1, (s) => 0)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 43}
+
+--- generic either right
+let left = (x) => (onLeft, onRight) => onLeft(x);
+let right = (x) => (onLeft, onRight) => onRight(x);
+let e = right("hello");
+e((n) => n + 1, (s) => s.length)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
+
+--- generic maybe nothing
+let nothing = (onNothing, onJust) => onNothing;
+let just = (x) => (onNothing, onJust) => onJust(x);
+nothing(0, (x) => x + 1)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 0}
+
+--- generic maybe just
+let nothing = (onNothing, onJust) => onNothing;
+let just = (x) => (onNothing, onJust) => onJust(x);
+just(41)(0, (x) => x + 1)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 42}
+
+--- annotated function erases value
+let f: (x) => Number = (x) => x + 1;
+f(5)
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- generic pipeline
+let pipe = (x, f) => f(x);
+let r = pipe(5, (x) => x * 2);
+r
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 10}
+
+--- pipeline chain
+let pipe = (x, f) => f(x);
+pipe(pipe(pipe(1, (x) => x + 1), (x) => x * 2), (x) => x + 10)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 14}
+
+--- church numeral zero
+let zero = (f) => (x) => x;
+let succ = (n) => (f) => (x) => f(n(f)(x));
+let toInt = (n) => n((x) => x + 1)(0);
+toInt(zero)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 0}
+
+--- church numeral three
+let zero = (f) => (x) => x;
+let succ = (n) => (f) => (x) => f(n(f)(x));
+let toInt = (n) => n((x) => x + 1)(0);
+let three = succ(succ(succ(zero)));
+toInt(three)
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 3}
+
+--- church add
+let zero = (f) => (x) => x;
+let succ = (n) => (f) => (x) => f(n(f)(x));
+let add = (m, n) => (f) => (x) => m(f)(n(f)(x));
+let toInt = (n) => n((x) => x + 1)(0);
+let two = succ(succ(zero));
+let three = succ(two);
+toInt(add(two, three))
+=== parse, compile, emit, interpret: $type
+{"type": "Number", "value": 5}
