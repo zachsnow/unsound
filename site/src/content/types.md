@@ -1,6 +1,8 @@
 # Exo Types
 
-Exo introduces a type system where **types are values** and **type checking is interpretation**. Rather than a separate static analysis pass, type checking runs your program with a different interpreter (`$type`) that computes types instead of values.
+Exo introduces a type system where **types are values** and **type checking is interpretation**.
+Rather than a separate static analysis pass, type checking runs your program with a different
+interpreter (`$type`) that computes types instead of values.
 
 ## Types as Values
 
@@ -22,7 +24,8 @@ let y: String = "hi";
 
 ## Dependent Types
 
-Types can carry their concrete values. When the `$type` interpreter evaluates `42`, it produces `Number(42)` — a number type that knows its value is 42:
+Types can carry their concrete values. When the `$type` interpreter evaluates `42`, it produces
+`Number(42)` — a number type that knows its value is `42`:
 
 ```unsound
 // Under $type semantics:
@@ -70,7 +73,8 @@ Number $= "hello"     // => Boolean(false)
 5 $= 10               // => Boolean(false) - value mismatch
 ```
 
-This is the operator used internally for type annotations. Each type implements `op$=` to define its compatibility rules.
+This is the operator used internally for type annotations. Each type implements `op$=` to define its
+compatibility rules.
 
 ## SetType (Union Types)
 
@@ -82,7 +86,7 @@ x = "hello";
 x                     // => Set(Number(1) | String("hello"))
 ```
 
-SetType forwards operations to all members:
+`SetType` forwards operations to all members:
 
 ```unsound
 let x = 1; x = 2;
