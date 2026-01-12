@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>Unsound</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self' ; script-src 'self' 'unsafe-inline' ; style-src 'self' 'unsafe-inline' "
+  >
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+  <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <a href="/" class="root">Uns&#x2601;und</a>
+    <p class="tagline">An extensible and unsound programming languages framework</p>
+  </header>
+
+  <nav>
+    <a href="/overview">Overview</a>
+    <a href="/building">Building</a>
+    <a href="/usage">Usage</a>
+    <a href="/languages">Languages</a>
+    <a href="/types">Types</a>
+    <a href="/extensions">Extensions</a>
+    <a href="/authoring">Authoring</a>
+    <a href="/lsp">LSP</a>
+    <a href="/testing">Testing</a>
+    <a href="https://github.com/zachsnow/unsound" class="source">Source</a>
+  </nav>
+
+  <aside id="js-optional">
+    JavaScript is required for syntax highlighting,
+    but is not otherwise required. If something doesn't work for you, try enabling 1st-party JS.
+  </aside>
+
+  <script type="text/javascript">
+    (() => {
+      const $optional = document.getElementById('js-optional');
+      $optional.parentElement.removeChild($optional);
+    })();
+  </script>
+
+  <h3 id="styles-required">
+    <b>(This page might be a bit more readable if you enable 1st-party CSS.)</b>
+  </h3>
+
+  <aside>
+    <p>Unsound is an <strong>experimental</strong> framework for building extensible programming languages,
+created to explore first class type checking, language extensions, and
+inspired by the <a href="http://okmij.org/ftp/tagless-final/">tagless final</a> approach to
+language implementation. <a href="/try/">Try it out</a> or learn more about <a href="/overview/">how it works</a>.</p>
+
+  </aside>
+
+  <main>
+    
+<h1>Type Semantics</h1>
+<p>Exo introduces a type system where <strong>types are values</strong> and <strong>type checking is interpretation</strong>.
+Rather than a separate static analysis pass, type checking runs your program with a different
+interpreter (<code>$type</code>) that computes types instead of values.</p>
+<h2>Types as Values</h2>
+<p>In Exo, types like <code>Number</code>, <code>String</code>, and <code>Boolean</code> are ordinary values in the environment:</p>
+<pre><code class="language-unsound">Number        // The type of all numbers
+String        // The type of all strings
+Boolean       // The type of all booleans
+Any           // Escape hatch: compatible with everything
+</code></pre>
+<p>Type annotations are expressions that get evaluated:</p>
+<pre><code class="language-unsound">let x: Number = 42;    // Number is evaluated, then 42's type is checked against it
+let y: String = &quot;hi&quot;;
+</code></pre>
+<h2>Dependent Types</h2>
+<p>Types can carry their concrete values. When the <code>$type</code> interpreter evaluates <code>42</code>, it produces
+<code>Number(42)</code> — a number type that knows its value is <code>42</code>:</p>
+<pre><code class="language-unsound">// Under $type semantics:
+42              // =&gt; Number(42)
+&quot;hello&quot;         // =&gt; String(&quot;hello&quot;)
+true            // =&gt; Boolean(true)
+</code></pre>
+<p>This enables <strong>compile-time computation</strong>:</p>
+<pre><code class="language-unsound">2 + 3           // =&gt; Number(5)
+&quot;a&quot; + &quot;b&quot;       // =&gt; String(&quot;ab&quot;)
+5 &gt; 3           // =&gt; Boolean(true)
+</code></pre>
+<h2>Branch Pruning</h2>
+<p>When <code>if</code> has a dependent boolean condition, only the taken branch is evaluated:</p>
+<pre><code class="language-unsound">if true then 1 else null.explode    // =&gt; Number(1), else branch not evaluated
+if 5 &gt; 3 then &quot;yes&quot; else &quot;no&quot;       // =&gt; String(&quot;yes&quot;)
+</code></pre>
+<p>This enables type-level assertions:</p>
+<pre><code class="language-unsound">let safeDiv = (a, b) =&gt;
+  if b == 0 then Error(&quot;division by zero&quot;)
+  else a / b;
+
+safeDiv(10, 2)   // =&gt; Number(5)
+safeDiv(10, 0)   // Type error: division by zero
+</code></pre>
+<h2>The <code>$=</code> Operator</h2>
+<p>The <code>$=</code> operator checks type compatibility: <code>expected $= actual</code> returns true if <code>actual</code> is assignable to <code>expected</code>:</p>
+<pre><code class="language-unsound">Number $= 5           // =&gt; Boolean(true)
+Number $= &quot;hello&quot;     // =&gt; Boolean(false)
+5 $= 5                // =&gt; Boolean(true)  - exact value match
+5 $= 10               // =&gt; Boolean(false) - value mismatch
+</code></pre>
+<p>This is the operator used internally for type annotations. Each type implements <code>op$=</code> to define its
+compatibility rules.</p>
+<h2>SetType (Union Types)</h2>
+<p>When a variable can hold multiple types (e.g., through assignment), it becomes a <code>SetType</code>:</p>
+<pre><code class="language-unsound">let x = 1;
+x = &quot;hello&quot;;
+x                     // =&gt; Set(Number(1) | String(&quot;hello&quot;))
+</code></pre>
+<p><code>SetType</code> forwards operations to all members:</p>
+<pre><code class="language-unsound">let x = 1; x = 2;
+x + 10                // =&gt; Set(Number(11) | Number(12))
+</code></pre>
+<p>For compatibility, all members must be compatible:</p>
+<pre><code class="language-unsound">let t = 1; t = 2;
+Number $= t           // =&gt; Boolean(true) - both are Numbers
+
+let t = 1; t = &quot;x&quot;;
+Number $= t           // =&gt; Boolean(false) - String not compatible
+</code></pre>
+<h2>Type-Level Assertions</h2>
+<p>The <code>Error(message)</code> function throws a type error with a custom message. Combined with branch pruning, this enables compile-time constraints:</p>
+<pre><code class="language-unsound">let requirePositive = (n) =&gt;
+  if n &gt; 0 then n
+  else Error(&quot;expected positive number&quot;);
+
+requirePositive(5)    // =&gt; Number(5)
+requirePositive(-1)   // Type error: expected positive number
+</code></pre>
+<h2>Example: Length-Checked Zip</h2>
+<p>A <code>zip</code> function that rejects arrays of different lengths at type-check time:</p>
+<pre><code class="language-unsound">let SameLen = (a, b) =&gt;
+  if a.length == b.length then true
+  else Error(&quot;zip requires same-length arrays&quot;);
+
+let zip = (a, b) =&gt; {
+  SameLen(a, b);  // assertion
+  let result = [];
+  let go = (i) =&gt;
+    if i &gt;= a.length then result
+    else { result.push([a[i], b[i]]); go(i + 1) };
+  go(0)
+};
+
+zip([1, 2, 3], [&quot;a&quot;, &quot;b&quot;, &quot;c&quot;])  // OK
+zip([1, 2], [&quot;a&quot;, &quot;b&quot;, &quot;c&quot;])     // Type error: zip requires same-length arrays
+</code></pre>
+<h2>Example: Matrix Dimensions</h2>
+<p>Check matrix multiplication dimensions at type level:</p>
+<pre><code class="language-unsound">let matmul = (a, b) =&gt;
+  if a[0].length == b.length then &quot;valid&quot;
+  else Error(&quot;matrix inner dimensions must match&quot;);
+
+matmul([[1,2,3], [4,5,6]], [[1], [2], [3]])  // OK: 2x3 * 3x1
+matmul([[1,2], [3,4]], [[1], [2], [3]])      // Type error: 2x2 * 3x1
+</code></pre>
+<h2>Custom Types</h2>
+<p>Since types are values with methods, you can create custom types by defining objects with <code>op$=</code>:</p>
+<pre><code class="language-unsound">let PositiveNumber = {
+  &quot;op$=&quot;: (actual) =&gt;
+    if Number $= actual then
+      if actual &gt; 0 then true
+      else false
+    else false
+};
+
+let x: PositiveNumber = 5;   // OK
+let y: PositiveNumber = -1;  // Type error
+</code></pre>
+<h2>Recursive Functions</h2>
+<p>Dependent types enable type-level recursion:</p>
+<pre><code class="language-unsound">let fib = (n) =&gt; if n &lt;= 1 then n else fib(n-1) + fib(n-2);
+fib(10)  // =&gt; Number(55)
+
+let isPrime = (n) =&gt; {
+  let check = (d) =&gt;
+    if d * d &gt; n then true
+    else if n % d == 0 then false
+    else check(d + 1);
+  if n &lt; 2 then false else check(2)
+};
+isPrime(17)  // =&gt; Boolean(true)
+</code></pre>
+<p>Note: Non-dependent inputs cause infinite recursion. Use function annotations to bound return types:</p>
+<pre><code class="language-unsound">let fact: (n) =&gt; Number = (n) =&gt; if n &lt;= 1 then 1 else n * fact(n - 1);
+let x: Number = 5;  // erases dependent value
+fact(x)             // =&gt; Number (not infinite recursion)
+</code></pre>
+
+  </main>
+
+  <footer>
+    <a href="https://patrim.vein.io">Patrim</a>
+    &middot;
+    <a href="https://zachsnow.com">❄</a>
+  </footer>
+
+  <script type="text/javascript" src="/js/lib/codemirror.min.js"></script>
+  <script type="text/javascript" src="/js/app.js"></script>
+</body>
+</html>
