@@ -910,7 +910,7 @@ const build$type = (in$: CoreInterpretOps): void => {
         // SetType: all members must be compatible with this
         if (hasTag(actual, "Set")) {
           const allCompat = (actual as SetType).types.every(member => {
-            const result = (t["op$="] as Function)(member);
+            const result = ((t as any)["op$="] as Function)(member);
             return hasTag(result, "Boolean") && result.value === true;
           });
           return makeBooleanType(allCompat);
@@ -1209,15 +1209,21 @@ const build$type = (in$: CoreInterpretOps): void => {
     throw new Error(`Type error: ${msgStr}`);
   });
 
-  $.env = () => createEnv({
-    Number: NumberType,
-    String: StringType,
-    Boolean: BooleanType,
-    Null: NullType,
-    Undefined: UndefinedType,
-    Any: AnyTypeProxy,
-    Error: errorFn,
-  });
+  $.env = () => {
+    const rootEnv = createEnv({
+      Number: NumberType,
+      String: StringType,
+      Boolean: BooleanType,
+      Null: NullType,
+      Undefined: UndefinedType,
+      Any: AnyTypeProxy,
+      Error: errorFn,
+    });
+    // `global` is the root frame - assignments write to module scope
+    // Usage: global.MyType = { ... } exports MyType
+    rootEnv.bind("global", rootEnv.frame);
+    return rootEnv;
+  };
 
   // === Literals (return dependent types with known values) ===
   $.number = (n: number) => makeNumberType(n);
@@ -1278,6 +1284,16 @@ const build$type = (in$: CoreInterpretOps): void => {
 
   // === Indexing ===
   $.index = (obj: unknown, key: unknown) => {
+    // Handle plain JS objects (like global frame) - just do property lookup
+    if (obj !== null && typeof obj === "object" && !isType(obj)) {
+      const keyStr = getStringValue(key);
+      if (keyStr !== null) {
+        const value = (obj as Record<string, unknown>)[keyStr];
+        // If value is a Type, return it; otherwise undefined means not found
+        if (value !== undefined) { return value as Type; }
+      }
+      return UndefinedType;
+    }
     if (!isType(obj)) { return AnyTypeProxy; }
     if (hasTag(obj, "Any")) { return AnyTypeProxy; }
 
@@ -1347,7 +1363,14 @@ const build$type = (in$: CoreInterpretOps): void => {
     return UndefinedType;
   };
 
-  $.assignIndex = (_obj: unknown, _key: unknown, value: unknown) => {
+  $.assignIndex = (obj: unknown, key: unknown, value: unknown) => {
+    // For plain JS objects (like global frame), actually mutate them
+    if (obj !== null && typeof obj === "object" && !isType(obj)) {
+      const keyStr = getStringValue(key);
+      if (keyStr !== null) {
+        (obj as Record<string, unknown>)[keyStr] = value;
+      }
+    }
     // TODO: track mutations to object types
     return value;
   };
@@ -1377,7 +1400,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (annotationThunk) {
       const annotationType = annotationThunk() as Type;
       // Use op$= for type compatibility check
-      const compatFn = (annotationType as Record<string, unknown>)["op$="];
+      const compatFn = (annotationType as unknown as Record<string, unknown>)["op$="];
       if (typeof compatFn === "function" && isUnsoundFn(compatFn)) {
         const result = compatFn(valueType);
         if (hasTag(result, "Boolean") && result.value === false) {

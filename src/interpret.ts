@@ -13,6 +13,7 @@ export interface Env {
   extend(bindings: Record<string, unknown>): Env;  // Create child env
   bind(name: string, value: unknown): void;        // Mutate current frame (for letrec)
   mutate(name: string, value: unknown): void;      // Mutate existing binding (for assignment)
+  frame: Record<string, unknown>;                  // Direct access to current frame
 }
 
 // Interpreter operations - what $ provides at runtime
@@ -58,6 +59,7 @@ export function createEnv(initial: Record<string, unknown> = {}): Env {
 // Helper to create env from existing frame (for extend)
 function createEnvFromFrame(frame: Record<string, unknown>): Env {
   return {
+    frame,
     lookup(name: string): unknown {
       return frame[name];
     },
