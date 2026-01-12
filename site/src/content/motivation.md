@@ -110,6 +110,8 @@ NumberType["op+"] = (n) => {
 };
 ```
 
+Read more about this approach to ["programmable types"](/types/).
+
 ## What Unsound is
 
 Unsound is an experiment in building extensible programming languages. It provides an extensible compiler pipeline,

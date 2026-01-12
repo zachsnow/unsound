@@ -1,4 +1,4 @@
-# Exo Types
+# Type Semantics
 
 Exo introduces a type system where **types are values** and **type checking is interpretation**.
 Rather than a separate static analysis pass, type checking runs your program with a different
