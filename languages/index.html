@@ -58,27 +58,34 @@ language implementation. <a href="/try/">Try it out</a> or learn more about <a h
 
   <main>
     
-<p>Unsound provides several language extensions that build on each other.</p>
+<p>Unsound provides language extensions that build on each other.</p>
 <h1>Layers</h1>
 <h2>Core</h2>
-<p>The base language - a simple expression-oriented language:</p>
+<p>A minimal functional language. Everything is an expression:</p>
 <pre><code class="language-unsound">let x = 42 in x
 let f = (a, b) =&gt; a in f(1, 2)
 if true then &quot;yes&quot; else &quot;no&quot;
+[1, 2, 3][0]
 { x: 1, y: 2 }.x
 </code></pre>
+<p>Primitives: numbers, strings, booleans, <code>null</code>. Compound values: arrays and objects. Functions are lambdas with implicit return.</p>
 <h2>Meso</h2>
-<p>Adds infix and prefix operators with precedence:</p>
+<p>Adds infix and prefix operators using precedence climbing. Precedence (low to high): <code>||</code>, <code>&amp;&amp;</code>, equality, comparison, <code>+</code>/<code>-</code>, <code>*</code>/<code>/</code>/<code>%</code>, prefix <code>!</code>/<code>-</code>.</p>
 <pre><code class="language-unsound">1 + 2 * 3
 x &gt; 0 &amp;&amp; x &lt; 10
 !done || count == 0
 </code></pre>
+<p>Operators compile to method calls: <code>a + b</code> becomes <code>a[&quot;op+&quot;](b)</code>. This lets values define their own operator behavior. The exceptions are <code>===</code>/<code>!==</code>, which use primitive dispatch to handle <code>null</code> comparisons.</p>
 <h2>Thermo</h2>
-<p>Adds imperative features - blocks, semicolons, assignment:</p>
+<p>Adds imperative features. Semicolons sequence expressions; in a sequence, <code>let</code> bindings scope over subsequent expressions:</p>
 <pre><code class="language-unsound">let x = 1;
 let y = 2;
+x + y
+</code></pre>
+<p>Blocks group statements and evaluate to their last expression. Assignment mutates existing bindings:</p>
+<pre><code class="language-unsound">let x = 1;
 {
-  x = x + y;
+  x = x + 10;
   x * 2
 }
 </code></pre>
@@ -95,12 +102,13 @@ implemented in TS directly on Core.</p>
 <p>The interesting thing about Exo is <em>how</em> types and typechecking are implemented. Specifically,
 each type annotation is an Exo <em>expression</em> -- a value -- that is itself evaluated before performing
 type checking.</p>
-<p>In addition, when interpreting a binding's value</p>
+<p>In addition, when interpreting a binding's value:</p>
 <pre><code class="language-unsound">let x: T = value;
 </code></pre>
 <p>We first evaluate <code>T</code> using the default <code>$interpret</code> semantics to determine the type. Then we evaluate <code>value</code>
-using the <code>$type</code> semantics, and compare the results using <code>op==</code> on <code>T</code> to determine whether <code>value</code> is assignable
+using the <code>$type</code> semantics, and compare the results using <code>op$=</code> on <code>T</code> to determine whether <code>value</code> is assignable
 to <code>x</code>.</p>
+<p>To learn more about Exo's type system see <a href="/types/">Type Semantics</a>.</p>
 <hr />
 <p>For more on writing your own languages, see <a href="/authoring/">Authoring Languages and Extensions</a>.</p>
 
