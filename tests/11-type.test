@@ -1010,3 +1010,100 @@ let safeIndex = (arr, i) =>
 safeIndex([10, 20, 30], 5)
 === parse, compile, emit, interpret: $type, error
 Type error: index out of bounds: too large
+
+# =============================================================================
+# ARRAY METHODS
+# =============================================================================
+
+--- array push returns number
+[1, 2, 3].push(4)
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+--- array pop returns element or undefined
+[1, 2, 3].pop!
+=== parse, compile, emit, interpret: $type
+{"type": "Set", "types": [{"type": "Number", "value": 3}, {"type": "undefined"}]}
+
+--- array map with function
+[1, 2, 3].map((x) => x + 1)
+=== parse, compile, emit, interpret: $type
+{"type": "Array", "elementType": {"type": "Set", "types": [{"type": "Number", "value": 2}, {"type": "Number", "value": 3}, {"type": "Number", "value": 4}]}}
+
+--- array join returns string
+[1, 2, 3].join(",")
+=== parse, compile, emit, interpret: $type
+{"type": "String"}
+
+--- array includes returns boolean
+[1, 2, 3].includes(2)
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean"}
+
+--- array indexOf returns number
+[1, 2, 3].indexOf(2)
+=== parse, compile, emit, interpret: $type
+{"type": "Number"}
+
+# =============================================================================
+# REAL-WORLD EXAMPLE: ZIP WITH LENGTH CONSTRAINT
+# =============================================================================
+# A zip function that uses SameLen as an assertion to enforce same-length
+# arrays. The assertion is called at the start of the function body.
+
+--- zip with assertion passes
+let SameLen = (a, b) =>
+  if a.length == b.length then true
+  else Error("zip requires same-length arrays");
+let zip = (a, b) => {
+  SameLen(a, b);
+  let result = [];
+  let go = (i) =>
+    if i >= a.length then result
+    else { result.push([a[i], b[i]]); go(i + 1) };
+  go(0)
+};
+zip([1, 2, 3], ["a", "b", "c"])
+=== parse, compile, emit, interpret: $type
+{"type": "Array", "elements": []}
+
+--- zip with assertion fails on different lengths
+let SameLen = (a, b) =>
+  if a.length == b.length then true
+  else Error("zip requires same-length arrays");
+let zip = (a, b) => {
+  SameLen(a, b);
+  let result = [];
+  let go = (i) =>
+    if i >= a.length then result
+    else { result.push([a[i], b[i]]); go(i + 1) };
+  go(0)
+};
+zip([1, 2], ["a", "b", "c"])
+=== parse, compile, emit, interpret: $type, error
+Type error: zip requires same-length arrays
+
+--- zip runs correctly
+let zip = (a, b) => {
+  let result = [];
+  let go = (i) =>
+    if i >= a.length then result
+    else { result.push([a[i], b[i]]); go(i + 1) };
+  go(0)
+};
+zip([1, 2, 3], ["a", "b", "c"])
+=== parse, compile, emit, interpret
+[
+  [
+    1,
+    "a"
+  ],
+  [
+    2,
+    "b"
+  ],
+  [
+    3,
+    "c"
+  ]
+]

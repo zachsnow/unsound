@@ -1063,12 +1063,12 @@ const build$type = (in$: CoreInterpretOps): void => {
     length: Type;
   }
 
-  const makeArrayType = (elementsOrType: Type[] | Type): ArrayType => {
+  const makeArrayType = (elementsOrType: Type[] | Type): ArrayType & Record<string, unknown> => {
     const isTuple = Array.isArray(elementsOrType);
     const elements = isTuple ? elementsOrType : undefined;
     const elementType = isTuple ? undefined : elementsOrType;
 
-    return {
+    const arr: ArrayType & Record<string, unknown> = {
       [TYPE_TAG]: "Array",
       elements,
       elementType,
@@ -1077,6 +1077,35 @@ const build$type = (in$: CoreInterpretOps): void => {
         ? { type: "Array", elements: elementsOrType.map(typeToJSON) }
         : { type: "Array", elementType: typeToJSON(elementsOrType) },
     };
+
+    // Array methods - push returns the new length (Number)
+    arr.push = tagFn((_elem: unknown) => NumberType);
+    arr.pop = tagFn(() => isTuple && elements!.length > 0
+      ? makeSetType([elements![elements!.length - 1], UndefinedType])
+      : UndefinedType);
+    arr.shift = tagFn(() => isTuple && elements!.length > 0
+      ? makeSetType([elements![0], UndefinedType])
+      : UndefinedType);
+    arr.unshift = tagFn((_elem: unknown) => NumberType);
+    arr.concat = tagFn((_other: unknown) => makeArrayType(AnyTypeProxy));
+    arr.slice = tagFn(() => makeArrayType(isTuple ? makeSetType(elements!) : (elementType ?? AnyTypeProxy)));
+    arr.map = tagFn((fn: unknown) => {
+      if (typeof fn === "function" && isUnsoundFn(fn)) {
+        // Apply fn to element type to get result type
+        const resultType = isTuple
+          ? makeSetType(elements!.map(e => fn(e) as Type))
+          : fn(elementType ?? AnyTypeProxy) as Type;
+        return makeArrayType(resultType);
+      }
+      return makeArrayType(AnyTypeProxy);
+    });
+    arr.filter = tagFn(() => makeArrayType(isTuple ? makeSetType(elements!) : (elementType ?? AnyTypeProxy)));
+    arr.forEach = tagFn(() => UndefinedType);
+    arr.join = tagFn(() => StringType);
+    arr.indexOf = tagFn(() => NumberType);
+    arr.includes = tagFn(() => BooleanType);
+
+    return arr;
   };
 
   interface ObjectType extends Type {
