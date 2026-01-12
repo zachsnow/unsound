@@ -1012,6 +1012,57 @@ safeIndex([10, 20, 30], 5)
 Type error: index out of bounds: too large
 
 # =============================================================================
+# TYPE COMPATIBILITY OPERATOR ($=)
+# =============================================================================
+# The $= operator checks if actual (right) is assignable to expected (left).
+# This is the operator used internally for type annotations.
+
+--- compat same type
+Number $= 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- compat wrong type
+Number $= "hello"
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- compat dependent matches non-dependent
+Number $= 42
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- compat annotation erases value
+let n: Number = 5; n $= 10
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- compat literal value mismatch
+5 $= 10
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+--- compat literal value match
+5 $= 5
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- compat any returns any
+Any $= 42
+=== parse, compile, emit, interpret: $type
+{"type": "Any"}
+
+--- compat settype all match
+let t = 1; t = 2; Number $= t
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": true}
+
+--- compat settype some mismatch
+let t = 1; t = "oops"; Number $= t
+=== parse, compile, emit, interpret: $type
+{"type": "Boolean", "value": false}
+
+# =============================================================================
 # ARRAY METHODS
 # =============================================================================
 

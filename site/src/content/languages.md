@@ -65,19 +65,22 @@ implemented in TS directly on Core.
 
 </aside>
 
+
 The interesting thing about Exo is _how_ types and typechecking are implemented. Specifically,
 each type annotation is an Exo _expression_ -- a value -- that is itself evaluated before performing
 type checking.
 
-In addition, when interpreting a binding's value
+In addition, when interpreting a binding's value:
 
 ```unsound
 let x: T = value;
 ```
 
 We first evaluate `T` using the default `$interpret` semantics to determine the type. Then we evaluate `value`
-using the `$type` semantics, and compare the results using `op==` on `T` to determine whether `value` is assignable
+using the `$type` semantics, and compare the results using `op$=` on `T` to determine whether `value` is assignable
 to `x`.
+
+To learn more about Exo's type system see [Type Semantics](/types/).
 
 ---
 

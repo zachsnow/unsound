@@ -103,6 +103,7 @@ const operators = {
     "!==": { prec: 3, assoc: "left", prim: "strictNeq" },
     "==": { prec: 3, assoc: "left", method: "op==" },
     "!=": { prec: 3, assoc: "left", method: "op!=" },
+    "$=": { prec: 3, assoc: "left", method: "op$=" },  // type compatibility: expected $= actual
     "<": { prec: 4, assoc: "left", method: "op<" },
     ">": { prec: 4, assoc: "left", method: "op>" },
     "<=": { prec: 4, assoc: "left", method: "op<=" },
@@ -897,6 +898,35 @@ const build$type = (in$: CoreInterpretOps): void => {
         }
         return BooleanType;
       }),
+
+    /** Type compatibility: this (expected) $= actual → Boolean
+     *  Returns true if actual is assignable to this type.
+     */
+    compat: (expectedTag: string) =>
+      tagFn((actual: unknown): Type => {
+        // Any is compatible with everything
+        if (hasTag(actual, "Any")) { return makeBooleanType(true); }
+
+        // SetType: all members must be compatible with this
+        if (hasTag(actual, "Set")) {
+          const allCompat = (actual as SetType).types.every(member => {
+            const result = (t["op$="] as Function)(member);
+            return hasTag(result, "Boolean") && result.value === true;
+          });
+          return makeBooleanType(allCompat);
+        }
+
+        // Must be same type tag
+        if (!hasTag(actual, expectedTag)) {
+          return makeBooleanType(false);
+        }
+
+        // No value constraint on expected = any value is ok
+        if (t.value === undefined) { return makeBooleanType(true); }
+
+        // Value constraint must match exactly
+        return makeBooleanType((actual as Type).value === t.value);
+      }),
   });
 
   // ---------------------------------------------------------------------------
@@ -908,7 +938,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "Number", value } : { type: "Number" };
 
-    const { num, cmp } = ops(t);
+    const { num, cmp, compat } = ops(t);
     t["op+"] = num((a, b) => a + b);
     t["op-"] = num((a, b) => a - b);
     t["op*"] = num((a, b) => a * b);
@@ -921,6 +951,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     t["op>"] = cmp("Number", (a, b) => a > b);
     t["op<="] = cmp("Number", (a, b) => a <= b);
     t["op>="] = cmp("Number", (a, b) => a >= b);
+    t["op$="] = compat("Number");
     return t;
   };
 
@@ -929,7 +960,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "String", value } : { type: "String" };
 
-    const { str, cmp } = ops(t);
+    const { str, cmp, compat } = ops(t);
     t["op+"] = str((a, b) => a + b);
     t["op=="] = cmp("String", (a, b) => a === b);
     t["op!="] = cmp("String", (a, b) => a !== b);
@@ -937,6 +968,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     t["op>"] = cmp("String", (a, b) => a > b);
     t["op<="] = cmp("String", (a, b) => a <= b);
     t["op>="] = cmp("String", (a, b) => a >= b);
+    t["op$="] = compat("String");
     t["length"] = value !== undefined ? makeNumberType(value.length) : NumberType;
     return t;
   };
@@ -946,18 +978,36 @@ const build$type = (in$: CoreInterpretOps): void => {
     if (value !== undefined) { t.value = value; }
     t.toJSON = () => value !== undefined ? { type: "Boolean", value } : { type: "Boolean" };
 
-    const { cmp } = ops(t);
+    const { cmp, compat } = ops(t);
     t["op!"] = tagFn(() => value !== undefined ? makeBooleanType(!value) : BooleanType);
     t["op&&"] = cmp("Boolean");
     t["op||"] = cmp("Boolean");
     t["op=="] = cmp("Boolean");
     t["op!="] = cmp("Boolean");
+    t["op$="] = compat("Boolean");
     return t;
   };
 
-  // Singleton types
-  const NullType: Type = { [TYPE_TAG]: "null", toJSON: () => ({ type: "null" }) };
-  const UndefinedType: Type = { [TYPE_TAG]: "undefined", toJSON: () => ({ type: "undefined" }) };
+  // Singleton types with compatibility
+  const makeSingletonCompat = (tag: string) => tagFn((actual: unknown) => {
+    if (hasTag(actual, "Any")) { return makeBooleanType(true); }
+    if (hasTag(actual, "Set")) {
+      const allCompat = (actual as SetType).types.every(member => hasTag(member, tag));
+      return makeBooleanType(allCompat);
+    }
+    return makeBooleanType(hasTag(actual, tag));
+  });
+
+  const NullType: Type & Record<string, unknown> = {
+    [TYPE_TAG]: "null",
+    toJSON: () => ({ type: "null" }),
+    "op$=": makeSingletonCompat("null"),
+  };
+  const UndefinedType: Type & Record<string, unknown> = {
+    [TYPE_TAG]: "undefined",
+    toJSON: () => ({ type: "undefined" }),
+    "op$=": makeSingletonCompat("undefined"),
+  };
 
   // Generic (non-dependent) primitive types
   const NumberType = makeNumberType();
@@ -1145,36 +1195,6 @@ const build$type = (in$: CoreInterpretOps): void => {
     return tag;
   };
 
-  /** Check if actual type is compatible with expected type */
-  const typeCompatible = (actual: Type, expected: Type): boolean => {
-    // Same reference
-    if (actual === expected) { return true; }
-
-    // Functions: trust programmer's annotation (no structural check)
-    if (typeof actual === "function" && typeof expected === "function") { return true; }
-
-    if (!isType(actual) || !isType(expected)) { return false; }
-
-    // Any is compatible with everything
-    if (hasTag(actual, "Any") || hasTag(expected, "Any")) { return true; }
-
-    // Same base type: check value constraints
-    if (actual[TYPE_TAG] === expected[TYPE_TAG]) {
-      // No value constraint on expected = any value is ok
-      // (casts needed due to TypeScript narrowing limitation with symbol keys)
-      if ((expected as Type).value === undefined) { return true; }
-      // Otherwise must match exactly
-      return (actual as Type).value === (expected as Type).value;
-    }
-
-    // SetType: all members must be compatible
-    if (hasTag(actual, "Set")) {
-      return (actual as SetType).types.every(t => typeCompatible(t, expected));
-    }
-
-    return false;
-  };
-
   // ==========================================================================
   // INTERPRETER OPERATIONS
   // ==========================================================================
@@ -1356,8 +1376,16 @@ const build$type = (in$: CoreInterpretOps): void => {
   $.letBind = ($env: any, name: string, valueType: unknown, annotationThunk: (() => unknown) | null) => {
     if (annotationThunk) {
       const annotationType = annotationThunk() as Type;
-      if (!typeCompatible(valueType as Type, annotationType)) {
-        throw new Error(`Type error: expected ${showType(annotationType)}, got ${showType(valueType)}`);
+      // Use op$= for type compatibility check
+      const compatFn = (annotationType as Record<string, unknown>)["op$="];
+      if (typeof compatFn === "function" && isUnsoundFn(compatFn)) {
+        const result = compatFn(valueType);
+        if (hasTag(result, "Boolean") && result.value === false) {
+          throw new Error(`Type error: expected ${showType(annotationType)}, got ${showType(valueType)}`);
+        }
+        // If result is not Boolean(true), it might be Boolean (non-dependent), treat as ok
+      } else {
+        // No op$= method, fall back to Any-like behavior (accept everything)
       }
       $env.bind(name, annotationType);
     } else {
