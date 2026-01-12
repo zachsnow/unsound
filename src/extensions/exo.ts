@@ -1151,6 +1151,15 @@ const build$type = (in$: CoreInterpretOps): void => {
   // ==========================================================================
 
   // === Environment ===
+  // Error is a function that throws a type error with a custom message.
+  // Use in unreachable branches: if valid then result else Error("why it's invalid")
+  const errorFn = tagFn((msg: unknown) => {
+    const msgStr = hasTag(msg, "String") && msg.value !== undefined
+      ? msg.value as string
+      : "type error";
+    throw new Error(`Type error: ${msgStr}`);
+  });
+
   $.env = () => createEnv({
     Number: NumberType,
     String: StringType,
@@ -1158,6 +1167,7 @@ const build$type = (in$: CoreInterpretOps): void => {
     Null: NullType,
     Undefined: UndefinedType,
     Any: AnyTypeProxy,
+    Error: errorFn,
   });
 
   // === Literals (return dependent types with known values) ===
