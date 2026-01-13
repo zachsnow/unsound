@@ -30,6 +30,15 @@ universe of JS values.
 One case also provide other semantics; for instance `$type` can implement an "abstract interpretation"
 in a universe of simple nominal types.
 
+<aside>
+
+- To make binding more customizable, we only make partial use of higher-order abstract syntax (HOAS).
+- We aren't trying to achieve type safety in the target language via type safety in the meta-language (TypeScript),
+  so that hasn't been a focus of the implementation. Many of the type-safe extensibility techniques Oleg describes
+  don't translate well to TypeScript, anyway.
+
+</aside>
+
 ### Extension System
 
 Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.
@@ -50,7 +59,20 @@ Extensions have the following form:
 ```
 
 All hooks mutate `$`, adding functionality extension by extension (and initially starting with the "empty"
-language's implementation -- generally `() => {}`). To see how this plays out, consider parsing. The framework
+language's implementation -- generally `() => {}`).
+
+<aside>
+
+Instead of relying on a hierarchy of classes to allow for extension, I used a simpler imperative approach,
+for 2 reasons:
+
+- Language extensions do not need access to the source of other language extensions that they extend
+- Target languages don't need to understand JS classes in order to write further language extensions _in the target_
+  language, which I wanted to do (primarily for fun).
+
+</aside>
+
+To see how this plays out, consider parsing. The framework
 expects that, after all extensions have been loaded, the `$parse` phase will result in an object `$` that
 exports a function `$.parse` that takes the contents of a file and outputs a value that the next phase,
 `$compile`, will understand. A simple language might implement `$.parse` as, for example, parsing a simple

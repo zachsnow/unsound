@@ -4,7 +4,7 @@
 
 Unsound compiles source code to a representation parameterized by a semantics object `$`. Different `$` implementations give different meanings to the same compiled code.
 
-**Source (Exo):**
+**Source:**
 ```unsound
 let add1 = (x) => x + 1;
 add1(42)
