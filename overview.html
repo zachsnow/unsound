@@ -85,6 +85,14 @@ an <em>interpretation</em>. The standard semantics is <code>$interpret</code>, a
 universe of JS values.</p>
 <p>One case also provide other semantics; for instance <code>$type</code> can implement an &quot;abstract interpretation&quot;
 in a universe of simple nominal types.</p>
+<aside>
+<ul>
+<li>To make binding more customizable, we only make partial use of higher-order abstract syntax (HOAS).</li>
+<li>We aren't trying to achieve type safety in the target language via type safety in the meta-language (TypeScript),
+so that hasn't been a focus of the implementation. Many of the type-safe extensibility techniques Oleg describes
+don't translate well to TypeScript, anyway.</li>
+</ul>
+</aside>
 <h3>Extension System</h3>
 <p>Extensions provide hooks for each phase, allowing the phase to be extended with additional functionality.
 The key idea allowing extension is to implement the various phases (parsing, compilation, evaluation) with
@@ -100,7 +108,17 @@ a similar &quot;open-recursive&quot; approach.</p>
 }
 </code></pre>
 <p>All hooks mutate <code>$</code>, adding functionality extension by extension (and initially starting with the &quot;empty&quot;
-language's implementation -- generally <code>() =&gt; {}</code>). To see how this plays out, consider parsing. The framework
+language's implementation -- generally <code>() =&gt; {}</code>).</p>
+<aside>
+<p>Instead of relying on a hierarchy of classes to allow for extension, I used a simpler imperative approach,
+for 2 reasons:</p>
+<ul>
+<li>Language extensions do not need access to the source of other language extensions that they extend</li>
+<li>Target languages don't need to understand JS classes in order to write further language extensions <em>in the target</em>
+language, which I wanted to do (primarily for fun).</li>
+</ul>
+</aside>
+<p>To see how this plays out, consider parsing. The framework
 expects that, after all extensions have been loaded, the <code>$parse</code> phase will result in an object <code>$</code> that
 exports a function <code>$.parse</code> that takes the contents of a file and outputs a value that the next phase,
 <code>$compile</code>, will understand. A simple language might implement <code>$.parse</code> as, for example, parsing a simple
