@@ -1,5 +1,8 @@
 # Motivation
 
+> Have you ever found yourself writing an elaborate TypeScript type, 3 conditionals deep and 2 mapped types to the wind,
+> and thought "I sure wish I could write this in plain old TypeScript?" This is for you. And you is me. This is for me.
+
 ## TL;DR
 
 Unsound compiles source code to a representation parameterized by a semantics object `$`. Different `$` implementations give different meanings to the same compiled code.
@@ -56,9 +59,6 @@ The type checker literally calls your function with types as arguments. Types ar
 ---
 
 ## Background
-
-> Have you ever found yourself writing an elaborate TypeScript type, 3 conditionals deep and 2 mapped types to the wind,
-> and thought "I sure wish I could write this in plain old TypeScript?" This is for you. And you is me. This is for me.
 
 TypeScript's type system is expressive, but it's a completely separate language:
 
