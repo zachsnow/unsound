@@ -5,7 +5,8 @@
 
 ## TL;DR
 
-Unsound compiles source code to a representation parameterized by a semantics object `$`. Different `$` implementations give different meanings to the same compiled code.
+Unsound compiles source code to a representation parameterized by a "semantics" object `$`.
+Different `$` implementations give different meanings to the same compiled code.
 
 **Source:**
 ```unsound
@@ -39,6 +40,8 @@ $.index = (obj, key) => obj[key];    // "op+" looks up the JS method
 // Result: 43
 ```
 
+The `$interpret` semantics interprets the program in the universe of the usual JS values.
+
 **$type** (type checking):
 ```javascript
 $.env = () => createEnv({ Number: NumberType, ... });
@@ -54,7 +57,7 @@ $.index = (obj, key) => obj[key];    // NumberType["op+"] is a type-level functi
 // Result: NumberType
 ```
 
-The type checker literally calls your function with types as arguments. Types are values with operator methods. Read more about [programmable types](/types/).
+The `$type` semantics interprets the program in a universe of values that *represent types*.
 
 ---
 
